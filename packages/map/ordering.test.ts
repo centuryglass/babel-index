@@ -350,7 +350,7 @@ test('the peak is how much wallpaper survives the surest cluster', () => {
 });
 
 test('every strength from peakAt up packs at the peak', () => {
-  // A CLIP-only room tops out at `search.weights.clip`; with `peakAt` there,
+  // A CLIP-only room tops out at `SEARCH_WEIGHTS.clip`; with `peakAt` there,
   // it packs as tightly as an exact match.
   const at = (s: number) => Float32Array.from({ length: 200 }, (_, i) => (i < 20 ? s : 0));
   const exact = graded(at(1), { density: { peakAt: 0.85 } });

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULTS, resolveConfig } from './config.ts';
 import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
+import { SEARCH_WEIGHTS } from '../map/scoring.ts';
 
 /**
  * Limits are injected rather than assumed: that is how the module is used, and
@@ -13,7 +14,7 @@ test('an empty overlay is exactly the defaults', () => {
   const c = resolveConfig({}, { zoomLimits: LIMITS });
   assert.deepEqual(c.notes, []);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio);
-  assert.deepEqual(c.search.weights, DEFAULTS.search.weights);
+  assert.deepEqual(c.search, DEFAULTS.search);
   // DEFAULTS narrows the bottom of the range and leaves the top alone, which is
   // why only maxZoom falls through to the injected limit.
   assert.equal(c.camera.minZoom, DEFAULTS.camera.minZoom);
@@ -105,14 +106,14 @@ test('nonsense values fall back and say so, rather than throwing', () => {
     {
       camera: { overviewCellsPerAxis: 'big' },
       map: { contentRatio: 0, slotSeed: 2.7 },
-      search: { weights: { tagExact: -1 }, minTokenLength: 0 },
+      search: { maxQueryLength: -1, minTokenLength: 0 },
     },
     { zoomLimits: LIMITS }
   );
   assert.equal(c.camera.overviewCellsPerAxis, DEFAULTS.camera.overviewCellsPerAxis);
   assert.equal(c.map.contentRatio, DEFAULTS.map.contentRatio, 'a ratio of 0 is out of range');
   assert.equal(c.map.slotSeed, 3, 'a fractional seed is rounded');
-  assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
+  assert.equal(c.search.maxQueryLength, 1, 'a query length below 1 is raised to 1');
   assert.equal(c.search.minTokenLength, 1, 'a token length below 1 matches everything');
   assert.ok(c.notes.length >= 5, `expected a note for each: ${c.notes.join(' | ')}`);
 });
@@ -137,17 +138,18 @@ test('a section of the wrong type is ignored rather than fatal', () => {
 });
 
 test('an overlay changes only what it names', () => {
-  const c = resolveConfig({ search: { weights: { clip: 0 } } }, { zoomLimits: LIMITS });
-  assert.equal(c.search.weights.clip, 0, 'zero is a legitimate "ignore this signal"');
-  assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
-  assert.equal(c.search.weights.story, DEFAULTS.search.weights.story);
+  const c = resolveConfig({ search: { density: { floor: 0 } } }, { zoomLimits: LIMITS });
+  assert.equal(c.search.density.floor, 0, 'zero is a legitimate "cluster any match at all"');
+  assert.equal(c.search.density.peakAt, DEFAULTS.search.density.peakAt);
+  assert.equal(c.search.minTokenLength, DEFAULTS.search.minTokenLength);
   assert.deepEqual(c.notes, []);
 });
 
-test('a search weight above 1 falls back, since a soft OR has no use for a pull past full strength', () => {
-  const c = resolveConfig({ search: { weights: { clip: 5 } } }, { zoomLimits: LIMITS });
-  assert.equal(c.search.weights.clip, DEFAULTS.search.weights.clip);
+test('search weights are not config: an overlay setting one is reported and ignored', () => {
+  const c = resolveConfig({ search: { weights: { tagExact: 0.1 } } }, { zoomLimits: LIMITS });
+  assert.equal('weights' in c.search, false);
   assert.equal(c.notes.length, 1);
+  assert.match(c.notes[0], /search\.weights is not a setting/);
 });
 
 test('the shipped defaults are valid against the real limits', () => {
@@ -272,7 +274,7 @@ test('a zero floor is accepted, and peakAt stays a ratio', () => {
 });
 
 test("peakAt defaults to CLIP's weight, so a genuine image match packs solid", () => {
-  assert.equal(DEFAULTS.search.density.peakAt, DEFAULTS.search.weights.clip);
+  assert.equal(DEFAULTS.search.density.peakAt, SEARCH_WEIGHTS.clip);
 });
 
 test('the default gradient bounds bracket a real CLIP cosine', () => {

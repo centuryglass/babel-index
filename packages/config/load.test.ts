@@ -33,7 +33,7 @@ test('a partial overlay changes only what it names', async () => {
     const c = await loadConfig({ path: join(dir, 'config.json') });
     assert.equal(c.map.contentRatio, 0.5);
     assert.equal(c.map.slotSeed, DEFAULTS.map.slotSeed, 'untouched keys keep their defaults');
-    assert.equal(c.search.weights.tagExact, DEFAULTS.search.weights.tagExact);
+    assert.equal(c.search.minTokenLength, DEFAULTS.search.minTokenLength);
     assert.deepEqual(c.notes, []);
     assert.equal(c.source, join(dir, 'config.json'));
   });

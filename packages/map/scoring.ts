@@ -26,7 +26,6 @@
 import winkLemmatizer from 'wink-lemmatizer';
 import anyAscii from 'any-ascii';
 import { embeddingScores } from './ordering.ts';
-import type { Config } from '../config/config.ts';
 import type {
   MatchRange,
   ParsedQuery,
@@ -598,6 +597,42 @@ function softOr(pulls: Iterable<number>): number {
   return 1 - miss;
 }
 
+/** How strongly each kind of evidence pulls a room, each in [0, 1]; see `SEARCH_WEIGHTS`. */
+export interface SearchWeights {
+  tagExact: number;
+  tagPartial: number;
+  titleExact: number;
+  titlePartial: number;
+  story: number;
+  storyLong: number;
+  clip: number;
+}
+
+/**
+ * How strongly each kind of evidence pulls a room toward the center, each in
+ * [0, 1] (docs/search_rules.md "Signal weights"). An exact match pulls at its
+ * full weight, a partial match at its weight times the fraction of the keyword
+ * or title it covers, a matched story word at `story` and a full story run at
+ * `storyLong`, and CLIP at `clip` times its curve.
+ *
+ * Code, not config: the ordering requirements between signals (an exact match
+ * ahead of a CLIP-only room, a long story run ahead of CLIP) hold because of
+ * these numbers, and `scoring.test.ts` checks each one on a built query. A
+ * re-tune that breaks one fails a test instead of quietly changing the map.
+ *
+ * `config.ts`'s `search.density.peakAt` defaults to `clip`; raising `clip`
+ * past it packs the top of CLIP's range at one density.
+ */
+export const SEARCH_WEIGHTS: Readonly<SearchWeights> = Object.freeze({
+  tagExact: 1,
+  tagPartial: 0.6,
+  titleExact: 1,
+  titlePartial: 0.6,
+  story: 0.35,
+  storyLong: 0.95,
+  clip: 0.85,
+});
+
 /**
  * The character band a story run's pull ramps across: zero below `low`
  * (about one long word, which `weights.story` already credits), full at
@@ -692,7 +727,7 @@ interface ScoredRow {
  * all, then id.
  *
  * - More exact term matches first. Exact matches pull at `weights.tagExact`
- *   and `weights.titleExact`, which default to 1 and saturate strength, so
+ *   and `weights.titleExact`, which are 1 and saturate strength, so
  *   this is where "more exact matches beat fewer" (SR-13) is decided.
  * - Then the higher raw cosine.
  * - Rooms at strength 0 skip both and keep id order, so a query nothing
@@ -759,7 +794,7 @@ function rankAxis(byId: ScoredRow[], compare: (x: ScoredRow, y: ScoredRow) => nu
 export interface RankHybridOpts {
   query: string;
   count: number;
-  weights: Config['search']['weights'];
+  weights?: SearchWeights;
   minTokenLength?: number;
   embeddings?: Int8Array | null;
   dim?: number;
@@ -775,7 +810,7 @@ export interface RankHybridOpts {
  * the order that places rooms by it.
  *
  * Each axis turns the room's evidence into a pull in [0, 1], scaled by its
- * `config.search.weights` entry (docs/search_rules.md "Signal weights"), and
+ * `SEARCH_WEIGHTS` entry (docs/search_rules.md "Signal weights"), and
  * `matchStrength` combines the four. Per axis:
  *
  *   - tag: a soft OR over the query's terms, each exact match pulling at
@@ -794,7 +829,7 @@ export interface RankHybridOpts {
  *
  * @param opts.query          the raw query string
  * @param opts.count          rooms in the collection
- * @param opts.weights        `config.search.weights`
+ * @param opts.weights        `SEARCH_WEIGHTS` unless a test swaps one out
  * @param opts.embeddings the blob, roomCount * dim row-major
  * @param opts.vector the query vector, L2-normalised
  * @param opts.clipStrength raw-cosine anchors for CLIP's curve
@@ -811,7 +846,7 @@ export interface RankHybridOpts {
 export function rankHybrid({
   query,
   count,
-  weights,
+  weights = SEARCH_WEIGHTS,
   minTokenLength = 3,
   embeddings = null,
   dim = 0,

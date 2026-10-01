@@ -13,6 +13,7 @@ import {
   matchStrength,
   parseQuery,
   rankHybrid,
+  SEARCH_WEIGHTS,
   clipCurveStrength,
   STORY_LONG_RANGE,
   storyMatchRanges,
@@ -23,9 +24,6 @@ import {
   tokenise,
 } from './scoring.ts';
 import { STRENGTH_FLOOR } from './ordering.ts';
-import { DEFAULTS } from '../config/config.ts';
-
-const WEIGHTS = DEFAULTS.search.weights;
 
 /** One fixture room: `[keywords, story]`, or `null` for a room with no metadata at all. */
 type RoomFixture = [string[] | null | undefined, string | null | undefined] | null;
@@ -253,7 +251,6 @@ test('an exact keyword match outranks the best possible CLIP score [SR-10]', () 
   const { order } = rankHybrid({
     query: 'brutalism',
     count: 2,
-    weights: WEIGHTS,
     embeddings,
     dim: 2,
     scale: 127,
@@ -270,7 +267,6 @@ test('CLIP still orders everything the text signals are silent about [SR-11]', (
   const { order } = rankHybrid({
     query: 'brutalism',
     count: 3,
-    weights: WEIGHTS,
     embeddings,
     dim: 2,
     scale: 127,
@@ -287,12 +283,11 @@ test('a weak partial tag does not beat a room CLIP is confident about [SR-12]', 
   // keyword hit" ahead of "has none" puts room 0 first; the blend does not,
   // because a partial pulls at `tagPartial` times its fraction.
   const { partial } = classifyTagTerm(parseQuery('art').terms[0], ['art nouveau and gilded rosewood']);
-  assert.ok(WEIGHTS.tagPartial * partial < WEIGHTS.clip, `partial ${partial} should pull less than top CLIP`);
+  assert.ok(SEARCH_WEIGHTS.tagPartial * partial < SEARCH_WEIGHTS.clip, `partial ${partial} should pull less than top CLIP`);
 
   const { order } = rankHybrid({
     query: 'art',
     count: 2,
-    weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
     scale: 127,
@@ -309,7 +304,6 @@ test('an undescribed room still outranks a described one CLIP likes less', () =>
   const { order } = rankHybrid({
     query: 'sailboat',
     count: 2,
-    weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
     scale: 127,
@@ -323,7 +317,6 @@ test('keywords outrank story text', () => {
   const { order } = rankHybrid({
     query: 'mezzotint',
     count: 2,
-    weights: WEIGHTS,
     index: indexOf([[], 'A room of mezzotint and dust.'], [['mezzotint'], null]),
   });
   assert.deepEqual(order, [1, 0]);
@@ -336,7 +329,6 @@ test('the whole collection is sorted, not just the matches [SR-08]', () => {
   const { order } = rankHybrid({
     query: 'copper',
     count,
-    weights: WEIGHTS,
     index: indexOf([['copper'], null], null, null, [[], 'copper piping'], null, null),
   });
   assert.equal(order.length, count);
@@ -347,7 +339,6 @@ test('rooms nothing matched keep their id order rather than shuffling [SR-15]', 
   const { order } = rankHybrid({
     query: 'copper',
     count: 4,
-    weights: WEIGHTS,
     index: indexOf([['copper'], null], null, null, null),
   });
   assert.deepEqual(order, [0, 1, 2, 3]);
@@ -357,7 +348,6 @@ test('text-only ranking works with no embeddings at all [SR-21]', () => {
   const { order, signals } = rankHybrid({
     query: 'collodion',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf([['oak'], null], [['wet collodion'], null], [[], 'nothing relevant']),
   });
   assert.equal(order[0], 1);
@@ -369,7 +359,6 @@ test('CLIP-only ranking works with no metadata at all [SR-21]', () => {
   const { order, signals } = rankHybrid({
     query: 'anything',
     count: 2,
-    weights: WEIGHTS,
     embeddings: Int8Array.from([0, 127, 127, 0]),
     dim: 2,
     scale: 127,
@@ -387,14 +376,13 @@ test('signals report what matched, not what was available [SR-01] [SR-21]', () =
   const { signals } = rankHybrid({
     query: 'sailboat',
     count: 2,
-    weights: WEIGHTS,
     index: indexOf([['brutalism'], 'A room of concrete.'], [['oak'], null]),
   });
   assert.deepEqual(signals, { clip: false, keyword: false, title: false, story: false });
 });
 
 test('a zero weight silences a signal without removing it', () => {
-  const weights = { ...WEIGHTS, tagExact: 0 };
+  const weights = { ...SEARCH_WEIGHTS, tagExact: 0 };
   const { order } = rankHybrid({
     query: 'brutalism',
     count: 2,
@@ -408,7 +396,6 @@ test('rooms without metadata are ranked, not dropped [SR-08]', () => {
   const { order } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf(null, [['oak'], null], null),
   });
   assert.equal(order.length, 3);
@@ -416,7 +403,7 @@ test('rooms without metadata are ranked, not dropped [SR-08]', () => {
 });
 
 test('an empty index behaves like no index', () => {
-  const { order, signals } = rankHybrid({ query: 'oak', count: 3, weights: WEIGHTS, index: [null, null, null] });
+  const { order, signals } = rankHybrid({ query: 'oak', count: 3, index: [null, null, null] });
   assert.deepEqual(order, [0, 1, 2]);
   assert.deepEqual(signals, { clip: false, keyword: false, title: false, story: false });
 });
@@ -424,7 +411,7 @@ test('an empty index behaves like no index', () => {
 test('a story index built at minTokenLength matches the short query words that setting lets through', () => {
   const story = 'An ox stands in the reading room.';
   const index = buildSearchIndex([{ keywords: [], story }], { minLength: 2 });
-  const { breakdown } = rankHybrid({ query: 'ox', count: 1, weights: WEIGHTS, index, minTokenLength: 2 });
+  const { breakdown } = rankHybrid({ query: 'ox', count: 1, index, minTokenLength: 2 });
   assert.ok(breakdown.story[0] > 0, 'the two-letter word is in the index and scores');
   assert.deepEqual(storyMatchRanges(story, ['ox'], { minLength: 2 }), [{ start: 3, end: 5 }]);
 });
@@ -434,7 +421,7 @@ test('an exact title match is as strong as an exact tag match', () => {
     { keywords: [{ text: 'unsurveyed' }], story: null },
     { title: 'Unsurveyed', story: null },
   ]);
-  const { order, strength, breakdown } = rankHybrid({ query: 'unsurveyed', count: 2, weights: WEIGHTS, index });
+  const { order, strength, breakdown } = rankHybrid({ query: 'unsurveyed', count: 2, index });
   assert.deepEqual([...strength], [1, 1]);
   assert.equal(breakdown.tagExact[order.indexOf(0)], 1);
   assert.equal(breakdown.titleExact[order.indexOf(1)], 1);
@@ -445,13 +432,13 @@ test('two exact tag matches still beat one exact title match', () => {
     { keywords: [{ text: 'brass' }, { text: 'oak' }], story: null },
     { title: 'Brass Oak', story: null },
   ]);
-  const { order } = rankHybrid({ query: 'brass oak', count: 2, weights: WEIGHTS, index });
+  const { order } = rankHybrid({ query: 'brass oak', count: 2, index });
   assert.equal(order[0], 0, 'two exact tags outrank a single exact title match');
 });
 
 test('a partial title match does not sum across terms - it is the same string read twice', () => {
   const index = buildSearchIndex([{ title: 'The Unsurveyed Room', story: null }]);
-  const { breakdown } = rankHybrid({ query: 'unsurveyed room', count: 1, weights: WEIGHTS, index });
+  const { breakdown } = rankHybrid({ query: 'unsurveyed room', count: 1, index });
   // "unsurveyed", "room" and the whole query each partially match the same
   // title; titlePartial is the best of the three, never their sum
   // (docs/search_rules.md "Title matching"). The whole query wins here - it
@@ -468,8 +455,8 @@ test('a partial title match does not sum across terms - it is the same string re
 
 test('a multi-word tag typed plainly is an exact match, same as quoted [SR-03]', () => {
   const index = indexOf([['outsider art'], null], [['oak'], null]);
-  const plain = rankHybrid({ query: 'outsider art', count: 2, weights: WEIGHTS, index });
-  const quoted = rankHybrid({ query: '"outsider art"', count: 2, weights: WEIGHTS, index });
+  const plain = rankHybrid({ query: 'outsider art', count: 2, index });
+  const quoted = rankHybrid({ query: '"outsider art"', count: 2, index });
   assert.equal(plain.breakdown.tagExact[0], 1, 'typing the tag is an exact tag match');
   assert.equal(quoted.breakdown.tagExact[0], 1, 'and quoting it still is');
   assert.equal(plain.order[0], 0);
@@ -478,7 +465,7 @@ test('a multi-word tag typed plainly is an exact match, same as quoted [SR-03]',
 test('typing a room tag verbatim reports it as a maximally strong match [SR-18]', () => {
   for (const query of ['outsider art', '"outsider art"', 'databending']) {
     const index = indexOf([['outsider art', 'databending'], null], [['oak'], null]);
-    const { strength, order } = rankHybrid({ query, count: 2, weights: WEIGHTS, index });
+    const { strength, order } = rankHybrid({ query, count: 2, index });
     assert.equal(order[0], 0, `${query} should find the room it names`);
     assert.equal(strength[0], 1, `${query} should read as a full-strength match, got ${strength[0]}`);
   }
@@ -488,7 +475,7 @@ test('the better of the two readings wins, so separate exact tags still beat one
   // `brutalism mezzotint` matches two keywords exactly per term, and the
   // whole-query reading matches neither - the per-term reading has to stand.
   const index = indexOf([['brutalism', 'mezzotint'], null], [['brutalism mezzotint'], null]);
-  const { breakdown, order } = rankHybrid({ query: 'brutalism mezzotint', count: 2, weights: WEIGHTS, index });
+  const { breakdown, order } = rankHybrid({ query: 'brutalism mezzotint', count: 2, index });
   assert.equal(order[0], 0, 'two exact tag matches outrank one exact phrase match');
   assert.equal(breakdown.tagExact[0], 2);
   assert.equal(breakdown.tagExact[1], 1, 'the phrase room still gets its one exact match');
@@ -496,7 +483,7 @@ test('the better of the two readings wins, so separate exact tags still beat one
 
 test('a one-term query gains nothing from the whole-query reading [SR-03]', () => {
   const index = indexOf([['oak'], null]);
-  const { breakdown } = rankHybrid({ query: 'oak', count: 1, weights: WEIGHTS, index });
+  const { breakdown } = rankHybrid({ query: 'oak', count: 1, index });
   assert.equal(breakdown.tagExact[0], 1, 'counted once, not once per reading');
 });
 
@@ -504,11 +491,10 @@ test('a one-term query gains nothing from the whole-query reading [SR-03]', () =
 
 test('a room matching one tag exactly does not weaken as the query grows [SR-17]', () => {
   const index = indexOf([['verdigris'], null], [['oak'], null]);
-  const short = rankHybrid({ query: 'verdigris', count: 2, weights: WEIGHTS, index });
+  const short = rankHybrid({ query: 'verdigris', count: 2, index });
   const long = rankHybrid({
     query: 'verdigris green smear across the walls',
     count: 2,
-    weights: WEIGHTS,
     index,
   });
   assert.equal(short.strength[0], 1);
@@ -527,7 +513,6 @@ test('the best term decides strength, while the count still decides rank [SR-17]
   const { order, strength, breakdown } = rankHybrid({
     query: 'brutalism mezzotint',
     count: 2,
-    weights: WEIGHTS,
     index,
   });
   assert.deepEqual([...order], [0, 1], 'more exact matches still ranks higher');
@@ -538,13 +523,13 @@ test('the best term decides strength, while the count still decides rank [SR-17]
 
 test('a quoted phrase matching the whole title is one exact title match', () => {
   const index = buildSearchIndex([{ title: 'The Unsurveyed Room', story: null }]);
-  const { breakdown } = rankHybrid({ query: '"the unsurveyed room"', count: 1, weights: WEIGHTS, index });
+  const { breakdown } = rankHybrid({ query: '"the unsurveyed room"', count: 1, index });
   assert.equal(breakdown.titleExact[0], 1);
 });
 
 test('a room with no title contributes nothing on the title axis', () => {
   const index = buildSearchIndex([{ keywords: [{ text: 'oak' }], story: null }]);
-  const { breakdown, signals } = rankHybrid({ query: 'oak', count: 1, weights: WEIGHTS, index });
+  const { breakdown, signals } = rankHybrid({ query: 'oak', count: 1, index });
   assert.equal(breakdown.titleExact[0], 0);
   assert.equal(breakdown.titlePartial[0], 0);
   assert.equal(signals.title, false);
@@ -558,7 +543,6 @@ test('more exact tag matches always beat fewer [SR-13]', () => {
   const { order } = rankHybrid({
     query: 'alien impasto',
     count: 2,
-    weights: WEIGHTS,
     index: indexOf([['alien'], null], [['alien', 'impasto'], null]),
   });
   assert.deepEqual(order, [1, 0], 'both tags beat one');
@@ -568,7 +552,6 @@ test('more partial tag matches beat fewer, for the same number of exact matches 
   const { order } = rankHybrid({
     query: 'art deco moderne',
     count: 2,
-    weights: WEIGHTS,
     // Neither term matches any keyword exactly; room 1 partially matches two,
     // room 0 only one - tagPartialSum is a sum, so more terms is strictly more.
     index: indexOf([['art nouveau'], null], [['art nouveau', 'deco revival'], null]),
@@ -601,12 +584,11 @@ test('a long contiguous story match outranks CLIP at its most confident [SR-10]'
     ) >= STORY_LONG_RANGE.high,
     'the fixture must actually saturate the run curve'
   );
-  assert.ok(WEIGHTS.storyLong > WEIGHTS.clip, 'a full run alone outpulls CLIP at its most confident');
+  assert.ok(SEARCH_WEIGHTS.storyLong > SEARCH_WEIGHTS.clip, 'a full run alone outpulls CLIP at its most confident');
 
   const { order } = rankHybrid({
     query,
     count: 2,
-    weights: WEIGHTS,
     embeddings: Int8Array.from([0, 0, 127, 0]),
     dim: 2,
     scale: 127,
@@ -623,7 +605,6 @@ test('a quoted phrase matches the story only as an ordered run, feeding storyLon
   const { order } = rankHybrid({
     query: '"room walled in glass"',
     count: 2,
-    weights: WEIGHTS,
     index: indexOf([forward.keywords, forward.story], [scrambled.keywords, scrambled.story]),
   });
   assert.deepEqual(order[0], 0, 'the ordered phrase match ranks above the scrambled words');
@@ -645,7 +626,7 @@ const atCosines = (...cosines) =>
 const CLIP_QUERY = Float32Array.from([1, 0]);
 
 const strengthOf = (opts) =>
-  rankHybrid({ count: 3, weights: WEIGHTS, dim: 2, scale: 127, vector: CLIP_QUERY, ...opts }).strength;
+  rankHybrid({ count: 3, dim: 2, scale: 127, vector: CLIP_QUERY, ...opts }).strength;
 
 test('a soft OR: any axis can carry strength, and two weak ones agree [SR-14]', () => {
   assert.equal(matchStrength({ tag: 1 }), 1, 'a tag matched whole needs no help');
@@ -656,19 +637,19 @@ test('a soft OR: any axis can carry strength, and two weak ones agree [SR-14]', 
 test('one matched story word pulls at weights.story, and a full clause at least weights.storyLong', () => {
   const clause = 'a room walled entirely in glass and bathed in warm light';
   const index = indexOf([[], 'The cat slept.'], [[], `A ${clause.replace(/^a /, '')}.`]);
-  const word = rankHybrid({ query: 'cat', count: 2, weights: WEIGHTS, index });
-  assert.ok(Math.abs(word.strength[0] - WEIGHTS.story) < 1e-6, `one word gave ${word.strength[0]}`);
-  const run = rankHybrid({ query: clause, count: 2, weights: WEIGHTS, index });
+  const word = rankHybrid({ query: 'cat', count: 2, index });
+  assert.ok(Math.abs(word.strength[0] - SEARCH_WEIGHTS.story) < 1e-6, `one word gave ${word.strength[0]}`);
+  const run = rankHybrid({ query: clause, count: 2, index });
   assert.equal(run.order[0], 1);
-  assert.ok(run.strength[0] >= WEIGHTS.storyLong, `a full clause gave ${run.strength[0]}`);
+  assert.ok(run.strength[0] >= SEARCH_WEIGHTS.storyLong, `a full clause gave ${run.strength[0]}`);
 });
 
 test('CLIP strength is read off the raw cosine, against the anchor band [SR-16] [SR-19]', () => {
   const { centre, high } = CLIP_STRENGTH;
   const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.05, centre - 0.1, (centre + high) / 2) });
   // `atCosines` round-trips each cosine through int8, hence the tolerances.
-  assert.ok(Math.abs(strength[0] - WEIGHTS.clip) < 1e-6, `past the high anchor gave ${strength[0]}`);
-  assert.ok(Math.abs(strength[1] - WEIGHTS.clip / 2) < 0.05, `halfway gave ${strength[1]}`);
+  assert.ok(Math.abs(strength[0] - SEARCH_WEIGHTS.clip) < 1e-6, `past the high anchor gave ${strength[0]}`);
+  assert.ok(Math.abs(strength[1] - SEARCH_WEIGHTS.clip / 2) < 0.05, `halfway gave ${strength[1]}`);
   assert.equal(strength[2], 0, 'below centre is no evidence, not a mismatch');
 });
 
@@ -708,7 +689,6 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   const { order, strength } = rankHybrid({
     query: 'cghjj',
     count: 3,
-    weights: WEIGHTS,
     embeddings: atCosines(...cosines),
     dim: 2,
     scale: 127,
@@ -724,7 +704,6 @@ test('a cosine that clears the centre leads the rooms that do not [SR-11]', () =
   const { order } = rankHybrid({
     query: 'cghjj',
     count: 3,
-    weights: WEIGHTS,
     embeddings: atCosines(...cosines),
     dim: 2,
     scale: 127,
@@ -742,8 +721,8 @@ test('a strong cosine reaches CLIP\'s full weight on its own [SR-16]', () => {
   const { centre, high } = CLIP_STRENGTH;
   const midHigh = centre + (high - centre) / 2;
   const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, centre) });
-  assert.ok(Math.abs(strength[0] - WEIGHTS.clip) < 1e-6);
-  assert.ok(Math.abs(strength[1] - WEIGHTS.clip / 2) < 0.05, `halfway to the high extreme gave ${strength[1]}`);
+  assert.ok(Math.abs(strength[0] - SEARCH_WEIGHTS.clip) < 1e-6);
+  assert.ok(Math.abs(strength[1] - SEARCH_WEIGHTS.clip / 2) < 0.05, `halfway to the high extreme gave ${strength[1]}`);
   assert.ok(Math.abs(strength[2]) < 0.05, `near the no-opinion centre gave ${strength[2]}`);
 });
 
@@ -773,7 +752,7 @@ test('a partial keyword pulls by the fraction it covers', () => {
     embeddings: atCosines(-0.1, -0.1, -0.1),
     index: indexOf([['art nouveau'], null], [['oak'], null], [['pine'], null]),
   });
-  assert.ok(Math.abs(strength[0] - (WEIGHTS.tagPartial * 3) / 11) < 1e-6, `got ${strength[0]}`);
+  assert.ok(Math.abs(strength[0] - (SEARCH_WEIGHTS.tagPartial * 3) / 11) < 1e-6, `got ${strength[0]}`);
 });
 
 test('strength is indexed by rank, not by room', () => {
@@ -782,7 +761,6 @@ test('strength is indexed by rank, not by room', () => {
   const { order, strength } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf(null, null, [['oak'], null]),
   });
   assert.equal(order[0], 2, 'room 2 has the keyword');
@@ -799,7 +777,6 @@ test('a room is placed by the strength it reports, so strength never rises with 
   const { order, strength, breakdown } = rankHybrid({
     query: 'glass tower',
     count: 5,
-    weights: WEIGHTS,
     embeddings: atCosines(centre - 0.1, centre - 0.1, centre - 0.1, high + 0.1, centre - 0.1),
     dim: 2,
     scale: 127,
@@ -831,17 +808,16 @@ test('the strength bounds are configurable', () => {
   // collection, which is why they are config rather than a constant in the blend.
   const opts = { query: 'red', embeddings: atCosines(-0.1, -0.1, -0.1), dim: 2, scale: 127, vector: CLIP_QUERY };
   assert.equal(
-    rankHybrid({ count: 3, weights: WEIGHTS, ...opts }).strength[0],
+    rankHybrid({ count: 3, ...opts }).strength[0],
     0,
     'the default band reads it as no evidence'
   );
   const loosened = rankHybrid({
     count: 3,
-    weights: WEIGHTS,
     ...opts,
     clipStrength: { centre: -0.2, high: -0.15 },
   });
-  assert.ok(Math.abs(loosened.strength[0] - WEIGHTS.clip) < 1e-6, 'a shifted band gives the same cosine CLIP\'s full pull');
+  assert.ok(Math.abs(loosened.strength[0] - SEARCH_WEIGHTS.clip) < 1e-6, 'a shifted band gives the same cosine CLIP\'s full pull');
 });
 
 test('no blob means no CLIP strength, rather than a strength of zero cosines', () => {
@@ -850,7 +826,6 @@ test('no blob means no CLIP strength, rather than a strength of zero cosines', (
   const { strength } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf([['oak'], null], null, null),
   });
   assert.equal(strength[0], 1);
@@ -967,14 +942,13 @@ test('rankHybrid reports the pulls it combined, by rank', () => {
   const { order, breakdown } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf([['oak'], null], null, null),
   });
 
   // Parallel to `order`, i.e. by rank - the convention `strength` uses too.
   assert.equal(order[0], 0);
   assert.equal(breakdown.tagExact[0], 1);
-  assert.equal(breakdown.tag[0], WEIGHTS.tagExact);
+  assert.equal(breakdown.tag[0], SEARCH_WEIGHTS.tagExact);
   // Ranks nothing matched carry zeroes rather than being absent.
   assert.equal(breakdown.tagExact[1], 0);
   assert.equal(breakdown.tag[1], 0);
@@ -990,7 +964,6 @@ test('ranks/ties are independent per-signal sorts, parallel to order like breakd
   const { order, ranks, ties } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf([['oakenwood'], null], null, null),
     embeddings: atCosines(0.05, 0.3, -0.5),
     dim: 2,
@@ -1018,7 +991,6 @@ test('a tie on one axis is reported as tied, even when placement is not [SR-33]'
   const { order, ranks, ties } = rankHybrid({
     query: 'oak',
     count: 3,
-    weights: WEIGHTS,
     index: indexOf([['oak'], null], [['oak'], null], null),
     embeddings: atCosines(0.3, 0.1, -0.5),
     dim: 2,
@@ -1047,7 +1019,6 @@ test('explainRanking omits an axis that found nothing, and returns null when not
   const { breakdown, strength, ranks, ties } = rankHybrid({
     query: 'oak',
     count: 2,
-    weights: WEIGHTS,
     index: indexOf([['oak'], null], null, null),
   });
 
@@ -1068,7 +1039,7 @@ test('explainRanking omits an axis that found nothing, and returns null when not
 
 test('explainRanking reports an exact vs. a partial title match', () => {
   const index = buildSearchIndex([{ title: 'Unsurveyed', story: null }, { title: 'The Unsurveyed Room', story: null }]);
-  const { breakdown, strength, ranks, ties } = rankHybrid({ query: 'unsurveyed', count: 2, weights: WEIGHTS, index });
+  const { breakdown, strength, ranks, ties } = rankHybrid({ query: 'unsurveyed', count: 2, index });
 
   const exact = explainRanking(0, { breakdown, strength, ranks, ties, total: 2 });
   assert.ok(exact.title);
@@ -1090,7 +1061,6 @@ test('the CLIP line reads a cosine below the centre as 0%, off the raw cosine [S
   const { breakdown, strength, ranks, ties } = rankHybrid({
     query: 'cghjj',
     count: 3,
-    weights: WEIGHTS,
     dim: 2,
     scale: 127,
     vector: CLIP_QUERY,

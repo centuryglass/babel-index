@@ -9,7 +9,7 @@ conventions still apply.
 - **One number, `strength`, both places a room and sets the density around
   it.** `rankHybrid` sorts by it, so there is no second ranking score to
   reconcile. A rule about which signal wins (an exact tag over CLIP, a long
-  story run over CLIP) holds because of `config.search.weights`, and
+  story run over CLIP) holds because of `scoring.ts`'s `SEARCH_WEIGHTS`, and
   `scoring.test.ts` checks each one on a built query: re-tuning a weight
   means re-running those tests, not re-deriving an inequality.
 - **Any change to what search returns fails `scoring.fixture.test.ts` until
@@ -35,7 +35,7 @@ conventions still apply.
   at `peakAt`, clamped at both ends (`ordering.ts`'s `densityRamp`), walking
   outward. Strength must stay non-increasing with rank, and anything at or
   under `floor` is the baseline; both are asserted.
-- **`search.density.peakAt` tracks `search.weights.clip`.** A CLIP-only room
+- **`search.density.peakAt` tracks `SEARCH_WEIGHTS.clip`.** A CLIP-only room
   never exceeds that weight, so re-tuning the weight without `peakAt` changes
   whether a genuine image match packs solid.
 - **Distance from the center carries one meaning at a time, so a search and
