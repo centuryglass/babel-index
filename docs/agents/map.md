@@ -89,9 +89,9 @@ still apply.
 
   `main.tsx` pins the center at level 0 and each generic or distill tile at
   the coarsest level its own array has - never a hardcoded `FALLBACK_LEVEL`,
-  since a collection with no shared pyramid has only level 0. `drawGenericFade`
-  (and its GL and slide counterparts) draws the distill alternate at the
-  base tile's level: distill is a mode toggle, visible at any zoom.
+  since a collection with no shared pyramid has only level 0. `framePlan.ts`'s
+  `planGenericFade`, shared by every renderer, draws the distill alternate
+  at the base tile's level: distill is a mode toggle, visible at any zoom.
 
 ## The center room's controls
 

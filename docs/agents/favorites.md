@@ -51,8 +51,8 @@ you" routes here, and its conventions still apply.
   non-generic cell; `favoriteBadge.ts` is the pure geometry and hit-test
   half. Two separate zoom gates:
   - **Drawing needs an exact pyramid level.** The scaled art is hand-tuned
-    and stops at tile width 128. `drawFavoriteBadge`/`drawFavoriteBadgeGL`
-    skip the cache's coarser-or-finer substitution: the badge's screen size
+    and stops at tile width 128. `framePlan.ts`'s `planFavoriteBadge`
+    skips the cache's coarser-or-finer substitution: the badge's screen size
     tracks the tile regardless of which rung backs it, so a substitute
     would only be blurrier.
   - **Interaction needs `config.favorites.minInteractiveTileWidth`.** The

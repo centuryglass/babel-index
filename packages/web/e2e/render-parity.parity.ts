@@ -2,18 +2,17 @@
  * Render-mode parity: drive the same collection, viewport and camera through both
  * the Canvas2D renderer and the WebGL one (`?webgl=0` vs `?webgl` -
  * `webglFlag.ts`/`glRenderer.ts`/`glSlideRenderer.ts`), and check the two draw
- * the same map. This is the real-GPU check behind the lockstep invariant in
- * docs/agents/rendering.md's "The WebGL renderer" - the recording fakes in
- * `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert draw-call shape,
- * never pixels or a real GPU.
+ * the same map. Both paint one shared plan (docs/agents/rendering.md's "The
+ * WebGL renderer"), so this is the real-GPU check on the two painters - the
+ * recording fakes in `glRenderer.test.ts`/`glSlideRenderer.test.ts` assert
+ * draw-call shape, never pixels or a real GPU.
  *
  * Two checks per scene, one strict and one loose:
  *   - HUD parity is the strict, deterministic backbone. Both renderers print
  *     their own account of the frame (`support.ts`'s `parseHud`), and every
  *     draw-loop decision that isn't a raw pixel - which pyramid level, how
- *     many cells substituted/blank - must agree, because the two loops are
- *     supposed to run in lockstep (see docs/agents/rendering.md, "The
- *     WebGL renderer").
+ *     many cells substituted/blank - must agree, because both come from the
+ *     same plan; only the GL painter's lost-texture count can move them.
  *   - A pixel diff is the loose guard. GL's LINEAR sampling and the browser's
  *     2D image smoothing differ at tile edges and on text, so an
  *     exact match is not the bar; the bar is "these are the same picture, not
@@ -27,7 +26,7 @@
  * `deploy.yml` is the only workflow that runs it. It boots two servers and
  * two browsers. Headless Chromium's software WebGL2 (SwiftShader) is enough
  * to run it; no real GPU is required. Run it by hand after touching either
- * draw loop:
+ * painter:
  *
  *   npx playwright install chromium   # once
  *   npm run test:parity

@@ -15,9 +15,9 @@
  *
  * What this hook owns beyond the flip is the fade: nothing composites a
  * generic tile's disappearance elsewhere, so `genericFade` (0-1, read every
- * frame by `render.ts`/`slide.ts` via `useMapRenderer.ts`) is driven by a
+ * frame by `framePlan.ts`/`slidePlan.ts` via `useMapRenderer.ts`) is driven by a
  * small rAF loop here. The scalar crossfades generic tiles to their paired
- * distill alternates - `drawGenericFade` in `render.ts` owns what the faded
+ * distill alternates - `planGenericFade` in `framePlan.ts` owns what the faded
  * end actually looks like.
  *
  * The sequence is asymmetric.

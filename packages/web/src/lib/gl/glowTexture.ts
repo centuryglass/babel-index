@@ -1,9 +1,8 @@
 /**
  * A hover-glow silhouette (the favorite badge, either distill-toggle state),
  * baked once to an offscreen 2D canvas and cached as a GL texture - what
- * `glRenderer.ts`'s `drawGlow` composites on hover. `render.ts`'s
- * `traceFavoriteToggle`/`traceDistillToggle` and this file's `get` trace the
- * same path commands via `svgPath.ts`'s `tracePathCommands`, so the two
+ * `glRenderer.ts`'s `paintGL` composites for a glow item. `render.ts`'s
+ * `paintCanvas2D` and this file's `get` trace the same path commands via `svgPath.ts`'s `tracePathCommands`, so the two
  * renderers draw the identical outline.
  *
  * Every path here is already defined in fractions of the whole tile (see
@@ -37,7 +36,7 @@ export interface GLGlowTexture {
 }
 
 export interface GlowTextureCache {
-  /** Bakes `d` on first request and caches the result; null when no offscreen canvas is available - see `glRenderer.ts`'s `drawGlow` for what it draws then. */
+  /** Bakes `d` on first request and caches the result; null when no offscreen canvas is available - see `glRenderer.ts`'s `paintGL` for what it draws then. */
   get(gl: WebGL2RenderingContext, d: string): GLGlowTexture | null;
   /** Frees every resident texture via `gl.deleteTexture`, if any. */
   dispose(gl: WebGL2RenderingContext): void;

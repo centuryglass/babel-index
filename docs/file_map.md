@@ -176,7 +176,7 @@ Every tracked file in the repo, with a line or two on what it is for.
       `RoomOverlay` still inline their own copies and import only
       `useScrimDismiss`.
     * `useDistillMode.ts`: The distill toggle's state and its fade-then-slide
-      sequence; `drawGenericFade` in `render.ts` draws the faded end.
+      sequence; `planGenericFade` in `framePlan.ts` plans the faded end.
     * `useContentZoom.ts`: Pinch-to-zoom and one-finger pan scoped to one DOM
       subtree (a room overlay, a dialog page, the catalog list).
   - `src/lib/`: Logic with no JSX - state, geometry and rendering.
@@ -191,8 +191,16 @@ Every tracked file in the repo, with a line or two on what it is for.
     * `camera.ts`: Pure camera math for the map.
     * `loadingAnimation.ts`: The center-tile loading indicator's sprite
       playback (see `docs/agents/rearrangement.md`'s "The loading indicator").
-    * `render.ts`: Draws one Canvas2D map frame.
-    * `slide.ts`: The Canvas2D rearrangement animation renderer.
+    * `drawList.ts`: A frame's draw primitives as a pooled list - what the
+      planners write and the painters read.
+    * `framePlan.ts`: Plans a map frame into a `DrawList` for both
+      renderers - the pyramid rules, per-cell decisions and overlay rules.
+    * `slidePlan.ts`: Plans a rearrangement frame into a `DrawList`, reusing
+      `framePlan.ts`'s per-cell rules.
+    * `render.ts`: The Canvas2D map renderer and `paintCanvas2D`, the
+      Canvas2D painter.
+    * `slide.ts`: The rearrangement's timeline and slideshow, and its
+      Canvas2D renderer.
     * `picking.ts`: `roomAtPoint` - which room is under a screen point.
     * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge on a
       room tile's upper right corner.
@@ -222,8 +230,9 @@ Every tracked file in the repo, with a line or two on what it is for.
       `?perf`.
     * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl` override and the WebGL2
       probe (see `docs/agents/rendering.md`'s "The WebGL renderer").
-    * `glRenderer.ts`: The WebGL counterpart of `render.ts`.
-    * `glSlideRenderer.ts`: The WebGL counterpart of `slide.ts`.
+    * `glRenderer.ts`: The WebGL map renderer and `paintGL`, the WebGL
+      painter.
+    * `glSlideRenderer.ts`: The WebGL rearrangement renderer.
     * `gl/context.ts`: The shader program, VAO and quad-drawing primitives;
       created once per canvas.
     * `gl/shaders.ts`: Loads the quad shader's GLSL source.

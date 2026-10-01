@@ -5,7 +5,7 @@
  * to anchor to the tile's lower right corner - the favorite badge's mirror
  * corner (`favoriteBadge.ts` anchors to the top right) - and scaled by a
  * cell's pixels-per-cell-width over `BASE_TILE.w`, the same factor
- * `render.ts`/`slide.ts` scale every corner overlay by.
+ * `framePlan.ts` scales every corner overlay by.
  *
  * `distill_off`/`distill_on` in `shelf_geometry.svg` are each traced as
  * their own outline, one silhouette per state, in whole-tile fractions
@@ -43,8 +43,8 @@ const DISTILL_ON_POLYGON: Point[] | null = DISTILL_ON_PATH ? flattenPath(DISTILL
  * The toggle's full screen rect for a tile whose top left corner is at
  * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's lower
  * right corner and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the art's own decoded pixel size (read by `render.ts`'s
- * `drawDistillToggle` once the tile cache reports it loaded), so a
+ * `iconSize` is the art's own decoded pixel size (read by `framePlan.ts`'s
+ * `planDistillToggle` once the tile cache reports it loaded), so a
  * differently-sized asset needs no change here.
  */
 export function distillIconScreenRect(

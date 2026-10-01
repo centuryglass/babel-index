@@ -9,14 +9,22 @@ conventions still apply.
 WebGL is the default renderer; Canvas2D (`render.ts`/`slide.ts`) is the
 second.
 
-- **The two renderers are separate implementations kept in lockstep.**
-  `glRenderer.ts`/`glSlideRenderer.ts` make the same per-cell decisions as
-  `render.ts`/`slide.ts` (pyramid level, what each cell draws, badge gating,
-  prefetch order) with `gl/context.ts`'s quad primitives. A change to either
-  draw loop needs the matching change in the other. `GLDrawOpts`/
-  `GLDrawResult` derive from `render.ts`'s `DrawOpts`/`DrawResult`, so a
-  shape change fails typecheck. Behavior drift is caught by
-  `npm run test:parity`; run it by hand when touching either loop.
+- **The renderers share a planner and differ only in their painters.**
+  `framePlan.ts` (map) and `slidePlan.ts` (rearrangement) make every
+  per-cell decision - pyramid level, what each cell draws, badge gating,
+  overlay geometry, prefetch order - into a `drawList.ts` `DrawList`.
+  `render.ts`'s `paintCanvas2D` and `glRenderer.ts`'s `paintGL` only walk it.
+  - A rule change goes in the planner, once, and is unit-tested there.
+  - A new primitive kind needs a case in both painters; each painter's
+    `switch` ends in `assertNever`, so a missing case fails typecheck.
+  - Painter behavior (blending, smoothing, stroke placement, texture
+    filtering) can still drift. `npm run test:parity` catches it; run it by
+    hand when touching either painter.
+- **The GL painter can lose a planned image.** A tile the cache has decoded
+  may not have a texture yet (`gl/textureCache.ts`). `paintGL` then draws
+  the item's `fallback` and reports the cell, and the GL renderers move it
+  from drawn to blank in their `DrawResult`. Planning cannot know this, so
+  don't move that count into the planner.
 - **GL setup happens once per canvas element's lifetime.**
   `gl/context.ts`'s `createGLContext` creates a new shader program, VAO and
   buffer on every call, and only its `dispose()` frees them.

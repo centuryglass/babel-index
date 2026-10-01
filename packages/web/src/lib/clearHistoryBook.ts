@@ -14,7 +14,7 @@
  * hit-test of its own: the book underneath keeps its hit-test in
  * `center.ts`, unaffected by the overlay's presence or size. `iconSize` is
  * the art's decoded pixel size, read from the image at runtime (see
- * `render.ts`'s `drawClearHistoryBookOverlay`), not a constant.
+ * `framePlan.ts`'s `planClearHistoryBook`), not a constant.
  */
 import { BASE_TILE } from './pyramid.ts';
 

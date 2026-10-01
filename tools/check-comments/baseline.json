@@ -113,9 +113,6 @@
   "packages/web/src/lib/pyramid.ts": {
     "conviction": 1
   },
-  "packages/web/src/lib/render.ts": {
-    "conviction": 1
-  },
   "packages/web/src/lib/rooms.ts": {
     "conviction": 2
   },

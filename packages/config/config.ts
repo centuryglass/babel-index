@@ -458,8 +458,8 @@ export const DEFAULTS: Defaults = {
      * Below this many CSS pixels of cell width, the on-tile favorite badge
      * stops responding to a tap or a hover - the tile it sits on is too small
      * for the target to mean anything (issue #257). Interactivity only;
-     * drawing has a separate cutoff (`render.ts`'s
-     * `drawFavoriteBadge`). This value is kept at the same tile width the
+     * drawing has a separate cutoff (`framePlan.ts`'s
+     * `planFavoriteBadge`). This value is kept at the same tile width the
      * scaled badge art runs out at (`manifest.shared.favoriteLevels`), so a
      * badge is never tappable after it has stopped being legible.
      */

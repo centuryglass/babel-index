@@ -134,11 +134,13 @@ rules. It is applied by hand, since it is independent of releases.
 The map is a virtualized canvas with two renderers: WebGL2
 (`glRenderer.ts`/`glSlideRenderer.ts`), the default where the browser
 supports it, and Canvas2D (`render.ts`/`slide.ts`), used otherwise or with
-`?webgl=0`. They are separate implementations that must make the same
-per-cell decisions (pyramid level, what each cell draws, favorite-badge
-placement, prefetch order). `npm run test:parity` drives both over the
-same scenes and compares their HUD reports and pixels; it runs on
-headless Chromium's software WebGL2, so it needs no GPU.
+`?webgl=0`. Both paint the same plan: `framePlan.ts` and `slidePlan.ts`
+make every per-cell decision (pyramid level, what each cell draws,
+favorite-badge placement, prefetch order) into a list of draw primitives,
+and each renderer only paints that list. `npm run test:parity` drives both
+over the same scenes and compares their HUD reports and pixels, which
+catches the painters drifting; it runs on headless Chromium's software
+WebGL2, so it needs no GPU.
 
 A rearrangement (re-sorting the map after a search or a shuffle) is a
 sliding-tile illusion, not an instant relayout. `packages/map/illusion.ts`

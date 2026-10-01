@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
-import { createRenderer, drawFavoriteBadge, drawFavoriteSwitch, type DrawContext, type DrawResult } from './render.ts';
-import { createTileCache, CENTER, FAV_ON, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, type Drawable, type LoadableImage, type RoomId, type TileCache, type TileHit } from './tiles.ts';
+import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
+import { createTileCache, CENTER, type Drawable, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
 import { favoriteIconScreenRect } from './favoriteBadge.ts';
@@ -68,7 +68,7 @@ function fakeCtx(): FakeCtx {
 
 // A stand-in for the badge/toggle/switch corner overlays' own decoded pixel
 // size - real art is comfortably under this at every zoom these tests use,
-// so a screen-space draw derived from it (`naturalIconSize`, render.ts)
+// so a screen-space draw derived from it (`naturalIconSize`, framePlan.ts)
 // still reads as "small" against the `w < 100 && h < 300` heuristic these
 // tests filter on to tell an overlay draw from a tile-sized one.
 const FAKE_ICON_SIZE = { width: 96, height: 96 };
@@ -622,7 +622,7 @@ test('the favorite badge draws on every room cell, and only room cells', () => {
 
   const badgeDraws = ctx.drawn.filter((d) => d.w < 100 && d.h < 300); // the badge is tiny next to a tile
   // +1: the center tile's favorites-sort switch base plate draws small too,
-  // whenever a favorite store is present - see `drawFavoriteSwitch`.
+  // whenever a favorite store is present - see `planFavoriteSwitch`.
   assert.equal(badgeDraws.length, rooms + 1);
 });
 
@@ -688,78 +688,6 @@ test('the badge stays proportional to the tile across a level change, once the l
     Math.abs(level1.w / level0.w - 0.5) < 1e-9,
     `a half-size tile with a half-size (already-scaled) icon must draw a half-size badge, got ${level0.w} -> ${level1.w}`
   );
-});
-
-test('drawFavoriteBadge never substitutes a different level - a resident coarser rung is not drawn undersized', () => {
-  // issue #257: unlike a room tile (which happily upscales a coarser
-  // resident level while its own loads), the badge's size already
-  // tracks the tile's scale regardless of which rung's pixels back it, so a
-  // substitute would only be softer, never smaller - drawing one would
-  // defeat the reason the badge has multiple rungs at all. Level 3 is
-  // resident (simulating "loaded, but for a different zoom, or a level with
-  // no generated badge art") while level 2 is being asked for.
-  const cache: TileCache = {
-    beginFrame: () => {},
-    request: () => null,
-    get: (_id: RoomId, want: number): TileHit | null =>
-      want === 3 ? { img: {} as unknown as Drawable, rect: null, level: 3 } : null,
-    isReady: () => false,
-    prefetch: () => {},
-    pin: () => {},
-    size: () => 0,
-    sizeOf: () => 0,
-    sheetCount: () => 0,
-    overBudget: () => 0,
-    pendingPrefetch: () => 0,
-    hasPrefetchCapacity: () => true,
-    clear: () => {},
-  };
-  const ctx = fakeCtx();
-  drawFavoriteBadge(ctx, cache, FAV_ON, { x: 100, y: 75 }, 0, 0, 2);
-  assert.equal(ctx.drawn.length, 0, 'a non-exact-level hit must not be drawn');
-});
-
-test('the favorites-sort switch sizes each piece off its OWN decoded pixels, not the base plate\'s', () => {
-  // fav_mine_on.png/fav_count_on.png are close to fav_center_switch_base.png
-  // in size but not pixel-identical in the real art - an earlier version drew
-  // every piece into the base plate's own rect, stretching the "on" face off
-  // its intended alignment with the base whenever the two sizes disagreed.
-  const sizeFor: Record<string, { width: number; height: number }> = {
-    [FAV_CENTER_SWITCH_BASE]: { width: 281, height: 275 },
-    [FAV_MINE_ON]: { width: 255, height: 270 },
-  };
-  const cache: TileCache = {
-    beginFrame: () => {},
-    request: () => null,
-    get: (id: RoomId): TileHit | null => {
-      const size = sizeFor[String(id)];
-      if (!size) return null;
-      return { img: { ...size } as unknown as Drawable, rect: null, level: 0 };
-    },
-    isReady: () => false,
-    prefetch: () => {},
-    pin: () => {},
-    size: () => 0,
-    sizeOf: () => 0,
-    sheetCount: () => 0,
-    overBudget: () => 0,
-    pendingPrefetch: () => 0,
-    hasPrefetchCapacity: () => true,
-    clear: () => {},
-  };
-
-  const ctx = fakeCtx();
-  drawFavoriteSwitch(ctx, cache, 'mine', { x: 1024, y: 768 }, 0, 0);
-
-  const base = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 281)!;
-  const mine = ctx.drawn.find((d) => (d.img as unknown as { width: number }).width === 255)!;
-  assert.ok(base && mine, 'both the base plate and the "mine" face must draw');
-  // Both anchor to the same corner...
-  assert.equal(base.x, mine.x);
-  assert.equal(base.y, mine.y);
-  // ...but each is sized off its own art, not stretched into the other's rect.
-  assert.equal(base.w, 281);
-  assert.equal(mine.w, 255);
 });
 
 // --- the distill toggle ------------------------------------------------------

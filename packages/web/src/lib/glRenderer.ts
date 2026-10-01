@@ -1,60 +1,27 @@
 /**
- * The WebGL counterpart of `render.ts`'s `createRenderer`.
+ * The WebGL map renderer: `framePlan.ts` decides the frame, and `paintGL`
+ * draws its `DrawList` with `gl/context.ts`'s quad primitives. One draw call
+ * per item, no instancing. `glSlideRenderer.ts` paints with `paintGL` too.
  *
- * Mirrors `render.ts`'s per-cell loop (blank fallback, tile draw, generic
- * fade, then the prefetch ring and coarser-level warm pass) with
- * `gl/context.ts`'s quad primitives in place of `CanvasRenderingContext2D`
- * calls, and the same `TileCache`/`pyramid.ts` policy: one draw call per
- * cell, no instancing. docs/agents/rendering.md's "The WebGL renderer" carries
- * the lockstep rule for the two loops; `render-parity.parity.ts` checks the
- * result.
+ * The painter resolves each image item through `gl/textureCache.ts`, the GPU
+ * side's own cache. An item whose texture has not uploaded yet draws its
+ * fallback fill, if it has one, and a cell lost that way is reported back so
+ * the frame's stats count it blank.
  *
- * Hover glows for the favorite badge and the distill toggle are not
- * re-traced per frame: `gl/glowTexture.ts` bakes the traced silhouette to a
- * texture, keyed by path string, because the shape never changes. The center
- * tile's spine text follows the same offscreen-2D-then-texture route
- * (`gl/spineTexture.ts`), re-rendering `composeSpines` only when its
- * content/hover/size key changes.
- *
- * The favorites-sort switch, distill toggle, clear-history overlay and
- * keyboard-cursor ring are textured quads of the same corner art
- * (`drawFavoriteSwitchGL`/`drawDistillToggleGL`/
- * `drawClearHistoryBookOverlayGL`, exported for `glSlideRenderer.ts`) and,
- * for the cursor, `gl/context.ts`'s `drawStrokeQuad`.
+ * Two primitives are baked to textures rather than drawn per frame, keyed so
+ * they re-render only on change: the hover glow's traced silhouette
+ * (`gl/glowTexture.ts`, by path string) and the center tile's spine titles
+ * (`gl/spineTexture.ts`, by content, hover and size).
  */
-import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
-import { pxPerCell } from './camera.ts';
-import {
-  CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
-  genericId, genericDistillId, type RoomId, type TileCache,
-} from './tiles.ts';
-import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
-import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
-import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
-import { areSpinesLegible, BOOK_COUNT } from './center.ts';
 import { HOVER_GLOW_RGB } from './cssVars.ts';
-import { toGLRect, type GLContext, type Rect } from './gl/context.ts';
+import type { GLContext, Rect } from './gl/context.ts';
 import { createGLTextureCache, type GLTextureCache } from './gl/textureCache.ts';
 import { createSpineTextureCache, type SpineTextureCache } from './gl/spineTexture.ts';
 import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.ts';
-import type { DrawOpts, DrawResult } from './render.ts';
-import { isCenter, type MapLayout } from '../../../map/ordering.ts';
-import type { SortMode } from '../../../map/favorites.ts';
-
-/**
- * Same rule as `render.ts`'s `idOf`, kept in lockstep with it - see
- * docs/agents/rendering.md's "The WebGL renderer".
- * Built from `layout.rankOf`/`isCenter` for the same per-frame allocation
- * reason.
- */
-const idOf = (layout: MapLayout, order: number[], gx: number, gy: number): RoomId => {
-  if (isCenter(gx, gy)) return CENTER;
-  const rank = layout.rankOf(gx, gy);
-  return rank === -1 || rank >= order.length
-    ? genericId(layout.genericIndexAt(gx, gy))
-    : order[rank];
-};
+import { assertNever, type DrawList } from './drawList.ts';
+import { createMapPlanner, type DrawResult, type MapFrameOpts } from './framePlan.ts';
+import type { TileCache } from './tiles.ts';
+import type { Pyramid } from './pyramid.ts';
 
 export interface CreateGLRendererOpts {
   cache: TileCache;
@@ -65,387 +32,129 @@ export interface CreateGLRendererOpts {
   glowTextures?: GlowTextureCache;
 }
 
-/** `render.ts`'s `DrawOpts` with the 2D context swapped for a GL one. */
-export type GLDrawOpts = Omit<DrawOpts, 'ctx'> & { gl: GLContext };
+/** `framePlan.ts`'s `MapFrameOpts` plus the GL context to paint on. */
+export type GLDrawOpts = MapFrameOpts & { gl: GLContext };
 
 export type GLDrawResult = DrawResult;
 
 /**
- * The GL clear colour, `#0a0908`. Every cell paints over it (see `render.ts`'s
- * draw loop), so it shows only where a frame leaves a gap.
+ * The GL clear colour, `#0a0908`, shared with `glSlideRenderer.ts`. Every
+ * cell paints over it (see `createMapPlanner`), so it shows only where a
+ * frame leaves a gap.
  */
-const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
-/** `render.ts`'s blank-cell fill `#15120f`, as float RGB; all four copies must agree (see that fill's comment). */
-const BLANK_FILL: [number, number, number] = [0x15 / 255, 0x12 / 255, 0x0f / 255];
+export const BACKGROUND: [number, number, number] = [0x0a / 255, 0x09 / 255, 0x08 / 255];
+
 /**
  * `cssVars.ts`'s `HOVER_GLOW_RGB`, as a flat quad. Used only when
  * `gl/glowTexture.ts` has no offscreen canvas to bake with - a headless
  * environment such as `npm test`, which never exercises a hover state
- * anyway. The real treatment is `drawGlow`'s textured case.
+ * anyway. The real treatment is the baked silhouette.
  */
-const FAVORITE_HOVER_GLOW: [number, number, number, number] = [
+const FLAT_HOVER_GLOW: [number, number, number, number] = [
   HOVER_GLOW_RGB[0] / 255, HOVER_GLOW_RGB[1] / 255, HOVER_GLOW_RGB[2] / 255, 0.28,
 ];
 
-/**
- * Composite a hover-glow silhouette over a tile's full screen rect. `d`'s
- * coordinates are fractions of the whole tile (`gl/glowTexture.ts`), so the
- * destination is the cell rect, not an icon's own smaller rect - the one
- * exception to this file's usual textured quads. With no bake available it
- * falls back to the flat `FAVORITE_HOVER_GLOW` quad over `fallbackRect`, so
- * a headless environment still draws something.
- */
-function drawGlow(
-  gl: GLContext,
-  glowTextures: GlowTextureCache,
-  d: string | null,
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  fallbackRect: Rect
-): void {
-  const glow = d ? glowTextures.get(gl.gl, d) : null;
-  if (glow) {
-    const rect: Rect = { x: sx, y: sy, w: cellPx.x, h: cellPx.y };
-    gl.drawTexturedQuad(glow.texture, { x: 0, y: 0, w: glow.width, h: glow.height }, glow.width, glow.height, rect);
-  } else {
-    gl.drawFlatQuad(fallbackRect, FAVORITE_HOVER_GLOW);
-  }
+/** The textures `paintGL` resolves items through. */
+export interface GLPaintResources {
+  textures: GLTextureCache;
+  glowTextures: GlowTextureCache;
+  /** Only the map renderer plans spines; a list with a spines item needs this. */
+  spineTextures?: SpineTextureCache;
 }
-/** `render.ts`'s cursor-ring stroke color (`#e8e0d2`), as float RGBA. */
-const CURSOR_STROKE: [number, number, number, number] = [232 / 255, 224 / 255, 210 / 255, 1];
 
-/**
- * GL twin of `render.ts`'s `drawGenericFade`: the distill alternate as a
- * textured quad at `fade` alpha over the base tile, flat black quad when the
- * alternate has no resident texture yet - see `render.ts`'s `drawGenericFade`
- * for the full rule, including when no alternate exists at all. Shared with
- * `glSlideRenderer.ts`.
- */
-export function drawGenericFadeGL(
-  gl: GLContext,
-  cache: TileCache,
-  textures: GLTextureCache,
-  distillId: RoomId,
-  fade: number,
-  dst: Rect,
-  level = 0
-): void {
-  if (fade <= 0) return;
-  const alpha = Math.min(1, fade);
-  const hit = cache.get(distillId, level);
-  const tex = hit ? textures.get(gl, hit.img) : null;
-  if (hit && tex) {
-    const src: Rect = hit.rect ? toGLRect(hit.rect) : { x: 0, y: 0, w: tex.width, h: tex.height };
-    gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, dst, alpha);
-  } else {
-    gl.drawFlatQuad(dst, [0, 0, 0, alpha]);
-  }
+/** Cell images `paintGL` could not draw, by the `CellStat` they were planned with. */
+export interface GLPaintLoss {
+  drawn: number;
+  substituted: number;
 }
 
 /**
- * GL twin of `render.ts`'s `drawFavoriteBadge`: rule 1 does not apply, and
- * neither does a fallback to a different pyramid rung - only the tile's draw
- * level (`level`) is ever requested, and anything else (still loading,
- * or a level with no generated badge art at all below tile width 128) draws
- * nothing this frame. See `drawFavoriteBadge`'s doc for why no fallback is
- * the correct behaviour here, not a gap. The hover glow is the baked
- * silhouette (`gl/glowTexture.ts`). Shared with `glSlideRenderer.ts` so the
- * badge rides along with sliding tiles.
+ * Paint a planned frame with GL quads, in list order. The list's CSS-pixel
+ * rects are scaled by its `dpr` here: a shader has no implicit pixel-ratio
+ * scale (`gl/context.ts`). The caller has already resized and cleared.
  */
-export function drawFavoriteBadgeGL(
-  gl: GLContext,
-  cache: TileCache,
-  textures: GLTextureCache,
-  isFavorite: boolean,
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  level: number,
-  hovered: boolean,
-  glowTextures: GlowTextureCache
-): void {
-  const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, level);
-  const tex = hit && hit.level === level ? textures.get(gl, hit.img) : null;
-  if (!hit || hit.level !== level || !tex) return;
-  const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
-  const rect: Rect = favoriteIconScreenRect(cellPx, sx, sy, iconSize, level);
-  const src = hit.rect
-    ? toGLRect(hit.rect)
-    : { x: 0, y: 0, w: tex.width, h: tex.height };
-  gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
-  if (hovered) drawGlow(gl, glowTextures, FAVORITE_TOGGLE_PATH, cellPx, sx, sy, rect);
-}
-
-/**
- * The favorites-sort switch as a textured quad per piece - mirrors
- * `render.ts`'s `drawFavoriteSwitch`; see that function's doc for why each
- * piece sizes itself from its own art. Shared with `glSlideRenderer.ts` so
- * the center tile's controls survive the handoff.
- */
-export function drawFavoriteSwitchGL(
-  gl: GLContext,
-  cache: TileCache,
-  textures: GLTextureCache,
-  sortMode: SortMode,
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number
-): void {
-  const draw = (id: RoomId) => {
-    const hit = cache.get(id, 0);
-    const tex = hit ? textures.get(gl, hit.img) : null;
-    if (!hit || !tex) return;
-    const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
-    const rect: Rect = favoriteSwitchScreenRect(cellPx, sx, sy, iconSize);
-    const src: Rect = hit.rect
-      ? toGLRect(hit.rect)
-      : { x: 0, y: 0, w: tex.width, h: tex.height };
-    gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
+export function paintGL(gl: GLContext, list: DrawList, res: GLPaintResources): GLPaintLoss {
+  const { dpr } = list;
+  const loss: GLPaintLoss = { drawn: 0, substituted: 0 };
+  // Reused for every destination: `gl/context.ts` reads a rect only during
+  // the call it is passed to.
+  const dst: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  const scaled = (r: Rect): Rect => {
+    dst.x = r.x * dpr;
+    dst.y = r.y * dpr;
+    dst.w = r.w * dpr;
+    dst.h = r.h * dpr;
+    return dst;
   };
-  draw(FAV_CENTER_SWITCH_BASE);
-  if (sortMode === 'mine') draw(FAV_MINE_ON);
-  else if (sortMode === 'count') draw(FAV_COUNT_ON);
-}
 
-/**
- * The center tile's distill toggle - mirrors `render.ts`'s
- * `drawDistillToggle`, with the hover glow baked per silhouette
- * (`gl/glowTexture.ts`) instead of re-traced. Shared with
- * `glSlideRenderer.ts`, same reason as `drawFavoriteSwitchGL`.
- */
-export function drawDistillToggleGL(
-  gl: GLContext,
-  cache: TileCache,
-  textures: GLTextureCache,
-  distillMode: boolean,
-  hovered: boolean,
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  glowTextures: GlowTextureCache
-): void {
-  const id = distillMode ? DISTILL_ON : DISTILL_OFF;
-  const hit = cache.get(id, 0);
-  const tex = hit ? textures.get(gl, hit.img) : null;
-  if (!hit || !tex) return;
-  const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
-  const rect: Rect = distillIconScreenRect(cellPx, sx, sy, iconSize);
-  const src: Rect = hit.rect
-    ? toGLRect(hit.rect)
-    : { x: 0, y: 0, w: tex.width, h: tex.height };
-  gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
-  if (hovered) {
-    const activePath = distillMode ? DISTILL_ON_PATH : DISTILL_OFF_PATH;
-    drawGlow(gl, glowTextures, activePath, cellPx, sx, sy, rect);
+  for (let i = 0; i < list.length; i++) {
+    const item = list.items[i];
+    switch (item.kind) {
+      case 'image': {
+        const tex = res.textures.get(gl, item.source);
+        if (tex) {
+          const src = item.whole ? { x: 0, y: 0, w: tex.width, h: tex.height } : item.src;
+          gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, scaled(item.dst), item.alpha);
+          break;
+        }
+        // The decode landed but the upload has not (or the image is past
+        // `maxTextureSize`): the planned fallback stands in for it.
+        if (item.fallback) {
+          const [r, g, b] = item.fallback.rgb;
+          gl.drawFlatQuad(scaled(item.dst), [r, g, b, item.alpha]);
+        }
+        if (item.stat === 'drawn') loss.drawn++;
+        else if (item.stat === 'substituted') loss.substituted++;
+        break;
+      }
+      case 'fill': {
+        const [r, g, b] = item.color.rgb;
+        gl.drawFlatQuad(scaled(item.dst), [r, g, b, item.alpha]);
+        break;
+      }
+      case 'stroke': {
+        const [r, g, b] = item.color.rgb;
+        gl.drawStrokeQuad(scaled(item.dst), item.width * dpr, [r, g, b, 1]);
+        break;
+      }
+      case 'glow': {
+        // The path's coordinates are fractions of the whole tile, so a baked
+        // glow covers the cell rect, not the icon's own smaller one.
+        const glow = res.glowTextures.get(gl.gl, item.path);
+        if (glow)
+          gl.drawTexturedQuad(glow.texture, { x: 0, y: 0, w: glow.width, h: glow.height }, glow.width, glow.height, scaled(item.cell));
+        else gl.drawFlatQuad(scaled(item.fallback), FLAT_HOVER_GLOW);
+        break;
+      }
+      case 'spines': {
+        const rect = scaled(item.dst);
+        const spine = res.spineTextures?.get(gl.gl, rect.w, rect.h, item.slots, item.hoveredBook, item.limits);
+        if (spine) gl.drawTexturedQuad(spine.texture, { x: 0, y: 0, w: spine.width, h: spine.height }, spine.width, spine.height, rect);
+        break;
+      }
+      default:
+        assertNever(item);
+    }
   }
-}
-
-/**
- * The "forget searches" book's black spine overlay - mirrors `render.ts`'s
- * `drawClearHistoryBookOverlay`, no hover treatment (the book's own hover
- * glow comes from `composeSpines`/the spine texture, drawn on top of this).
- * Shared with `glSlideRenderer.ts`, same reason as `drawFavoriteSwitchGL`.
- */
-export function drawClearHistoryBookOverlayGL(
-  gl: GLContext,
-  cache: TileCache,
-  textures: GLTextureCache,
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number
-): void {
-  const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
-  const tex = hit ? textures.get(gl, hit.img) : null;
-  if (!hit || !tex) return;
-  const iconSize = hit.rect ? { w: hit.rect.sw, h: hit.rect.sh } : { w: tex.width, h: tex.height };
-  const rect: Rect = clearHistoryBookScreenRect(cellPx, sx, sy, iconSize);
-  const src: Rect = hit.rect
-    ? toGLRect(hit.rect)
-    : { x: 0, y: 0, w: tex.width, h: tex.height };
-  gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, rect);
+  return loss;
 }
 
 export function createGLRenderer({
-  cache, pyramid = PYRAMID, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+  cache, pyramid, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLRendererOpts) {
-  let level: number | null = null;
-  // Cycles the prefetch ring's starting corner across frames - see its use below.
-  let ringFrame = 0;
+  const planner = createMapPlanner({ cache, pyramid });
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
-  function draw({
-    gl, width: w, height: h, dpr, cam, layout, order, genericFade = 0,
-    favorites = null, hoveredFavorite = null,
-    centreSlots = null, hoveredBook = null, spineFontLimits = null,
-    sortMode = 'relevance', distillMode, hoveredDistill = false, cursor = null, loadingFrame = null,
-  }: GLDrawOpts): GLDrawResult {
-    cache.beginFrame();
+  function draw({ gl, ...opts }: GLDrawOpts): GLDrawResult {
+    const result = planner.plan(opts);
     textures.beginFrame();
-    gl.resize(w, h, dpr);
+    gl.resize(opts.width, opts.height, opts.dpr);
     gl.clear(BACKGROUND[0], BACKGROUND[1], BACKGROUND[2], 1);
-
-    const { x: cx, y: cy, zoom } = cam;
-    // Device pixels throughout - unlike `render.ts`, which sets
-    // `ctx.setTransform(dpr, ...)` and works in css pixels, there is no
-    // implicit pixel-ratio scale here, so every rect handed to a draw call is
-    // already in the units `gl.resize()`'s viewport uses.
-    const cellPxCss = pxPerCell(cam);
-    const cellPx = { x: cellPxCss.x * dpr, y: cellPxCss.y * dpr };
-    const wDev = w * dpr;
-    const hDev = h * dpr;
-    const halfW = wDev / 2 / cellPx.x;
-    const halfH = hDev / 2 / cellPx.y;
-    const bounds: Bounds = {
-      x0: Math.floor(cx - halfW), x1: Math.ceil(cx + halfW),
-      y0: Math.floor(cy - halfH), y1: Math.ceil(cy + halfH),
-    };
-
-    level = pyramid.pickLevel({ w: cellPx.x, h: cellPx.y }, level);
-
-    const toScreen = (wx: number, wy: number): [number, number] =>
-      [(wx - cx) * cellPx.x + wDev / 2, (wy - cy) * cellPx.y + hDev / 2];
-    // The hairline-gap pad `render.ts` applies as `+1`, in device pixels.
-    const cw = cellPx.x + dpr;
-    const ch = cellPx.y + dpr;
-
-    let drawn = 0;
-    let substituted = 0;
-    let blank = 0;
-    const visible: RoomId[] = [];
-
-    for (let gy = bounds.y0; gy <= bounds.y1; gy++) {
-      for (let gx = bounds.x0; gx <= bounds.x1; gx++) {
-        // Scalar reads rather than `layout.roomAt()` - see `idOf`'s comment.
-        const isCtr = isCenter(gx, gy);
-        const rank = isCtr ? -1 : layout.rankOf(gx, gy);
-        const isGeneric = !isCtr && (rank === -1 || rank >= order.length);
-        const id: RoomId = isCtr ? CENTER : isGeneric ? genericId(layout.genericIndexAt(gx, gy)) : order[rank];
-        visible.push(id);
-
-        const [sx, sy] = toScreen(gx, gy);
-        const dst = { x: sx, y: sy, w: cw, h: ch };
-        const distillId = isGeneric ? genericDistillId(layout.genericIndexAt(gx, gy)) : null;
-
-        if (isGeneric && genericFade >= 1) {
-          drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
-        } else {
-          const hit = cache.get(id, level);
-          const tex = hit ? textures.get(gl, hit.img) : null;
-
-          if (hit && tex) {
-            const src = hit.rect
-              ? toGLRect(hit.rect)
-              : { x: 0, y: 0, w: tex.width, h: tex.height };
-            gl.drawTexturedQuad(tex.texture, src, tex.width, tex.height, dst);
-            drawn++;
-            if (hit.level !== level) substituted++;
-          } else {
-            // Rule 1's floor - same as `render.ts`: reachable before the
-            // generic itself has loaded, or (a GL-specific extra case) before
-            // its `ImageBitmap` has an uploaded texture yet.
-            gl.drawFlatQuad(dst, [BLANK_FILL[0], BLANK_FILL[1], BLANK_FILL[2], 1]);
-            blank++;
-          }
-
-          if (isGeneric && genericFade)
-            drawGenericFadeGL(gl, cache, textures, distillId!, genericFade, dst, level);
-        }
-
-        // The favorite badge - every real room, never the center or a
-        // generic cell, same gate as `render.ts`.
-        if (favorites && !isCtr && !isGeneric) {
-          const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
-          drawFavoriteBadgeGL(gl, cache, textures, favorites.isFavorite(order[rank]), cellPx, sx, sy, level, hovered, glowTextures);
-        }
-
-        // The "forget searches" book's black spine overlay - same gate as
-        // `render.ts`, drawn before the spine texture so the gilt text still
-        // composites on top.
-        if (isCtr && centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
-          drawClearHistoryBookOverlayGL(gl, cache, textures, cellPx, sx, sy);
-
-        // The center room's spines - a separately-cached texture
-        // (`gl/spineTexture.ts`) rather than text drawn straight into this
-        // frame, same content-gated re-render `composeSpines` itself already
-        // does for legibility (`areSpinesLegible`, called inside it).
-        if (isCtr && centreSlots && spineFontLimits) {
-          const spine = spineTextures.get(gl.gl, cw, ch, centreSlots, hoveredBook, spineFontLimits);
-          if (spine) gl.drawTexturedQuad(spine.texture, { x: 0, y: 0, w: spine.width, h: spine.height }, spine.width, spine.height, dst);
-        }
-        // The favorites-sort switch - same gate as `render.ts`: only once a
-        // favorite store exists and the tile is zoomed in enough to read.
-        // `areSpinesLegible` only reads the rect's width, so the CSS-pixel
-        // `cellPxCss` (not the device-pixel `cellPx` used to draw) is what
-        // keeps the threshold matching `render.ts`'s own gate.
-        if (isCtr && favorites && areSpinesLegible({ x: 0, y: 0, w: cellPxCss.x, h: cellPxCss.y }))
-          drawFavoriteSwitchGL(gl, cache, textures, sortMode, cellPx, sx, sy);
-        // The distill toggle - independent of `favorites`, same `undefined`
-        // opt-out as `render.ts`.
-        if (isCtr && distillMode !== undefined)
-          drawDistillToggleGL(gl, cache, textures, distillMode, hoveredDistill, cellPx, sx, sy, glowTextures);
-        // The loading indicator's current frame - the WebGL counterpart of
-        // `render.ts`'s `drawLoadingFrame`. Same disjoint region, same last-in
-        // ordering; the sheet uploads through the ordinary texture cache.
-        if (isCtr && loadingFrame) {
-          const tex = textures.get(gl, loadingFrame.image);
-          if (tex) {
-            const r = loadingFrame.rect;
-            gl.drawTexturedQuad(
-              tex.texture,
-              { x: loadingFrame.src.x, y: loadingFrame.src.y, w: loadingFrame.src.w, h: loadingFrame.src.h },
-              tex.width, tex.height,
-              { x: sx + r.x * cellPx.x, y: sy + r.y * cellPx.y, w: r.w * cellPx.x, h: r.h * cellPx.y }
-            );
-          }
-        }
-      }
-    }
-
-    // Same "rule 2" as `render.ts`: prefetch the ring, then warm one level
-    // coarser - pure cache calls, no drawing, unchanged from the 2D path,
-    // including the capacity check and rotating start corner (see there).
-    const ring = prefetchBounds(bounds);
-    ringFrame = (ringFrame + 1) % 4;
-    const flipY = (ringFrame & 1) !== 0;
-    const flipX = (ringFrame & 2) !== 0;
-    const ringHeight = ring.y1 - ring.y0;
-    const ringWidth = ring.x1 - ring.x0;
-    ringWalk:
-    for (let iy = 0; iy <= ringHeight; iy++) {
-      const gy = flipY ? ring.y1 - iy : ring.y0 + iy;
-      for (let ix = 0; ix <= ringWidth; ix++) {
-        if (!cache.hasPrefetchCapacity()) break ringWalk;
-        const gx = flipX ? ring.x1 - ix : ring.x0 + ix;
-        const inside =
-          gx >= bounds.x0 && gx <= bounds.x1 && gy >= bounds.y0 && gy <= bounds.y1;
-        if (inside) continue;
-        cache.prefetch(idOf(layout, order, gx, gy), level);
-      }
-    }
-    // Deduped once here: see `render.ts`'s matching comment for why (repeated
-    // generic ids at coarse zoom, `prefetch()` already a no-op on a hit).
-    const distinctVisible = new Set(visible);
-    for (const coarser of pyramid.warmLevels(level))
-      for (const id of distinctVisible) cache.prefetch(id, coarser);
-
-    // The keyboard cursor's ring - drawn last, over everything, same gate as
-    // `render.ts`. `drawStrokeQuad` strokes inside the given rect rather than
-    // centering on its path like `strokeRect`, so this approximates
-    // `render.ts`'s inset+lineWidth combination rather than matching it
-    // pixel-for-pixel.
-    const cells = (bounds.x1 - bounds.x0 + 1) * (bounds.y1 - bounds.y0 + 1);
-    if (cursor && cursor.x >= bounds.x0 && cursor.x <= bounds.x1
-      && cursor.y >= bounds.y0 && cursor.y <= bounds.y1) {
-      const [sx, sy] = toScreen(cursor.x, cursor.y);
-      gl.drawStrokeQuad(
-        { x: sx + 2 * dpr, y: sy + 2 * dpr, w: cellPx.x - 4 * dpr, h: cellPx.y - 4 * dpr },
-        3 * dpr,
-        CURSOR_STROKE
-      );
-    }
-
-    return { cells, drawn, substituted, blank, level, bounds, zoom };
+    const loss = paintGL(gl, planner.list, { textures, glowTextures, spineTextures });
+    result.drawn -= loss.drawn + loss.substituted;
+    result.substituted -= loss.substituted;
+    result.blank += loss.drawn + loss.substituted;
+    return result;
   }
 
   return { draw, textures, spineTextures, glowTextures };
