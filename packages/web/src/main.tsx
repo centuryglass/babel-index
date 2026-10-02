@@ -1173,6 +1173,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         setContentRatio={setContentRatio}
         onReorder={reorder}
         onRescatter={rescatter}
+        distillMode={distillMode}
+        onToggleDistill={toggleDistill}
         distillTooltipRef={distillTooltipRef}
         favorites={favorites.enabled}
         sortMode={sortMode}
@@ -1215,7 +1217,6 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           onBook={onBook}
           onOpenArtistStatement={openArtistStatement}
           distillMode={distillMode}
-          onToggleDistill={toggleDistill}
           cellOfId={(id) => cellById.get(id) ?? null}
           history={history}
           onForgetSearches={forgetSearches}

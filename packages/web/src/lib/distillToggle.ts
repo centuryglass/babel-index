@@ -15,7 +15,9 @@
  * catch the tile art around it.
  *
  * No DOM - this is the pure geometry/hit-test half, split out the same way
- * `favoriteBadge.ts` and `center.ts` are.
+ * `favoriteBadge.ts` and `center.ts` are. The keyboard's way in is a DOM
+ * button in `MapView.tsx`'s `.center-controls`, over the active state's
+ * traced box.
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { flattenPath, pointInPolygon, type Point } from './svgPath.ts';
@@ -34,6 +36,14 @@ const GEOMETRY = layout({ width: 1, height: 1 });
 export const DISTILL_OFF_PATH: string | null = GEOMETRY.distillOff?.d ?? null;
 /** The "disable distillation" icon's traced silhouette - null on a trace with none. */
 export const DISTILL_ON_PATH: string | null = GEOMETRY.distillOn?.d ?? null;
+
+/**
+ * Each state's traced bounding box, in whole-tile fractions - where
+ * `MapView.tsx` places the toggle's DOM button for the keyboard and screen
+ * readers. Null on a trace with none, like the paths.
+ */
+export const DISTILL_OFF_RECT: Rect | null = GEOMETRY.distillOff?.bbox ?? null;
+export const DISTILL_ON_RECT: Rect | null = GEOMETRY.distillOn?.bbox ?? null;
 
 /** `DISTILL_OFF_PATH`/`DISTILL_ON_PATH` flattened once at module load - see `FAVORITE_TOGGLE_POLYGON` for the same tradeoff. */
 const DISTILL_OFF_POLYGON: Point[] | null = DISTILL_OFF_PATH ? flattenPath(DISTILL_OFF_PATH) : null;

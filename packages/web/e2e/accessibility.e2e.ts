@@ -43,6 +43,64 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.deepEqual(summary, [], `axe reported violations:\n  ${summary.join('\n  ')}`);
   });
 
+  test('the distill toggle is a keyboard switch on the map and decoration in the catalog', async () => {
+    const { page } = session;
+    // Runs at the opening view, where the center tile's controls are legible
+    // and so displayed. Distill mode is a rearrangement that eases back to the
+    // zoom it was called from, so toggling it twice returns here.
+    const distillButton = async () =>
+      axFind(await axNodes(page), 'button', /^distill the library$/i);
+    // CDP reports `pressed` as a tristate token ('true', 'false', 'mixed').
+    const pressed = (node) => String(node?.props.pressed);
+    const off = await distillButton();
+    assert.ok(off, 'the distill toggle must be a named button on the map');
+    assert.equal(pressed(off), 'false', `distill must start off:\n${JSON.stringify(off, null, 2)}`);
+
+    // Reached by Tab from the control before it, so it is in the tab order,
+    // not only focusable.
+    await page.evaluate(() => {
+      (document.querySelector('[data-control="shuffle"]') as HTMLElement | null)?.focus();
+    });
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.control);
+    assert.equal(focused, 'distill', 'Tab from the reorder button must reach the distill toggle');
+
+    try {
+      await page.keyboard.press('Enter');
+      await waitFor(
+        async () => pressed(await distillButton()) === 'true',
+        5000,
+        'Enter on the focused distill toggle must turn distill on'
+      );
+    } finally {
+      await settled(page);
+      if (pressed(await distillButton()) === 'true') {
+        await page.evaluate(() => {
+          (document.querySelector('[data-control="distill"]') as HTMLElement | null)?.click();
+        });
+        await settled(page);
+      }
+    }
+
+    await page.locator('.panel .mode-toggle').click();
+    try {
+      const art = page.locator('.catalog .catalog-distill-toggle');
+      await art.waitFor({ state: 'attached', timeout: 5000 });
+      const shape = await art.evaluate((el) => ({
+        tag: el.tagName,
+        alt: el.getAttribute('alt'),
+        tabbable: (el as HTMLElement).tabIndex >= 0,
+      }));
+      assert.deepEqual(shape, { tag: 'IMG', alt: '', tabbable: false }, 'the catalog shows the toggle as decoration');
+      const control = axFind(await axNodes(page), 'button', /distill/i);
+      assert.equal(control, undefined, `the catalog must offer no distill control:\n${JSON.stringify(control, null, 2)}`);
+    } finally {
+      await page.locator('.catalog .mode-toggle').click();
+      await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+      await settled(page);
+    }
+  });
+
   test('the ranked listbox is honestly counted, reachable with no arrow keys, and axe-clean [SR-48]', async () => {
     const { page } = session;
     // The "non-generic" slider defaults short of maxed, and at anything less

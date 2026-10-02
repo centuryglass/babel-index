@@ -89,15 +89,16 @@ canvas.dragging { cursor: grabbing; }
 .center-book:focus-visible { outline-offset: 1px; }
 
 /*
- * The favorites-sort switch and reorder button: one container over the
- * whole cell like `.center-books`, each button placed in percentages from
- * its traced rect.
+ * The favorites-sort switch, reorder button and distill toggle: one
+ * container over the whole cell like `.center-books`, each button placed in
+ * percentages from its traced rect.
  * - `pointer-events: none`: a click reaches `onTap` ->
- *   `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
- *   through the canvas.
+ *   `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`/
+ *   `distillToggleAtPoint` through the canvas.
  * - `.hover` comes from the render loop's pointermove listener, as on
  *   `.center-book`. The glow is a plain background tint, since these
- *   buttons have no text to protect.
+ *   buttons have no text to protect. The distill toggle never gets it: its
+ *   hover glow is painted on its traced silhouette.
  */
 .center-controls { position: absolute; display: none; pointer-events: none; }
 .center-controls button {
@@ -106,6 +107,8 @@ canvas.dragging { cursor: grabbing; }
 }
 .center-controls button.hover { background: rgba(var(--hover-glow-rgb),0.28); box-shadow: 0 0 0 1px rgba(var(--hover-glow-rgb),0.55); }
 .center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
+/* The distill toggle's art swaps faces with its state, so it takes no pressed frame. */
+.center-controls button[data-control="distill"][aria-pressed="true"] { box-shadow: none; }
 .center-controls button:focus-visible { outline-offset: 1px; }
 /*
  * A custom tooltip, not the native `title` popup, which never shows: the

@@ -514,9 +514,9 @@ export function useMapRenderer({
       mineEl?.classList.toggle('hover', mineToggleAtPoint(px, py, cellRect));
       countEl?.classList.toggle('hover', countToggleAtPoint(px, py, cellRect));
 
-      // The distill toggle - painted onto the center tile with no element of
-      // its own (the `favTooltipRef` situation), so highlight and tooltip are
-      // both driven from here, same shape as the favorite badge's handling.
+      // The distill toggle - highlight and tooltip are both driven from here,
+      // same shape as the favorite badge's handling: its glow traces the
+      // painted silhouette, which its DOM button's box (`MapView.tsx`) cannot.
       const nextDistill = distillToggleAtPoint(
         px, py, { x: cellRect.w, y: cellRect.h }, cellRect.x, cellRect.y, distillMode
       );
