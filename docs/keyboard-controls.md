@@ -94,10 +94,10 @@ up the ring, matching every other focus ring in the app (`css/base.css`'s
   announced once per direction, not blocked.
 - `prefers-reduced-motion` collapses every keyboard-triggered flight to an
   instant jump.
-- A keyboard action does not end a rearrangement animation in progress. Its
-  flight is overridden by the rearrangement's next camera move; only a
-  pointer grab ends one. Issue #306 tracks these keys staying enabled while
-  inert.
+- While a rearrangement holds the camera, the keys that move it (arrows,
+  zoom, `Home`, `Ctrl/Cmd+End`, and `/` when it would fly) do nothing and
+  say so in the live region. They neither end the animation nor queue for
+  later; only a pointer grab ends one (`main.tsx`'s `refuseHeldCamera`).
 
 ## State 2 - Center shelf book focused (roving tabindex)
 

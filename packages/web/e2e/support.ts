@@ -311,25 +311,22 @@ export async function landed(page, flightMs, timeoutMs = 5000) {
 }
 
 /**
- * Click the 'center' button and retry until the camera lands on the center
+ * Click the 'center' button and wait for the camera to land on the center
  * cell, at world (0.5, 0.5): `main.tsx`'s `recentre` calls `flyTo(0, 0, ...)`,
  * and `cameraAtCell` (`camera.ts`) lands a flight on a cell's center.
  *
- * A `flyTo` issued during a rearrangement, or one that starts just after the
- * click, is overridden by the rearrangement's own camera, so `landed()` alone
- * can report a camera at rest that never recentred. Waiting out any
- * rearrangement before clicking narrows that race but does not close it, so
- * this checks the outcome and clicks again.
+ * The button is disabled while a rearrangement holds the camera
+ * (`main.tsx`'s `refuseHeldCamera`), and Playwright's click waits for it to
+ * be enabled. A rearrangement that starts after the click (a search still
+ * being ranked) overrides the flight, so this checks the outcome rather
+ * than trusting `landed()`.
  */
 export async function recentre(page, flightMs, timeoutMs = SEARCH_TIMEOUT) {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    await settled(page); // waits out any rearrangement already in flight
-    await page.locator('button', { hasText: 'center' }).click();
-    const after = await landed(page, flightMs);
-    if (after.x === 0.5 && after.y === 0.5) return after;
-    assert.ok(Date.now() < deadline, 'the map never recentred - stuck mid-rearrangement');
-  }
+  await settled(page); // waits out any rearrangement already in flight
+  await page.locator('button', { hasText: 'center' }).click({ timeout: timeoutMs });
+  const after = await landed(page, flightMs);
+  assert.ok(after.x === 0.5 && after.y === 0.5, `the map never recentred: at ${after.x}, ${after.y}`);
+  return after;
 }
 
 /**

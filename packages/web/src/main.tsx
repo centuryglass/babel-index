@@ -34,7 +34,7 @@ import { load, save, clear, KEYS } from './lib/persist.ts';
 import { TOUCH_DEBUG, appendTouchLog } from './lib/touchDebug.ts';
 import { roomAtPoint, type RoomPick } from './lib/picking.ts';
 import { initLibraryState, overlayRank, reduce, type InitialRoute } from './lib/libraryState.ts';
-import { describeCell, describeRoom, describeCatalog, describeSort } from '../../map/describe.ts';
+import { describeCell, describeRoom, describeCatalog, describeSort, CAMERA_HELD } from '../../map/describe.ts';
 import {
   bookAtPoint,
   centerCellRect,
@@ -70,7 +70,8 @@ import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
 import { loadLoadingAnimation, type LoadingAnimation } from './lib/loadingAnimation.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
-import { useMapRenderer } from './hooks/useMapRenderer.ts';
+import { useMapRenderer, type RunningAnim } from './hooks/useMapRenderer.ts';
+import { presenceRef } from './lib/presenceRef.ts';
 import { useMapRendererGL } from './hooks/useMapRendererGL.ts';
 import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
@@ -441,7 +442,33 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // every frame, and state would tear down the render effect sixty times a
   // second. It holds the animation's board, its progress, and the camera it
   // was planned for - frames draw at that camera, not the live one.
-  const anim = useRef(null);
+  //
+  // `cameraHeld` mirrors whether it is set, as state, for the camera
+  // controls (see `refuseHeldCamera`). A `presenceRef` re-renders only when
+  // a rearrangement takes or releases the camera, never per frame.
+  const [cameraHeld, setCameraHeld] = useState(false);
+  const anim = useMemo(() => presenceRef<RunningAnim>(setCameraHeld), []);
+
+  /**
+   * The one rule for every camera control (the 'center' button, the
+   * keyboard's pan and zoom, `goToSearch`'s flight, a "show on the map"):
+   * while a rearrangement holds the camera, a control declines to move it
+   * and says why. Returns true when it declined.
+   *
+   * A control is not allowed to end the animation, and its input is not
+   * queued for later. A pointer grab is the exception: the render hooks'
+   * `onDown` ends the rearrangement (`docs/agents/rearrangement.md`, "The
+   * reorder animation").
+   *
+   * A repeat refusal toggles a trailing no-break space, since React writes
+   * nothing for identical text and a reader pressing again would hear
+   * nothing.
+   */
+  const refuseHeldCamera = useCallback(() => {
+    if (!anim.current) return false;
+    setStatus((s) => (s === CAMERA_HELD ? `${CAMERA_HELD}\u00a0` : CAMERA_HELD));
+    return true;
+  }, [anim]);
 
   // The center-tile loading indicator (loadingAnimation.ts), loaded once
   // from the shared assets; a ref for the same reason as `anim`. Null until
@@ -641,7 +668,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         books: settled && overlapsViewport(cellRect, w, h) && areSpinesLegible(cellRect),
       };
     },
-    [cam]
+    [cam, anim]
   );
 
   // The panel's search affordance: focus the live field on the center tile
@@ -657,13 +684,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       input.focus();
       return;
     }
+    if (refuseHeldCamera()) return;
     // flyTo aims at a cell's middle (+0.5, via cameraAtCell); `opening` is
     // already a raw camera position, so cancel the offset here or the
     // flight lands half a cell short. Same reasoning in the double-tap
     // handler below.
     const landed = await flyTo(opening.x - 0.5, opening.y - 0.5, opening.zoom);
     if (landed) input.focus();
-  }, [flyTo, opening, centreOverlay]);
+  }, [flyTo, opening, centreOverlay, refuseHeldCamera]);
 
   // `Escape` returns focus to the canvas from any center-tile control.
   // `Shift+Tab` can also reach it, but the controls in between are
@@ -712,6 +740,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       flightTarget,
       camera: config.camera,
       setStatus,
+      refuseHeldCamera,
       requestDraw,
       onOpenCard: useCallback((pick: RoomPick) => dispatch({ type: 'openCard', card: pick }), []),
       goToSearch,
@@ -787,6 +816,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     },
     [mode, order, result, setStatus, announceArrangement]
   );
+
+  // Say a rearrangement has started, so a reader knows why the map's
+  // controls stopped answering (`refuseHeldCamera`). `announce` speaks once
+  // the new arrangement is in place.
+  useEffect(() => {
+    if (cameraHeld && mode === 'map') setStatus(CAMERA_HELD);
+  }, [cameraHeld, mode]);
 
   // Closes the useSearch <-> useRearrangement cycle discussed at
   // `requestAnimationRef`'s declaration.
@@ -902,9 +938,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
       dispatch({ type: 'openCard', card: { id, rank, x, y } });
+      if (refuseHeldCamera()) return;
       flyTo(x, y, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current));
     },
-    [flyTo, config, canvasRef, cam]
+    [flyTo, config, canvasRef, cam, refuseHeldCamera]
   );
 
   // The catalog's scroll container. Not part of the mode transition, so it
@@ -927,10 +964,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   /** A row's "show on the map" - aim the camera, then go and look. */
   const showOnMap = useCallback(
     (x: number, y: number) => {
-      flyTo(x, y, overviewZoom(mapViewport(), config.camera.overviewCellsPerAxis, cam.current));
+      if (!refuseHeldCamera()) flyTo(x, y, overviewZoom(mapViewport(), config.camera.overviewCellsPerAxis, cam.current));
       exitCatalog();
     },
-    [flyTo, config, exitCatalog, mapViewport, cam]
+    [flyTo, config, exitCatalog, mapViewport, cam, refuseHeldCamera]
   );
 
   // The shuffle button. It ends an active search along with the sort, for
@@ -974,10 +1011,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     requestAnimation('');
     dispatch({ type: 'rescatter' });
   }, [requestAnimation]);
-  const recentre = useCallback(
-    () => flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current)),
-    [flyTo, config, canvasRef, cam]
-  );
+  // Disabled in `MapView` while `cameraHeld`; the guard covers the debug
+  // runner's `recentre` and a click in the render before the disable lands.
+  const recentre = useCallback(() => {
+    if (refuseHeldCamera()) return Promise.resolve(false);
+    return flyTo(0, 0, overviewZoom(canvasRef.current, config.camera.overviewCellsPerAxis, cam.current));
+  }, [flyTo, config, canvasRef, cam, refuseHeldCamera]);
 
   // Selecting a book on the center room. Off the center cell or on an empty
   // book, nothing happens - the tap is not otherwise claimed.
@@ -1182,6 +1221,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         favoriteFor={favoriteFor}
         cursorId={cursorId}
         onRecentre={recentre}
+        cameraHeld={cameraHeld}
         history={history}
         onForgetSearches={forgetSearches}
         onEnterCatalog={enterCatalog}
