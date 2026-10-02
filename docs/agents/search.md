@@ -20,13 +20,14 @@ conventions still apply.
 - **Search combines its signals; it does not tier them.** Tiering keyword
   hits ahead of everything would let one weak partial beat a room CLIP is
   confident about.
-- **A query is matched term by term and as one whole string, and the better
-  reading wins.** `rankHybrid` classifies each term against a room's
-  keywords and title, then the whole folded query the same way, so a
-  multi-word tag typed plainly (`outsider art`) is an exact match. A keyword
-  chip searches its text unquoted, and many real keywords are multi-word. A
-  whole-query match counts as one exact match, so two separate exact tags
-  still outrank one matched phrase.
+- **A query is matched term by term and as every multi-word run, and the
+  best reading wins.** `tagTermsOf` builds the runs, and `readTags` picks the
+  split into exact runs and single terms with the most exact matches, so a
+  multi-word tag typed plainly (`outsider art`, or `golden hour` inside
+  `golden hour jungle`) is an exact match. A keyword chip searches its text
+  unquoted, and many real keywords are multi-word. An exact run counts as one
+  exact match and consumes its words, so two separate exact tags still
+  outrank one matched phrase. The highlighter marks from the same runs.
 - **Keyword partials divide by the keyword; story matches count words.**
   `art` matches only 3/11 of `art nouveau`, and a hit in a long story is
   worth the same as in a short one.

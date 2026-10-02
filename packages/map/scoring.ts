@@ -258,8 +258,26 @@ export function splitQuoted(parsed: ParsedQuery, minTokenLength = 3): SplitQuery
 }
 
 /**
+ * A contiguous run of query words holding two or more eligible ones, read as
+ * one candidate against one whole keyword (docs/search_rules.md "Tag
+ * matching").
+ *
+ * `start`/`end` index the eligible words it covers in `tagTermsOf`'s
+ * `terms`, `end` exclusive. `from` is the parsed-query position of its first
+ * word. `folded` is its words as typed, joined by single spaces, so a
+ * stopword or short word stays in the text (`lady of the lake`, `the
+ * inverted ladder`).
+ */
+export interface TagRun {
+  folded: string;
+  start: number;
+  end: number;
+  from: number;
+}
+
+/**
  * The terms the tag and title rules classify for one query, and the
- * whole-query reading that sits beside them.
+ * multi-word runs that sit beside them.
  *
  * One home for "what does this query offer a keyword", because two of them
  * drift silently: `rankHybrid` scores from this, and `useSearch`'s
@@ -271,24 +289,142 @@ export function splitQuoted(parsed: ParsedQuery, minTokenLength = 3): SplitQuery
  * floor (docs/search_rules.md "The parsed query"), so a quoted phrase is
  * always eligible regardless of its own length.
  *
- * `whole` is the entire folded query as one candidate against one whole
- * keyword - what makes a multi-word tag typed plainly an exact match
- * (docs/search_rules.md "Tag matching"). It exists only for a query of more
- * than one eligible term; with one, it would be that term.
+ * `runs` are every span of unquoted words holding two or more eligible ones,
+ * the whole query included. A quoted phrase ends a run, since its quotes
+ * already say what belongs together. Runs are what make a multi-word tag
+ * typed plainly an exact match, alone or inside a longer query. They come
+ * sorted by `from`, then by length; `matchingRuns` relies on that order.
  */
-export function tagTermsOf(
-  parsed: ParsedQuery,
-  queryTokens: string[] = [],
-  minTokenLength = 3
-): { terms: Term[]; whole: Term | null } {
-  const terms = parsed.terms.filter(
-    (t) => t.quoted || (t.folded.length >= minTokenLength && !STOPWORDS.has(t.folded))
-  );
-  const whole =
-    terms.length > 1 && parsed.folded
-      ? { text: parsed.raw, folded: parsed.folded, quoted: true, words: queryTokens }
-      : null;
-  return { terms, whole };
+export function tagTermsOf(parsed: ParsedQuery, minTokenLength = 3): { terms: Term[]; runs: TagRun[] } {
+  const terms: Term[] = [];
+  // Each unquoted stretch of the query as parsed-term positions, and the
+  // `terms` index of each eligible word by position.
+  const stretches: number[][] = [[]];
+  const idxAt = new Map<number, number>();
+  parsed.terms.forEach((t, at) => {
+    if (t.quoted) {
+      terms.push(t);
+      stretches.push([]);
+      return;
+    }
+    stretches[stretches.length - 1].push(at);
+    if (t.folded.length >= minTokenLength && !STOPWORDS.has(t.folded)) {
+      idxAt.set(at, terms.length);
+      terms.push(t);
+    }
+  });
+
+  const runs: TagRun[] = [];
+  for (const stretch of stretches) {
+    for (let a = 0; a < stretch.length; a++) {
+      let first = -1;
+      let last = -1;
+      let eligible = 0;
+      let folded = '';
+      for (let b = a; b < stretch.length; b++) {
+        const at = stretch[b];
+        folded = folded ? `${folded} ${parsed.terms[at].folded}` : parsed.terms[at].folded;
+        const idx = idxAt.get(at);
+        if (idx !== undefined) {
+          if (first === -1) first = idx;
+          last = idx;
+          eligible++;
+        }
+        if (eligible >= 2) runs.push({ folded, start: first, end: last + 1, from: stretch[a] });
+      }
+    }
+  }
+  return { terms, runs };
+}
+
+/**
+ * The runs that match any of `keywords`, as an equal or a substring, each with its
+ * `classifyTagTerm` result.
+ *
+ * A run that is no keyword's substring cannot be extended into one that is,
+ * since it is a prefix of every longer run with the same `from`. So the
+ * remaining runs from that word are skipped at its first miss, which keeps a
+ * long query near linear in its length per room.
+ *
+ * @param runs `tagTermsOf`'s `runs`, in the order it returns them
+ */
+function matchingRuns(
+  runs: TagRun[],
+  keywords: string[] | null | undefined
+): { run: TagRun; exact: boolean; partial: number }[] {
+  const out = [];
+  if (!keywords?.length) return out;
+  let dead = -1;
+  for (const run of runs) {
+    if (run.from === dead) continue;
+    const { exact, partial } = classifyTagTerm(run, keywords);
+    if (exact || partial > 0) out.push({ run, exact, partial });
+    else dead = run.from;
+  }
+  return out;
+}
+
+/** `readTags`' result: the tag pull and the match counts it reports. */
+interface TagReading {
+  tag: number;
+  exact: number;
+  partialCount: number;
+}
+
+/**
+ * The best reading of a query against one room's keywords
+ * (docs/search_rules.md "Tag matching").
+ *
+ * A reading splits the terms into exact-matching runs and single terms, so a
+ * word a run consumed adds nothing on its own. Each exact run counts as one
+ * exact match and pulls at `tagExact`. Each single term pulls as
+ * `classifyTagTerm` reads it. The reading kept is the one with the most exact
+ * matches, then the larger soft OR: `brutalism mezzotint` against keywords
+ * `brutalism` and `mezzotint` reads as two exact singles, not as nothing.
+ *
+ * A run that matches only partially competes with the whole reading instead,
+ * the larger pull standing, so it never sums with the partials of its own
+ * words.
+ */
+function readTags(
+  terms: Term[],
+  runs: TagRun[],
+  keywords: string[],
+  weights: SearchWeights
+): TagReading {
+  const exactRunsByEnd: TagRun[][] = Array.from({ length: terms.length + 1 }, () => []);
+  let runPartial = 0;
+  for (const { run, exact, partial } of matchingRuns(runs, keywords)) {
+    if (exact) exactRunsByEnd[run.end].push(run);
+    else runPartial = Math.max(runPartial, partial);
+  }
+
+  // best[i]: the best reading of terms[0, i).
+  const best = [{ exact: 0, partialCount: 0, pulls: [] as number[] }];
+  const better = (a: (typeof best)[number], b: (typeof best)[number]) =>
+    a.exact !== b.exact ? a.exact > b.exact : softOr(a.pulls) > softOr(b.pulls);
+  for (let i = 1; i <= terms.length; i++) {
+    const prev = best[i - 1];
+    const { exact, partial } = classifyTagTerm(terms[i - 1], keywords);
+    let pick = prev;
+    if (exact) pick = { ...prev, exact: prev.exact + 1, pulls: [...prev.pulls, weights.tagExact] };
+    else if (partial > 0)
+      pick = { ...prev, partialCount: prev.partialCount + 1, pulls: [...prev.pulls, weights.tagPartial * partial] };
+    for (const run of exactRunsByEnd[i]) {
+      const from = best[run.start];
+      const viaRun = { ...from, exact: from.exact + 1, pulls: [...from.pulls, weights.tagExact] };
+      if (better(viaRun, pick)) pick = viaRun;
+    }
+    best.push(pick);
+  }
+
+  const { exact, partialCount, pulls } = best[terms.length];
+  const runPull = weights.tagPartial * runPartial;
+  return {
+    tag: Math.max(softOr(pulls), runPull),
+    exact,
+    partialCount: runPartial > 0 && exact === 0 && partialCount === 0 ? 1 : partialCount,
+  };
 }
 
 /**
@@ -297,8 +433,8 @@ export function tagTermsOf(
  * The one substring rule every tag and title match is read through. A term
  * matches a keyword exactly when it equals it, and partially by the fraction
  * of the keyword it covers. A term is tested as its whole `folded` text,
- * whether it is one word, a quoted phrase, or the whole-query term
- * `rankHybrid` builds (docs/search_rules.md "Tag matching"). Quoting a single
+ * whether it is one word, a quoted phrase, or a `TagRun`
+ * (docs/search_rules.md "Tag matching"). Quoting a single
  * word therefore changes nothing (docs/search_rules.md "Quoted phrases").
  *
  * @param keywords folded room keywords
@@ -306,7 +442,7 @@ export function tagTermsOf(
  *   match at all (exact implies `partial` is meaningless and left at 0)
  */
 export function classifyTagTerm(
-  term: Term | null | undefined,
+  term: Pick<Term, 'folded'> | null | undefined,
   keywords: string[] | null | undefined
 ): { exact: boolean; partial: number } {
   if (!term?.folded || !keywords?.length) return { exact: false, partial: 0 };
@@ -553,24 +689,23 @@ function occurrences(hay: string, needle: string): MatchRange[] {
 /**
  * Where a query matched one keyword, mirroring `classifyTagTerm`'s substring rule.
  *
- * The union of both of that function's readings - the whole query as a
- * substring, and each query token as a substring - not only whichever won
- * the score. A query contains its own tokens, so the two almost always
- * overlap into one range anyway; and the reader's question is "why is this
- * chip here", not "which arithmetic produced the number".
+ * The union of every reading that could score - each multi-word run
+ * (`tagTermsOf`'s `runs`) and each query token as a substring - not only
+ * whichever won the score. A run contains its own tokens, so the readings
+ * almost always overlap into one range anyway; and the reader's question is
+ * "why is this chip here", not "which arithmetic produced the number".
  *
  * @param text the keyword as written, unfolded
+ * @param needles folded run texts and query tokens
  * @returns ranges into `text`
  */
-export function keywordMatchRanges(text: unknown, foldedQuery: string, queryTokens: string[] = []): MatchRange[] {
+export function keywordMatchRanges(text: unknown, needles: string[] = []): MatchRange[] {
   const src = String(text ?? '');
   if (!src) return [];
   const { folded, map } = foldWithMap(src);
   if (!folded) return [];
 
-  const hits = occurrences(folded, foldedQuery);
-  for (const token of queryTokens) hits.push(...occurrences(folded, token));
-
+  const hits = needles.flatMap((needle) => occurrences(folded, needle));
   return mergeRanges(hits.map((h) => toSource(map, src.length, h.start, h.end)));
 }
 
@@ -872,12 +1007,11 @@ export interface RankHybridOpts {
  * `SEARCH_WEIGHTS` entry (docs/search_rules.md "Signal weights"), and
  * `matchStrength` combines the four. Per axis:
  *
- *   - tag: a soft OR over the query's terms, each exact match pulling at
- *     `tagExact` and each partial at `tagPartial` times the fraction of the
- *     keyword it covers. The whole-query reading competes with it, and the
- *     better one stands.
- *   - title: the best single reading over every term and the whole query,
- *     since a room has one title.
+ *   - tag: `readTags`' best reading of the query's terms and multi-word
+ *     runs, a soft OR with each exact match pulling at `tagExact` and each
+ *     partial at `tagPartial` times the fraction of the keyword it covers.
+ *   - title: the best single reading over every term and run, since a room
+ *     has one title.
  *   - story: a soft OR of `story` per matched unquoted word or quoted
  *     phrase, and `storyLong` times the run curve (`STORY_LONG_RANGE`) over
  *     the unquoted words.
@@ -920,7 +1054,7 @@ export function rankHybrid({
   const { words: storyTokens, phrases } = splitQuoted(parsed, minTokenLength);
   const storyLemmas = new Set(storyTokens.map(lemmatise));
 
-  const { terms: tagTerms, whole: wholeQueryTerm } = tagTermsOf(parsed, queryTokens, minTokenLength);
+  const { terms: tagTerms, runs: tagRuns } = tagTermsOf(parsed, minTokenLength);
 
   const cosines =
     embeddings && dim > 0 && scale > 0 && vector
@@ -948,40 +1082,22 @@ export function rankHybrid({
 
     const entry = hasText ? index?.[id] : null;
     if (entry) {
-      const titleKeywords = entry.title ? [entry.title] : null;
-      const tagPulls: number[] = [];
-      for (const term of tagTerms) {
-        const { exact, partial } = classifyTagTerm(term, entry.keywords);
-        if (exact) {
-          tagExact++;
-          tagPulls.push(weights.tagExact);
-        } else if (partial > 0) {
-          tagPartialCount++;
-          tagPulls.push(weights.tagPartial * partial);
-        }
+      ({ tag, exact: tagExact, partialCount: tagPartialCount } = readTags(
+        tagTerms,
+        tagRuns,
+        entry.keywords,
+        weights
+      ));
 
-        if (titleKeywords) {
-          const t = classifyTagTerm(term, titleKeywords);
-          if (t.exact) titleExact = 1;
-          else if (t.partial > titlePartial) titlePartial = t.partial;
-        }
-      }
-      tag = softOr(tagPulls);
-
-      // Two readings, and the better one wins - the whole query against one
-      // whole keyword, beside the per-term pass above. An exact whole match
-      // counts as one exact match, never more: `brutalism mezzotint` hitting
-      // two separate keywords already counted 2 up there, and this must not
-      // pull that down.
-      if (wholeQueryTerm) {
-        const whole = classifyTagTerm(wholeQueryTerm, entry.keywords);
-        const wholePull = whole.exact ? weights.tagExact : weights.tagPartial * whole.partial;
-        if (whole.exact) tagExact = Math.max(tagExact, 1);
-        else if (whole.partial > 0 && tagExact === 0 && tagPartialCount === 0) tagPartialCount = 1;
-        tag = Math.max(tag, wholePull);
-
-        if (titleKeywords) {
-          const t = classifyTagTerm(wholeQueryTerm, titleKeywords);
+      // A room has one title, so it takes the best single reading over every
+      // term and run, never a count.
+      if (entry.title) {
+        const titleKeywords = [entry.title];
+        const readings = [
+          ...tagTerms.map((term) => classifyTagTerm(term, titleKeywords)),
+          ...matchingRuns(tagRuns, titleKeywords),
+        ];
+        for (const t of readings) {
           if (t.exact) titleExact = 1;
           else if (t.partial > titlePartial) titlePartial = t.partial;
         }

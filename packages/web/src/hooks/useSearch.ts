@@ -191,24 +191,23 @@ export function useSearch({
     const term = result?.term?.trim();
     if (!term) return null;
     const tokens = tokenise(term, { minLength: searchConfig.minTokenLength });
-    // The whole-query reading marks only where it also scores, which is what
+    // A multi-word run marks only where it also scores, which is what
     // `tagTermsOf` decides for both (docs/search_requirements.md SR-35). A
     // query with no eligible term - `a`, `the` - scores nothing and so marks
     // nothing, where the raw folded query would have substring-matched most
     // of the collection.
     const parsed = parseQuery(term);
-    const { terms, whole } = tagTermsOf(parsed, tokens, searchConfig.minTokenLength);
-    const foldedQuery = whole?.folded ?? '';
+    const { terms, runs } = tagTermsOf(parsed, searchConfig.minTokenLength);
     if (!terms.length && !tokens.length) return null;
     // A word inside quotes marks only as part of its phrase, the way it scores.
     const { words, phrases } = splitQuoted(parsed, searchConfig.minTokenLength);
-    const keywordTokens = [...words, ...phrases.map((p) => p.trim())];
+    const keywordNeedles = [...runs.map((r) => r.folded), ...words, ...phrases.map((p) => p.trim())];
     return {
-      keyword: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, keywordTokens),
+      keyword: (text: string): MatchRange[] => keywordMatchRanges(text, keywordNeedles),
       // A title matches by the same substring rule a keyword does (see
       // `classifyTagTerm` in scoring.ts), so the keyword finder is the faithful
       // one here - a room's title marks exactly where its tag-style match landed.
-      title: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, keywordTokens),
+      title: (text: string): MatchRange[] => keywordMatchRanges(text, keywordNeedles),
       story: (text: string): MatchRange[] =>
         storyMatchRanges(text, words, { minLength: searchConfig.minTokenLength, phrases }),
     };

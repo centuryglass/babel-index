@@ -58,7 +58,7 @@ export interface Term {
 export interface ParsedQuery {
   /** the query as typed */
   raw: string;
-  /** fold(raw) - the whole query, which `rankHybrid` classifies as one term against a whole keyword */
+  /** fold(raw) */
   folded: string;
   terms: Term[];
 }
@@ -85,7 +85,7 @@ export interface ScoreBreakdown {
   title: Float32Array;
   story: Float32Array;
   clip: Float32Array;
-  /** how many query terms were exact keyword matches (the whole-query reading counts as one) */
+  /** how many query terms were exact keyword matches (an exact multi-word run counts as one) */
   tagExact: Float32Array;
   /** how many terms matched a keyword as a substring only - a count, not a fraction */
   tagPartialCount: Int32Array;
