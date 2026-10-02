@@ -140,12 +140,15 @@ input[type="search"] {
 }
 input[type="search"]:focus { border-color: var(--accent); }
 /*
- * One focus ring for everything, and it must stay visible. A border-colour
- * shift alone is not an indicator: at low contrast it disappears against
- * the panel.
+ * One focus ring for everything, and it must stay visible. No control opts
+ * out with `outline: none`, text fields included. A border-colour shift
+ * alone is not an indicator: at low contrast it disappears against the
+ * panel.
  * - The offset keeps the ring off the control's border, so the two do not
  *   read as one thicker edge.
- * - `:focus-visible`, not `:focus`, so a mouse click leaves no ring behind.
+ * - `:focus-visible`, not `:focus`, so a mouse click on a button leaves no
+ *   ring behind. A text field matches `:focus-visible` however it was
+ *   focused, so its ring shows whenever it has focus.
  */
 :focus-visible {
   outline: 2px solid var(--accent);
