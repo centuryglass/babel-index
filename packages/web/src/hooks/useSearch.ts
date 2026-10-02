@@ -18,6 +18,7 @@ import {
   rankHybrid,
   parseQuery,
   tagTermsOf,
+  splitQuoted,
   tokenise,
   keywordMatchRanges,
   storyMatchRanges,
@@ -181,7 +182,7 @@ export function useSearch({
 
   // The two range finders, bound to the query the current ranking is for.
   //
-  // A keyword matches by substring and a story word by prefix (`scoring.ts`).
+  // A keyword matches by substring, and a story word by lemma (`scoring.ts`).
   // Consumers get one function per kind of text, so none of them picks the
   // rule.
   //
@@ -195,17 +196,21 @@ export function useSearch({
     // query with no eligible term - `a`, `the` - scores nothing and so marks
     // nothing, where the raw folded query would have substring-matched most
     // of the collection.
-    const { terms, whole } = tagTermsOf(parseQuery(term), tokens, searchConfig.minTokenLength);
+    const parsed = parseQuery(term);
+    const { terms, whole } = tagTermsOf(parsed, tokens, searchConfig.minTokenLength);
     const foldedQuery = whole?.folded ?? '';
     if (!terms.length && !tokens.length) return null;
+    // A word inside quotes marks only as part of its phrase, the way it scores.
+    const { words, phrases } = splitQuoted(parsed, searchConfig.minTokenLength);
+    const keywordTokens = [...words, ...phrases.map((p) => p.trim())];
     return {
-      keyword: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, tokens),
+      keyword: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, keywordTokens),
       // A title matches by the same substring rule a keyword does (see
       // `classifyTagTerm` in scoring.ts), so the keyword finder is the faithful
       // one here - a room's title marks exactly where its tag-style match landed.
-      title: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, tokens),
+      title: (text: string): MatchRange[] => keywordMatchRanges(text, foldedQuery, keywordTokens),
       story: (text: string): MatchRange[] =>
-        storyMatchRanges(text, tokens, { minLength: searchConfig.minTokenLength }),
+        storyMatchRanges(text, words, { minLength: searchConfig.minTokenLength, phrases }),
     };
   }, [result, searchConfig]);
 

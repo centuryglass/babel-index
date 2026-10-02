@@ -17,13 +17,15 @@ import {
   clipCurveStrength,
   STORY_LONG_RANGE,
   storyMatchRanges,
-  storyPhraseRun,
+  splitQuoted,
+  storyPhraseMatches,
   storyWordMatches,
   strengthPercent,
   tagTermsOf,
   tokenise,
 } from './scoring.ts';
 import { STRENGTH_FLOOR } from './ordering.ts';
+import type { SearchIndexSource } from './scoring.ts';
 
 /** One fixture room: `[keywords, story]`, or `null` for a room with no metadata at all. */
 type RoomFixture = [string[] | null | undefined, string | null | undefined] | null;
@@ -150,19 +152,23 @@ test('no match run when nothing in the query lemma set appears', () => {
   assert.equal(longestMatchRun([], new Set([lemmatise('room')])), 0);
 });
 
-test('a quoted phrase matches the story only as an ordered run', () => {
-  const s = story('A room walled in glass, floor to ceiling.');
-  const forward = ['room', 'walled', 'glass'].map(lemmatise);
-  const reversed = ['glass', 'walled', 'room'].map(lemmatise);
-
-  assert.ok(storyPhraseRun(s.sequence, forward) > 0, 'the phrase appears in order');
-  assert.equal(storyPhraseRun(s.sequence, reversed), 0, 'reversed is not the same phrase');
+test('a quoted phrase matches a story only as its exact folded text [SR-05]', () => {
+  const s = story("Don't go in the Room of Glass.");
+  assert.equal(storyPhraseMatches(['room of glass'], s), 1, 'case folds, and the stopword stays');
+  assert.equal(storyPhraseMatches(['glass room'], s), 0, 'order matters');
+  assert.equal(storyPhraseMatches(['rooms of glass'], s), 0, 'no lemmatising');
+  assert.equal(storyPhraseMatches(['room glass'], s), 0, 'no dropped words');
+  assert.equal(storyPhraseMatches(['room of glass', 'room of glass'], s), 2, 'one count per phrase given');
 });
 
-test('a phrase run must be truly consecutive, not just present [SR-05]', () => {
-  const s = story('A room, entirely walled in oak, then glass.');
-  // "room" and "glass" both occur, far apart - not a phrase match.
-  assert.equal(storyPhraseRun(s.sequence, ['room', 'glass'].map(lemmatise)), 0);
+test('a quoted phrase matches as a substring unless its own spaces ask for word edges [SR-05]', () => {
+  const s = story('A fiberglass roommate.');
+  assert.equal(storyPhraseMatches(['glass room'], s), 1);
+  assert.equal(storyPhraseMatches([' glass room '], s), 0);
+
+  // The story's start and end count as spaces.
+  assert.equal(storyPhraseMatches([' glass room '], story('Glass room')), 1);
+  assert.equal(storyPhraseMatches([' glass room '], story('Glass room.')), 0, 'punctuation is not a space');
 });
 
 // --- query parsing: quoted phrases as single terms ---------------------------
@@ -208,6 +214,56 @@ test('an empty or whitespace-only query parses to no terms', () => {
   assert.deepEqual(parseQuery('').terms, []);
   assert.deepEqual(parseQuery('   ').terms, []);
   assert.deepEqual(parseQuery(null).terms, []);
+});
+
+test('words inside quotes reach the story only as their phrase [SR-05]', () => {
+  const { words, phrases } = splitQuoted(parseQuery('oak "Room of Glass" " glass room " "room of glass" of'));
+  assert.deepEqual(words, ['oak'], 'the vocabulary floor still drops an unquoted "of"');
+  assert.deepEqual(phrases, ['room of glass', ' glass room '], 'folded, deduplicated, edge spaces kept');
+});
+
+// --- quoted phrases in story ranking -----------------------------------------
+
+const STORY_ROOMS = [
+  'This shelf sits inside a glass room',
+  'Room master Meren left a glass of whiskey on the shelf',
+  "Don't go in the room of glass",
+  'This room is silicate-free',
+];
+
+/** Each room's story pull and `storyWords` for `query` over `STORY_ROOMS`, by id. */
+const storyById = (query: string, rooms: SearchIndexSource[] = STORY_ROOMS.map((story) => ({ keywords: [], story }))) => {
+  const { order, breakdown, strength } = rankHybrid({ query, count: rooms.length, index: buildSearchIndex(rooms) });
+  const byId: { story: number; words: number; strength: number }[] = [];
+  order.forEach((id, rank) => {
+    byId[id] = { story: breakdown.story[rank], words: breakdown.storyWords[rank], strength: strength[rank] };
+  });
+  return byId;
+};
+
+test('unquoted words match a story wherever they appear', () => {
+  assert.deepEqual(storyById('glass room').map((r) => r.words), [2, 2, 2, 1]);
+});
+
+test('a quoted phrase scores only the story that contains it, as one matched word [SR-05]', () => {
+  const quoted = storyById('"glass room"');
+  assert.deepEqual(quoted.map((r) => r.words), [1, 0, 0, 0]);
+  assert.equal(quoted[0].story, Math.fround(SEARCH_WEIGHTS.story));
+  for (const r of quoted.slice(1)) assert.equal(r.story, 0);
+
+  // Its stopword is part of the phrase, not dropped from it.
+  assert.deepEqual(storyById('"room of glass"').map((r) => r.words), [0, 0, 1, 0]);
+});
+
+test('a quoted phrase and unquoted words in one query each count once [SR-05]', () => {
+  assert.deepEqual(storyById('"glass room" whiskey').map((r) => r.words), [1, 1, 0, 0]);
+});
+
+test('a quoted phrase narrows the story, not the room [SR-05]', () => {
+  // No phrase in the story, but the title carries it.
+  const [room] = storyById('"glass room"', [{ keywords: [], title: 'The Glass Room', story: STORY_ROOMS[1] }]);
+  assert.equal(room.story, 0);
+  assert.ok(room.strength > 0);
 });
 
 // --- classifying one term against a room's keywords ---------------------------
@@ -874,6 +930,15 @@ test('a story marks the whole matched word, by lemma, and only real tokens [SR-3
   assert.deepEqual(marked(story, storyMatchRanges(story, ['survey', 'surveyed'])), ['surveyed']);
 });
 
+test('a quoted phrase marks where it matched, and its words mark nowhere else [SR-34]', () => {
+  const story = '  Glass room and a fiberglass roommate, then glass.';
+  const { words, phrases } = highlightQuery('" glass room "');
+  assert.deepEqual(marked(story, storyMatchRanges(story, words, { phrases })), ['Glass room']);
+
+  const loose = highlightQuery('"glass room"');
+  assert.deepEqual(marked(story, storyMatchRanges(story, loose.words, { phrases: loose.phrases })), ['Glass room', 'glass room']);
+});
+
 /**
  * Did the tag rule score this query against these folded keywords - the same
  * classification `rankHybrid` runs, whole-query reading included.
@@ -890,11 +955,12 @@ const tagScored = (query, keywords) => {
   });
 };
 
-/** What `useSearch` hands `keywordMatchRanges` - the same rule, read from one place. */
+/** What `useSearch` hands the range finders - the same rules, read from one place. */
 const highlightQuery = (query) => {
-  const tokens = tokenise(query);
-  const { whole } = tagTermsOf(parseQuery(query), tokens);
-  return { foldedQuery: whole?.folded ?? '', tokens };
+  const parsed = parseQuery(query);
+  const { whole } = tagTermsOf(parsed, tokenise(query));
+  const { words, phrases } = splitQuoted(parsed);
+  return { foldedQuery: whole?.folded ?? '', tokens: [...words, ...phrases.map((p) => p.trim())], words, phrases };
 };
 
 test('a keyword marks by substring, where a story would have needed a lemma [SR-34]', () => {
@@ -920,18 +986,21 @@ test('anything marked scored, and anything that scored is marked [SR-35]', () =>
   // than about the agreement it exists to check.
   const { keywords: indexed, story: storyStems } = buildSearchIndex([{ keywords: keywords.map((text) => ({ text })), story }])[0];
 
-  for (const query of ['art', 'nouveau', 'gilt', 'oak', 'cartographer', 'survey', 'catalogue', 'the', 'a', 'zzz', 'art nouveau']) {
+  for (const query of [
+    'art', 'nouveau', 'gilt', 'oak', 'cartographer', 'survey', 'catalogue', 'the', 'a', 'zzz', 'art nouveau',
+    '"art"', '"oak gilded"', '"of gilded"', '" oak "', '"gilded oak" survey',
+  ]) {
     // Marked through exactly what `useSearch` passes, not the raw folded
-    // query: a term the vocabulary floor drops cannot score, so it must not
-    // mark either.
-    const { foldedQuery, tokens } = highlightQuery(query);
+    // query: a term the vocabulary floor drops, or a word inside quotes,
+    // cannot score alone, so it must not mark alone either.
+    const { foldedQuery, tokens, words, phrases } = highlightQuery(query);
 
     const kScored = tagScored(query, indexed);
     const kMarked = keywords.some((k) => keywordMatchRanges(k, foldedQuery, tokens).length > 0);
     assert.equal(kMarked, kScored, `keyword agreement for ${JSON.stringify(query)}`);
 
-    const sScored = storyWordMatches(tokens, storyStems) > 0;
-    const sMarked = storyMatchRanges(story, tokens).length > 0;
+    const sScored = storyWordMatches(words, storyStems) + storyPhraseMatches(phrases, storyStems) > 0;
+    const sMarked = storyMatchRanges(story, words, { phrases }).length > 0;
     assert.equal(sMarked, sScored, `story agreement for ${JSON.stringify(query)}`);
   }
 });

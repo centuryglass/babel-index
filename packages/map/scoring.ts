@@ -108,7 +108,7 @@ export const STOPWORDS = new Set([
 ]);
 
 /**
- * Lowercase, strip diacritics, transliterate to ASCII, collapse whitespace.
+ * Lowercase, strip diacritics, transliterate to ASCII, trim.
  *
  * Decomposing to NFD and dropping the combining marks means `rosé` and `rose`
  * are the same word, which matters for a collection whose vocabulary is full of art
@@ -229,6 +229,34 @@ export function parseQuery(raw: unknown): ParsedQuery {
   return { raw: text, folded: fold(text), terms };
 }
 
+/** A query's story readings, split by quoting: what `splitQuoted` returns. */
+export interface SplitQuery {
+  /** folded, tokenised words from outside quotes - each matches a story word by lemma */
+  words: string[];
+  /** each distinct quoted phrase, folded but not trimmed - each matches a story as one substring */
+  phrases: string[];
+}
+
+/**
+ * Split a parsed query into the words that match on their own and the quoted
+ * phrases that match only whole (docs/search_rules.md "Quoted phrases").
+ *
+ * A word inside quotes never reaches `words`, so it cannot match a story, or
+ * mark one, apart from its phrase. A phrase keeps the spaces typed inside its
+ * quotes: `" glass room "` asks for word edges that `"glass room"` does not.
+ *
+ * @param minTokenLength must match `rankHybrid`'s, which floors `words` only
+ */
+export function splitQuoted(parsed: ParsedQuery, minTokenLength = 3): SplitQuery {
+  const words: string[] = [];
+  const phrases = new Set<string>();
+  for (const term of parsed.terms) {
+    if (term.quoted) phrases.add(foldWithMap(term.text).folded);
+    else words.push(...tokenise(term.text, { minLength: minTokenLength }));
+  }
+  return { words, phrases: [...phrases] };
+}
+
 /**
  * The terms the tag and title rules classify for one query, and the
  * whole-query reading that sits beside them.
@@ -333,14 +361,16 @@ export interface SearchIndexSource {
  * lookups. Rooms without metadata stay null, so the array is still indexed by
  * room id.
  *
- * Stories are kept as an ordered *sequence* of `{lemma, start, end}`, not a
- * bag - `storyWordMatches` only needs membership (`set`, kept alongside so
- * that stays an O(1) lookup), but the longest-contiguous-run measurement a
- * long story match needs (`longestMatchRun`, `storyPhraseRun`) has to know
- * which words sit next to which. Positions are into the folded story, not
- * the original - good enough for a character-count threshold, and
- * `storyMatchRanges` (which does need the original for highlighting)
- * re-walks the source text itself rather than reading this index.
+ * A story is held three ways:
+ *
+ * - `sequence`, its words as `{lemma, start, end}` in order, for the
+ *   longest-contiguous-run measurement (`longestMatchRun`). Positions are
+ *   into the folded story, not the original - good enough for a
+ *   character-count threshold. `storyMatchRanges`, which needs the original
+ *   for highlighting, re-walks the source text itself.
+ * - `set`, the same lemmas, for `storyWordMatches`' O(1) membership test.
+ * - `text`, the folded story as `phraseHaystack` pads it, for
+ *   `storyPhraseMatches`.
  *
  * @param joined output of `joinMetadata()`
  * @param opts.minLength must match the `minTokenLength` `rankHybrid` filters
@@ -367,7 +397,7 @@ export function buildSearchIndex(
       // Folded, same as a keyword - one string rather than a list, since a
       // room has at most one title (docs/search_rules.md "Title matching").
       title: entry.title ? fold(entry.title) : null,
-      story: { sequence, set: new Set(sequence.map((t) => t.lemma)) },
+      story: { sequence, set: new Set(sequence.map((t) => t.lemma)), text: phraseHaystack(fold(entry.story)) },
     };
   });
 }
@@ -398,6 +428,36 @@ export function storyWordMatches(queryTokens: string[], storyIndex: StoryIndex |
 }
 
 /**
+ * Folded story text with one space added at each end, so a quoted phrase's
+ * own edge spaces (`" glass room "`) match at the story's start and end.
+ *
+ * @param folded the story through `fold`, which has trimmed it
+ */
+function phraseHaystack(folded: string): string {
+  return ` ${folded} `;
+}
+
+/**
+ * How many of a query's quoted phrases appear in a room's story, each as one
+ * exact substring of the folded text (docs/search_rules.md "Quoted phrases").
+ *
+ * No lemmas, no dropped words, no word boundaries: `"room of glass"` needs
+ * `room of glass` verbatim after folding, and `"glass room"` also finds
+ * `fiberglass roommate`. Each phrase counts once, however often it appears.
+ *
+ * @param phrases `splitQuoted`'s `phrases`
+ * @param storyIndex the room's story
+ */
+export function storyPhraseMatches(phrases: string[], storyIndex: StoryIndex | null | undefined): number {
+  const text = storyIndex?.text;
+  if (!text) return 0;
+
+  let matched = 0;
+  for (const phrase of phrases) if (text.includes(phrase)) matched++;
+  return matched;
+}
+
+/**
  * The character span of the longest *contiguous* run of story words whose
  * lemma is one of `matchLemmas` - what tells "cat" (one word, moderate
  * strength) from "a room walled in glass" (a whole matched clause,
@@ -407,8 +467,7 @@ export function storyWordMatches(queryTokens: string[], storyIndex: StoryIndex |
  * not in the raw text - a stopword or a too-short word between two matches
  * (`a room of glass`) does not break the run, because it was never part of
  * the index either. `matchLemmas` is unordered: this measures "most of a
- * sentence matched", not "matched in the order the query gave it" - that
- * stricter, ordered test is `storyPhraseRun`, for a quoted phrase.
+ * sentence matched", not "matched in the order the query gave it".
  *
  * @returns characters spanned by the longest run, 0 if none
  */
@@ -432,42 +491,21 @@ export function longestMatchRun(
   return best;
 }
 
-/**
- * Whether a quoted phrase's words appear consecutively in the story, by
- * lemma, in the order the phrase gave them (docs/search_rules.md, "Quoted
- * phrases"). Unlike `longestMatchRun`, order matters: `"glass room"` must
- * not match a story where only `room glass` appears. `rankHybrid` takes the
- * longer of this and `longestMatchRun` as `storyLongChars`, so a quote does
- * not narrow story matching (issue #327).
- *
- * @param phraseLemmas the phrase's own words, lemmatised, in order
- * @returns characters spanned by the match, 0 if the phrase is not found
- */
-export function storyPhraseRun(sequence: StorySequenceEntry[] | null | undefined, phraseLemmas: string[] | null | undefined): number {
-  if (!sequence?.length || !phraseLemmas?.length) return 0;
-
-  outer: for (let i = 0; i + phraseLemmas.length <= sequence.length; i++) {
-    for (let j = 0; j < phraseLemmas.length; j++) {
-      if (sequence[i + j].lemma !== phraseLemmas[j]) continue outer;
-    }
-    return sequence[i + phraseLemmas.length - 1].end - sequence[i].start;
-  }
-  return 0;
-}
-
 // --- Where the query matched, for highlighting --------------------------------
 //
-// Two range finders, one per match rule, shadowing the two scorers above
-// them. A keyword matches by substring and a story word by lemma; one
-// highlighter over both would mark text `classifyTagTerm` never looked at
-// and miss text `storyWordMatches` credited. They live here rather than in a component
+// Two range finders, one per match rule, shadowing the scorers above
+// them. A keyword matches by substring, and a story by lemma per word and by
+// substring per quoted phrase; one highlighter over both would mark text
+// `classifyTagTerm` never looked at and miss text `storyWordMatches` credited.
+// They live here rather than in a component
 // for one reason: a view that re-derives "what matched" drifts from the
 // thing that ranked, silently - marked text that scored nothing, or a ranked
 // room with nothing marked.
 //
-// Both take the same `foldedQuery` and `queryTokens` the ranking was
-// computed from, so a token dropped as a stopword or under `minTokenLength`
-// cannot highlight: it did not score, so it does not mark. Both return
+// Both take the query as the ranking read it (`tagTermsOf`, `splitQuoted`),
+// so a token dropped as a stopword or under `minTokenLength`, or a word
+// inside quotes, cannot highlight alone: it did not score, so it does not
+// mark. Both return
 // ranges into the original string - sorted, merged, non-overlapping - which
 // is what `<Highlight>` renders and what makes them assertable without a DOM.
 
@@ -555,22 +593,43 @@ export function keywordMatchRanges(text: unknown, foldedQuery: string, queryToke
  *     `surveyed`. Marking three quarters of a word reads as a rendering bug;
  *     marking the word reads as "this is why this room is here".
  *
+ * A quoted phrase marks every occurrence `storyPhraseMatches` would find,
+ * against the same padded text. Whitespace at a phrase's edges marks nothing,
+ * so `" glass room "` marks the same text `"glass room"` does there.
+ *
  * @param text the story as written, unfolded
+ * @param queryTokens `splitQuoted`'s `words`
  * @param opts.minLength must match what built the story index
+ * @param opts.phrases `splitQuoted`'s `phrases`
  * @returns ranges into `text`
  */
 export function storyMatchRanges(
   text: unknown,
   queryTokens: string[] = [],
-  { minLength = 3 }: { minLength?: number } = {}
+  { minLength = 3, phrases = [] }: { minLength?: number; phrases?: string[] } = {}
 ): MatchRange[] {
   const src = String(text ?? '');
-  if (!src || !queryTokens.length) return [];
+  if (!src || (!queryTokens.length && !phrases.length)) return [];
   const { folded, map } = foldWithMap(src);
   if (!folded) return [];
 
-  const lemmas = new Set(queryTokens.map(lemmatise));
   const hits = [];
+  // `fold` trims; `lead` turns an index into the padded, trimmed text back
+  // into one into `folded`.
+  const trimmed = folded.trim();
+  const lead = folded.length - folded.trimStart().length - 1;
+  const hay = phraseHaystack(trimmed);
+  for (const phrase of phrases) {
+    for (const { start, end } of occurrences(hay, phrase)) {
+      let s = Math.max(start + lead, lead + 1);
+      let e = Math.min(end + lead, lead + 1 + trimmed.length);
+      while (s < e && /\s/.test(folded[s])) s++;
+      while (e > s && /\s/.test(folded[e - 1])) e--;
+      if (e > s) hits.push(toSource(map, src.length, s, e));
+    }
+  }
+
+  const lemmas = new Set(queryTokens.map(lemmatise));
   // The complement of `tokenise`'s split, so the two agree on what a word is.
   for (const m of folded.matchAll(/[\p{L}\p{N}]+/gu)) {
     const word = m[0];
@@ -819,8 +878,9 @@ export interface RankHybridOpts {
  *     better one stands.
  *   - title: the best single reading over every term and the whole query,
  *     since a room has one title.
- *   - story: a soft OR of `story` per matched query word and `storyLong`
- *     times the run curve (`STORY_LONG_RANGE`).
+ *   - story: a soft OR of `story` per matched unquoted word or quoted
+ *     phrase, and `storyLong` times the run curve (`STORY_LONG_RANGE`) over
+ *     the unquoted words.
  *   - clip: `clip` times `clipCurveStrength` of the raw cosine.
  *
  * A missing signal is omitted, not substituted: no embedding blob gives a
@@ -857,11 +917,8 @@ export function rankHybrid({
 }: RankHybridOpts): RankHybridResult {
   const parsed = parseQuery(query);
   const queryTokens = tokenise(query, { minLength: minTokenLength });
-  const queryLemmas = new Set(queryTokens.map(lemmatise));
-  // Quoted multi-word phrases get an ordered story run of their own, on top
-  // of the unordered scattered-word run every query gets - see
-  // `storyPhraseRun`.
-  const phraseLemmas = parsed.terms.filter((t) => t.quoted && t.words.length > 1).map((t) => t.words.map(lemmatise));
+  const { words: storyTokens, phrases } = splitQuoted(parsed, minTokenLength);
+  const storyLemmas = new Set(storyTokens.map(lemmatise));
 
   const { terms: tagTerms, whole: wholeQueryTerm } = tagTermsOf(parsed, queryTokens, minTokenLength);
 
@@ -931,10 +988,10 @@ export function rankHybrid({
       }
       title = titleExact ? weights.titleExact : weights.titlePartial * titlePartial;
 
-      storyWords = storyWordMatches(queryTokens, entry.story);
-      storyLongChars = longestMatchRun(entry.story.sequence, queryLemmas);
-      for (const phrase of phraseLemmas)
-        storyLongChars = Math.max(storyLongChars, storyPhraseRun(entry.story.sequence, phrase));
+      // A matched quoted phrase counts as one matched word, and adds nothing
+      // to the run: its words are not in `storyLemmas`.
+      storyWords = storyWordMatches(storyTokens, entry.story) + storyPhraseMatches(phrases, entry.story);
+      storyLongChars = longestMatchRun(entry.story.sequence, storyLemmas);
       story = softOr([1 - (1 - storyWordPull) ** storyWords, weights.storyLong * storyRunCurve(storyLongChars)]);
 
       if (tagExact > 0 || tagPartialCount > 0) sawKeyword = true;
