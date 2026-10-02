@@ -39,7 +39,7 @@ export interface GLContext {
   /** (cssWidth, cssHeight, dpr) - resizes the backing store and the viewport. */
   resize(w: number, h: number, dpr: number): void;
   clear(r: number, g: number, b: number, a: number): void;
-  /** A solid-color quad, in device pixels - the blank fallback, the fade's flat-black substitute, and `drawGlow`'s un-baked fallback (`glRenderer.ts`). */
+  /** A solid-color quad, in device pixels - the blank fallback, the fade's flat-black substitute, and an un-baked hover glow (`glRenderer.ts`'s `paintGL`). */
   drawFlatQuad(dst: Rect, color: [number, number, number, number]): void;
   /**
    * A textured quad, in device pixels. `src` is in the TEXTURE's own pixel

@@ -4,8 +4,8 @@
  * `assets/fav_on.png`/`fav_off.png` are fixed, checked-in art that
  * integrates with any tile: anchored to the tile's top right corner and
  * scaled by a cell's pixels-per-cell-width over the reference width the
- * loaded art was itself scaled to match - the same factor `render.ts`/
- * `slide.ts` draw the tile itself at, and the one factor covers both axes
+ * loaded art was itself scaled to match - the same factor `framePlan.ts`/
+ * `slidePlan.ts` draw the tile itself at, and the one factor covers both axes
  * because both assets share the tile's aspect. The badge has a pyramid
  * (`manifest.shared.favoriteLevels`), so the scale denominator is
  * not a flat `BASE_TILE.w` - `favoriteIconScreenRect` is the one home for that
@@ -76,8 +76,8 @@ const TOUCH_HIT_AREA_CAP = 0.1;
  * The badge's full screen rect for a tile whose top left corner is at
  * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's upper
  * right corner and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the decoded art's pixel size, read by `render.ts`'s
- * `drawFavoriteBadge` once the tile cache reports it loaded - unrelated to
+ * `iconSize` is the decoded art's pixel size, read by `framePlan.ts`'s
+ * `planFavoriteBadge` once the tile cache reports it loaded - unrelated to
  * `FAVORITE_TOGGLE_BBOX`, which sizes the tap target instead.
  *
  * `level` is which pyramid rung `iconSize` came from - the badge's

@@ -107,12 +107,12 @@ interface UseMapRendererOpts {
   slideRenderer: SlideRenderer;
   cache: TileCache;
   centreSlots?: (Slot | null)[] | null;
-  /** `config.center`'s auto-fit font range - see `render.ts`'s `DrawOpts.spineFontLimits` */
+  /** `config.center`'s auto-fit font range - see `framePlan.ts`'s `MapFrameOpts.spineFontLimits` */
   spineFontLimits?: SpineFontLimits | null;
   centreOverlay: (w: number, h: number) => CentreOverlay;
   /** rooms the reader's blocked tags removed, for the HUD */
   blockedCount?: number;
-  /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
+  /** overlay a favorite badge on every real room's tile - see `framePlan.ts`'s `MapFrameOpts.favorites` */
   favorites?: { isFavorite: (id: number) => boolean } | null;
   /**
    * `config.favorites.minInteractiveTileWidth` - below this many CSS pixels
@@ -126,7 +126,7 @@ interface UseMapRendererOpts {
    * (`onMove`) alongside `hoveredFavorite`.
    */
   favTooltipRef?: { current: HTMLElement | null };
-  /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
+  /** which ranking is in force, for the center tile's favorites-sort switch - see `framePlan.ts`'s `MapFrameOpts.sortMode` */
   sortMode?: SortMode;
   /**
    * Distill mode's crossfade over generic tiles, 0-1 - a ref rather than a
@@ -134,14 +134,14 @@ interface UseMapRendererOpts {
    * fade loop, the same reason `anim`/`cam` are refs rather than props.
    */
   genericFade?: { current: number };
-  /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
+  /** whether distill mode is on - see `framePlan.ts`'s `MapFrameOpts.distillMode` */
   distillMode?: boolean;
   /** The distill toggle's tooltip - one shared element, the `favTooltipRef` arrangement. */
   distillTooltipRef?: { current: HTMLElement | null };
   /**
    * The center-tile loading indicator, or null when none is deployed. Read
    * every frame for the current frame to composite onto the center cell (see
-   * `render.ts`'s `DrawOpts.loadingFrame`), and cancelled when the map is
+   * `framePlan.ts`'s `MapFrameOpts.loadingFrame`), and cancelled when the map is
    * grabbed mid-rearrangement. A ref, like `anim`/`cam`, so the render loop is
    * not rebuilt when it changes.
    */

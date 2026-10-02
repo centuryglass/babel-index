@@ -71,8 +71,8 @@ you" routes here, and its conventions still apply.
   it was handed each tick, and the renderer pulls the frame through
   `frame()`. A grab mid-preload calls `cancel()`, which stops the loop and
   resolves the pending `finish()`, ending the rearrangement.
-- **`drawLoadingFrame` is drawn in both renderers, in lockstep** (see
-  `rendering.md`, "The WebGL renderer").
+- **`framePlan.ts`'s `planLoadingFrame` places each frame for both
+  renderers** (see `rendering.md`, "The WebGL renderer").
 - **The frames are a build artifact, served like fixed art** from the shared
   dir (`assets/animation/`), resolved off `sharedBase`; `scan.ts` discovers
   nothing here. A missing manifest means no indicator, read as null

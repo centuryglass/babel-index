@@ -818,7 +818,7 @@ export function CatalogView({
               )}
               {/*
                 The distill toggle, in the lower right corner as on the map
-                (`render.ts`'s `drawDistillToggle`), sized by `distillW`/
+                (`framePlan.ts`'s `planDistillToggle`), sized by `distillW`/
                 `distillH`.
               */}
               <button

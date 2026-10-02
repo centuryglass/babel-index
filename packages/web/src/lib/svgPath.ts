@@ -86,9 +86,8 @@ export interface PathTracer {
  * Trace the canonical M/L/C/Z grammar onto a real path via `parsePath`,
  * scaling each coordinate per axis by `scale.x`/`scale.y` and offsetting by
  * `ox`/`oy`. Replays the true Bezier curve rather than a flattened polygon -
- * `flattenPath` is for hit-testing only. `render.ts`'s
- * `traceFavoriteToggle`/`traceDistillToggle` call this with a tile's own
- * `cellPx`/`sx`/`sy`; `gl/glowTexture.ts` calls it with a bake canvas's own
+ * `flattenPath` is for hit-testing only. `render.ts`'s `paintCanvas2D`
+ * calls this with a glow item's cell rect; `gl/glowTexture.ts` calls it with a bake canvas's own
  * pixel size and a zero offset, since a traced path's coordinates are
  * fractions of the whole tile either way.
  */

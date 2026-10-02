@@ -1,8 +1,7 @@
 /**
  * The one declaration point for style values shared between canvas-drawn
  * chrome and plain CSS: the hover glow the open book
- * (`center.ts`'s `composeSpines`, `render.ts`'s favorite-badge/distill-toggle
- * hover, `gl/glowTexture.ts`'s bake) and its CSS-DOM counterparts
+ * (`center.ts`'s `composeSpines`, `render.ts`'s glow items, `gl/glowTexture.ts`'s bake) and its CSS-DOM counterparts
  * (`.center-book.hover`, `.center-controls button.hover`,
  * `.catalog-center-book:hover` in `css/`) both draw. A canvas draw call
  * needs the color as a string or float tuple at module scope; CSS needs it as

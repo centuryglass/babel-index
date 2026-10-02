@@ -98,8 +98,8 @@ export const genericId = (i: number): number | string => {
  * see `scan.ts`'s `scanShared`). Same shared-id treatment as `genericId`;
  * whether this id actually resolves to anything is a `rooms.ts` question,
  * not this one - an index with no matching distill alternate on disk has no
- * entry in `createTileLocator`'s url map, and `drawGenericFade`
- * (`render.ts`) falls back to flat black when the cache has nothing for it.
+ * entry in `createTileLocator`'s url map, and `planGenericFade`
+ * (`framePlan.ts`) falls back to flat black when the cache has nothing for it.
  */
 const genericDistillIdCache = new Map<number, string>();
 export const genericDistillId = (i: number): number | string => {
@@ -128,7 +128,7 @@ export const DISTILL_ON = 'distill-on';
 /**
  * The "forget searches" book's black spine art, overlaid on the shelf's
  * bottom-right book only while there is history to clear (see
- * `render.ts`'s `drawClearHistoryBookOverlay`) - the base center tile paints
+ * `framePlan.ts`'s `planClearHistoryBook`) - the base center tile paints
  * that book brown, like every other closed book, so the override is only
  * visually distinct while it is actually present. Shared id, like `CENTER`.
  */
@@ -245,7 +245,7 @@ export interface TileCache {
   /** How far past their budgets the visible working set is forcing the levels. */
   overBudget: () => number;
   pendingPrefetch: () => number;
-  /** Whether `prefetch()` still has queue room this frame - see `render.ts`'s ring walk. */
+  /** Whether `prefetch()` still has queue room this frame - see `framePlan.ts`'s ring walk. */
   hasPrefetchCapacity: () => boolean;
   clear: () => void;
 }

@@ -196,6 +196,25 @@ test('nothing resident draws the blank fallback, never a missing quad', () => {
   assert.ok(gl.flats.length >= stats.cells, 'every blank cell got a flat fill');
 });
 
+test('a resident tile whose texture has not uploaded draws the blank fill and counts as blank', () => {
+  // The plan saw a hit; only the painter knows the GPU side is not ready.
+  const w = world();
+  frame(w, { zoom: 220 });
+  w.images.settleAll();
+
+  const noUploads: GLTextureCache = { beginFrame: () => {}, get: () => null, dispose: () => {} };
+  const renderer = createGLRenderer({ cache: w.cache, textures: noUploads, glowTextures: fakeGlowTextureCache() });
+  const gl = fakeGLContext();
+  const stats = renderer.draw({
+    gl, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order,
+  });
+  assert.equal(stats.drawn, 0);
+  assert.equal(stats.substituted, 0);
+  assert.equal(stats.blank, stats.cells);
+  const blankFills = gl.flats.filter((f) => f.color[0] === 0x15 / 255 && f.color[3] === 1);
+  assert.equal(blankFills.length, stats.cells);
+});
+
 // --- the favorite badge, the sort switch, the distill toggle, the overlay ---
 
 test('the favorite badge draws on every room cell, and only room cells', () => {

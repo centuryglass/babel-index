@@ -2,12 +2,14 @@
  * The rearrangement animation: a second renderer, for the one moment the map
  * is not a map.
  *
- * `render.ts` draws an infinite world under a camera the reader controls; this
- * draws a finite board under a camera parked for the animation's duration,
- * with one row or column part-way through a slide. The loops stay separate
- * because a shared one would thread "is something sliding" through every
- * other decision; `main.tsx` picks which is drawing, and the animation ends
- * by handing back.
+ * `framePlan.ts` plans an infinite world under a camera the reader controls;
+ * `slidePlan.ts` plans a finite board under a camera parked for the
+ * animation's duration, with one row or column part-way through a slide.
+ * This file lays the moves out in time and drives the board. The two planners
+ * stay separate because a shared one would thread "is something sliding"
+ * through every other decision; they share the per-cell and overlay rules.
+ * `main.tsx` picks which renderer is drawing, and the animation ends by
+ * handing back.
  *
  * ### A run is a whole line's worth of motion, not one step
  *
@@ -55,40 +57,14 @@
  * on-camera rectangle ever slide. The duration is set by the viewport, and
  * collection size does not enter into it.
  */
-import { PYRAMID, type Pyramid } from './pyramid.ts';
-import { pxPerCell, type Camera } from './camera.ts';
-import { CENTER, FAV_ON, FAV_OFF, genericId, genericDistillId, type RoomId, type TileCache } from './tiles.ts';
-import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
-import type { Board, BoardValue, Motion, Move, Point } from '../../../map/moves.ts';
+import type { Pyramid } from './pyramid.ts';
+import type { TileCache } from './tiles.ts';
+import type { Board, Motion, Move } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
-import type { SortMode } from '../../../map/favorites.ts';
-import {
-  drawFavoriteBadge, drawFavoriteSwitch, drawDistillToggle, drawClearHistoryBookOverlay, drawGenericFade,
-  SMOOTHING_MAX_DOWNSCALE, type DrawContext,
-} from './render.ts';
-import { areSpinesLegible } from './center.ts';
+import { paintCanvas2D, type DrawContext } from './render.ts';
+import { createSlidePlanner, type SlideDrawResult, type SlideFrameOpts } from './slidePlan.ts';
 
-/**
- * The cache id for a board value at its home map cell.
- *
- * The board carries one interchangeable `GENERIC` value wherever a generic
- * tile sits (`board.ts` and `illusion.ts` never distinguish one from
- * another), so the actual tile is resolved here, positionally, from the home
- * cell - never from wherever the slide has pushed the value. That is what
- * lets a generic tile carry its own face across a ride instead of flipping
- * mid-slide.
- */
-const idFor = (
-  value: BoardValue,
-  homeMx: number,
-  homeMy: number,
-  genericIndexAt: (x: number, y: number) => number
-): RoomId =>
-  value === BOARD_CENTER
-    ? CENTER
-    : value === BOARD_GENERIC
-      ? genericId(genericIndexAt(homeMx, homeMy))
-      : value;
+export type { SlideDrawResult };
 
 /** One step of a run: the move it carries and where along the run it applies. */
 interface Step {
@@ -342,191 +318,21 @@ export interface CreateSlideRendererOpts {
   pyramid?: Pyramid;
 }
 
-export interface SlideDrawOpts {
-  ctx: DrawContext;
-  /** css pixels */
-  width: number;
-  /** css pixels */
-  height: number;
-  dpr: number;
-  /** parked on the center */
-  cam: Camera;
-  board: Board;
-  /** board index of map cell (0, 0) */
-  origin: Point;
-  /**
-   * from `advanceTo` - several at once during a wave, and never overlapping
-   * on screen; see `createSlideshow`'s doc for why
-   */
-  motions?: Motion[];
-  /**
-   * which generic tile a generic cell shows, by map coordinate (the same
-   * positional chooser the main renderer uses, so the tile matches across
-   * the handoff)
-   */
-  genericIndexAt?: (x: number, y: number) => number;
-  /** the center-room marker */
-  chrome?: boolean;
-  /** overlay a favorite badge on every real room's tile - see `render.ts`'s `DrawOpts.favorites` */
-  favorites?: { isFavorite: (id: number) => boolean } | null;
-  /** which ranking is in force, for the center tile's favorites-sort switch - see `render.ts`'s `DrawOpts.sortMode` */
-  sortMode?: SortMode;
-  /** distill mode's crossfade over generic tiles - see `render.ts`'s `DrawOpts.genericFade` */
-  genericFade?: number;
-  /** whether distill mode is on - see `render.ts`'s `DrawOpts.distillMode` */
-  distillMode?: boolean;
-  /** whether the pointer is over the distill toggle - see `render.ts`'s `DrawOpts.hoveredDistill` */
-  hoveredDistill?: boolean;
-  /**
-   * Whether the "forget searches" book's slot is claimed - the caller's
-   * reduction of `centreSlots[BOOK_COUNT - 1]?.action === 'forgetHistory'`,
-   * the check `render.ts`'s loop makes directly. This renderer receives no
-   * `centreSlots` at all: it draws no spine text.
-   */
-  clearHistoryAvailable?: boolean;
-}
-
-export interface SlideDrawResult {
-  drawn: number;
-  blank: number;
-  level: number;
-  cells: number;
-}
+/** `slidePlan.ts`'s `SlideFrameOpts` plus the context to paint on. */
+export type SlideDrawOpts = SlideFrameOpts & { ctx: DrawContext };
 
 /**
- * Draw one frame of the animation.
- *
- * Takes a 2d context and the state of the board, the same way `render.ts`
- * takes one and the state of the world, so a frame's decisions are
+ * Draw one frame of the animation: `slidePlan.ts` decides it and
+ * `render.ts`'s `paintCanvas2D` paints it, so a frame's decisions are
  * assertable without a browser.
  */
-export function createSlideRenderer({ cache, pyramid = PYRAMID }: CreateSlideRendererOpts) {
-  function draw({
-    ctx, width: w, height: h, dpr, cam, board, origin, motions = [], genericIndexAt = () => -1, chrome = true,
-    favorites = null, sortMode = 'relevance', genericFade = 0, distillMode, hoveredDistill = false,
-    clearHistoryAvailable = false,
-  }: SlideDrawOpts): SlideDrawResult {
-    cache.beginFrame();
+export function createSlideRenderer({ cache, pyramid }: CreateSlideRendererOpts) {
+  const planner = createSlidePlanner({ cache, pyramid });
 
-    // No full-viewport clear: same reasoning as `render.ts`'s draw loop - the
-    // still field plus the moving lines' padded ranges cover the whole
-    // viewport with no gaps (`slide.test.ts`'s "every visible cell is painted
-    // in every frame, including mid-slide" asserts it), and every cell paints
-    // something.
-    const cellPx = pxPerCell(cam);
-    const level = pyramid.pickLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr }, null);
-
-    // The same smoothing gate `render.ts`'s draw applies.
-    const src = pyramid.sizeOf(level);
-    ctx.imageSmoothingEnabled = !src || src.w <= cellPx.x * dpr * SMOOTHING_MAX_DOWNSCALE;
-
-    const halfW = w / 2 / cellPx.x;
-    const halfH = h / 2 / cellPx.y;
-    const x0 = Math.floor(cam.x - halfW);
-    const x1 = Math.ceil(cam.x + halfW);
-    const y0 = Math.floor(cam.y - halfH);
-    const y1 = Math.ceil(cam.y + halfH);
-
-    const W = board.width;
-    const H = board.height;
-    const valueAt = (bx: number, by: number): BoardValue =>
-      board.cells[(((by % H) + H) % H) * W + (((bx % W) + W) % W)];
-    // +1 on each axis kills hairline gaps from rounding, as in `render.ts`.
-    const cw = cellPx.x + 1;
-    const ch = cellPx.y + 1;
-
-    let drawn = 0;
-    let blank = 0;
-    const wanted: RoomId[] = [];
-
-    const paint = (value: BoardValue, homeMx: number, homeMy: number, drawMx: number, drawMy: number): void => {
-      const sx = (drawMx - cam.x) * cellPx.x + w / 2;
-      const sy = (drawMy - cam.y) * cellPx.y + h / 2;
-      const id = idFor(value, homeMx, homeMy, genericIndexAt);
-      const distillId = value === BOARD_GENERIC ? genericDistillId(genericIndexAt(homeMx, homeMy)) : null;
-      // The fully-faded skip `render.ts`'s loop makes too: under a complete
-      // fade the base tile's art is never seen, so it is not drawn - though
-      // the prefetch pass still warms it.
-      if (value === BOARD_GENERIC && genericFade >= 1) {
-        drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
-        wanted.push(id);
-        return;
-      }
-      const hit = cache.get(id, level);
-      if (hit) {
-        if (hit.rect) {
-          const { sx: rx, sy: ry, sw, sh } = hit.rect;
-          ctx.drawImage(hit.img, rx, ry, sw, sh, sx, sy, cw, ch);
-        } else {
-          ctx.drawImage(hit.img, sx, sy, cw, ch);
-        }
-        drawn++;
-      } else {
-        // Must match `render.ts`'s blank-cell fill.
-        ctx.fillStyle = '#15120f';
-        ctx.fillRect(sx, sy, cw, ch);
-        blank++;
-      }
-      if (value === BOARD_GENERIC && genericFade) drawGenericFade(ctx, cache, distillId!, genericFade, sx, sy, cw, ch, level);
-      // The favorite badge rides along with a sliding tile. Only real rooms
-      // carry one - which is when `value` is a numeric id rather than one of
-      // the two shared board values.
-      if (favorites && typeof value === 'number')
-        drawFavoriteBadge(ctx, cache, favorites.isFavorite(value) ? FAV_ON : FAV_OFF, cellPx, sx, sy, level);
-      wanted.push(id);
-    };
-
-    // The still field. Lines in motion are skipped here and drawn after, so
-    // their tiles land on top of their neighbours rather than under them.
-    const movingRows = new Set<number>();
-    const movingCols = new Set<number>();
-    for (const m of motions)
-      (m.kind === 'row' ? movingRows : movingCols).add(
-        m.kind === 'row' ? m.index - origin.y : m.index - origin.x
-      );
-    for (let my = y0; my <= y1; my++)
-      for (let mx = x0; mx <= x1; mx++) {
-        if (movingRows.has(my) || movingCols.has(mx)) continue;
-        paint(valueAt(mx + origin.x, my + origin.y), mx, my, mx, my);
-      }
-
-    // Each line in motion, extended by however far it has travelled so the
-    // cells sliding in from off screen are drawn too.
-    for (const m of motions) {
-      const shift = m.offset * m.dir;
-      const pad = Math.ceil(Math.abs(shift)) + 1;
-      if (m.kind === 'row')
-        for (let mx = x0 - pad; mx <= x1 + pad; mx++)
-          paint(valueAt(mx + origin.x, m.index), mx, m.index - origin.y, mx + shift, m.index - origin.y);
-      else
-        for (let my = y0 - pad; my <= y1 + pad; my++)
-          paint(valueAt(m.index, my + origin.y), m.index - origin.x, my, m.index - origin.x, my + shift);
-    }
-
-    // The tiles about to arrive: a ring outside the viewport, at the one level
-    // this animation ever uses. Behind everything visible, as always.
-    for (let my = y0 - 2; my <= y1 + 2; my++)
-      for (let mx = x0 - 2; mx <= x1 + 2; mx++)
-        if (my < y0 || my > y1 || mx < x0 || mx > x1)
-          cache.prefetch(idFor(valueAt(mx + origin.x, my + origin.y), mx, my, genericIndexAt), level);
-
-    if (chrome) {
-      // The center tile's controls, drawn for the whole animation - see
-      // `drawFavoriteSwitch`'s doc for why the handoff needs them. The gates
-      // are the ones `render.ts`'s loop uses: a favorite store and legible
-      // spines for the switch, an opted-in `distillMode` for the toggle,
-      // `clearHistoryAvailable` for the black spine.
-      //
-      // The center room itself has not moved, by construction.
-      const sx = (0 - cam.x) * cellPx.x + w / 2;
-      const sy = (0 - cam.y) * cellPx.y + h / 2;
-      if (favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
-        drawFavoriteSwitch(ctx, cache, sortMode, cellPx, sx, sy);
-      if (distillMode !== undefined) drawDistillToggle(ctx, cache, distillMode, hoveredDistill, cellPx, sx, sy);
-      if (clearHistoryAvailable) drawClearHistoryBookOverlay(ctx, cache, cellPx, sx, sy);
-    }
-
-    return { drawn, blank, level, cells: wanted.length };
+  function draw({ ctx, ...opts }: SlideDrawOpts): SlideDrawResult {
+    const result = planner.plan(opts);
+    paintCanvas2D(ctx, planner.list);
+    return result;
   }
 
   return { draw };
