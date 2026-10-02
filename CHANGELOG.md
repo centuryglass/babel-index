@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.10.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.9.0...babel-index-v1.10.0) (2026-10-02)
+
+
+### Features
+
+* **curation:** ask the story engine for motivated mechanisms and open questions ([#410](https://github.com/centuryglass/babel-index/issues/410)) ([4bb9c57](https://github.com/centuryglass/babel-index/commit/4bb9c5752c8611b872f4d1785e29f266dfc1db9e))
+* **curation:** explain a tile's style keywords from the review GUI ([#421](https://github.com/centuryglass/babel-index/issues/421)) ([70f6f5d](https://github.com/centuryglass/babel-index/commit/70f6f5d5cf4c49c280e341fefa8d09584603fc6d))
+* **curation:** generate a tile's title from the review GUI ([#420](https://github.com/centuryglass/babel-index/issues/420)) ([c2f824f](https://github.com/centuryglass/babel-index/commit/c2f824f2873911f5afea9225ba8ad656735cfcea)), closes [#419](https://github.com/centuryglass/babel-index/issues/419)
+* **curation:** rebuild the story review GUI around one growing pitch and draft list ([#411](https://github.com/centuryglass/babel-index/issues/411)) ([a4b4171](https://github.com/centuryglass/babel-index/commit/a4b41718424b14dd3d4ebd9e61d1d1fa8f5b1170))
+* rename the demo script to start, keeping demo as an alias ([#429](https://github.com/centuryglass/babel-index/issues/429)) ([8c96e03](https://github.com/centuryglass/babel-index/commit/8c96e03815bffff3933698b1362abeeb363225e2)), closes [#427](https://github.com/centuryglass/babel-index/issues/427)
+
+
+### Bug Fixes
+
+* **a11y:** make the map's distill toggle a keyboard button and the catalog's decoration ([#444](https://github.com/centuryglass/babel-index/issues/444)) ([b1c59b3](https://github.com/centuryglass/babel-index/commit/b1c59b3ea330bc5207a9ceb7478c421872091e83)), closes [#439](https://github.com/centuryglass/babel-index/issues/439)
+* **a11y:** name rooms by title, not id, everywhere a reader hears them ([#446](https://github.com/centuryglass/babel-index/issues/446)) ([5638133](https://github.com/centuryglass/babel-index/commit/5638133084e79532c53ca876943851ad2623671b)), closes [#434](https://github.com/centuryglass/babel-index/issues/434)
+* **a11y:** name the catalog's back button and search trigger, announce page turns and generic moves ([#440](https://github.com/centuryglass/babel-index/issues/440)) ([83edccd](https://github.com/centuryglass/babel-index/commit/83edccd57919f7b5c4902aa9cf0c5962917fd34a))
+* **a11y:** restore the focus ring on the catalog's search field ([#445](https://github.com/centuryglass/babel-index/issues/445)) ([4379f44](https://github.com/centuryglass/babel-index/commit/4379f44e1f056d9041c68c310b9a92d6cd9c9800))
+* match a multi-word tag inside a longer query ([#448](https://github.com/centuryglass/babel-index/issues/448)) ([857c122](https://github.com/centuryglass/babel-index/commit/857c12226b6540d5e4ec517b0022f9d29b01d333)), closes [#398](https://github.com/centuryglass/babel-index/issues/398)
+* match a quoted phrase in a story only as its exact folded text ([#443](https://github.com/centuryglass/babel-index/issues/443)) ([0cceb6e](https://github.com/centuryglass/babel-index/commit/0cceb6ec240148f87f0c1b0c16978db5a7cb2550)), closes [#327](https://github.com/centuryglass/babel-index/issues/327)
+* refuse camera controls while a rearrangement holds the camera ([#447](https://github.com/centuryglass/babel-index/issues/447)) ([5a20d1a](https://github.com/centuryglass/babel-index/commit/5a20d1adea83308d1a637258a5223a9c9f1471e4)), closes [#306](https://github.com/centuryglass/babel-index/issues/306)
+* **search:** make the signal weights a scoring.ts constant, not config ([#430](https://github.com/centuryglass/babel-index/issues/430)) ([8759adb](https://github.com/centuryglass/babel-index/commit/8759adba6545ab9c3e6915e46046914a6e7a7eed)), closes [#229](https://github.com/centuryglass/babel-index/issues/229)
+* size the catalog score-strip reserve to the rendered strip ([#406](https://github.com/centuryglass/babel-index/issues/406)) ([430dff2](https://github.com/centuryglass/babel-index/commit/430dff2e986b4ec3ff89352d877f70bec5587a1a))
+
 ## [1.9.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.8.0...babel-index-v1.9.0) (2026-09-28)
 
 
