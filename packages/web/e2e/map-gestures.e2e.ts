@@ -382,7 +382,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // Confirm a real room through the dialog's accessible name (`desc.name`,
     // `describeRoom`); `.card-id`'s visible text leads with the room's title
     // when it has one.
-    assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
+    assert.match(await card.getAttribute('aria-label'), /, rank \d+ of \d+/);
 
     const chips = card.locator('.chip');
     assert.equal(await chips.count(), 3, 'the sample collection gives every room three keywords');

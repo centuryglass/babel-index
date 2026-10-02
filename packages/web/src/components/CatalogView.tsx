@@ -956,6 +956,8 @@ function CatalogRow({
   const [clipped, setClipped] = useState(false);
   const [hiddenChips, setHiddenChips] = useState(0);
   const desc: Description = describeRoom(id, rank, total, entry);
+  const title = roomTitle(entry, id);
+  const nameId = `catalog-name-${id}`;
 
   // Measures what the row could not show, after layout and on every resize:
   // whether the story was cut (`clipped`) and how many chips are hidden.
@@ -1020,7 +1022,7 @@ function CatalogRow({
     <button
       className="catalog-tile-button"
       onClick={() => onExpand(id, rank)}
-      aria-label={`enlarge room ${id}`}
+      aria-label={`show details for ${title}`}
     >
       {/*
         `alt` is the room's optional caption (`desc.picture`), or empty. The
@@ -1041,7 +1043,7 @@ function CatalogRow({
 
   const head = (
     <div className="catalog-head">
-      <h2 className="catalog-name">
+      <h2 className="catalog-name" id={nameId}>
         <span className="catalog-rank">{rank + 1}</span>
         {/*
           The title is highlighted like the chips and story, since title is
@@ -1049,7 +1051,7 @@ function CatalogRow({
           never scores.
         */}
         <span className="catalog-title">
-          <Highlight text={roomTitle(entry, id)} ranges={entry?.title ? highlight?.title(entry.title) : null} />
+          <Highlight text={title} ranges={entry?.title ? highlight?.title(entry.title) : null} />
         </span>
       </h2>
       {/*
@@ -1077,10 +1079,14 @@ function CatalogRow({
     </div>
   );
 
+  // The row is named by its head (rank and title) through `aria-labelledby`:
+  // the floated tile must precede the head in the DOM for the story to wrap
+  // around it, so contents order alone would lead with the tile button.
   return (
     <li
       className={spotlit ? 'catalog-row spotlight' : 'catalog-row'}
       data-room-id={id}
+      aria-labelledby={nameId}
       aria-setsize={total}
       aria-posinset={rank + 1}
     >

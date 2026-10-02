@@ -170,7 +170,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     // the search was typed from, so any real cell's description passes.
     assert.match(
       said,
-      /the center of the library|Room \d+|a library wall|the far field/,
+      /the center of the library|, rank \d+ of \d+|a library wall|the far field/,
       `the announcement never names a cell: ${said}`
     );
 

@@ -178,7 +178,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // from contents" in the accessible-name algorithm, so the `<li>` is
       // nameless in the tree. Checked last because the CDP round trip is slow.
       const nodes = await axNodes(page);
-      assert.ok(axFind(nodes, 'button', /^Room \d+/), 'a result button must be named by its room');
+      assert.ok(axFind(nodes, 'button', /, rank \d+ of \d+/), 'a result button must be named by its room');
 
       // No arrow keys in this flow; the listbox is reachable with focus and
       // Enter alone. The map's arrow-key interface is `keyboard-cursor.e2e.ts`.
@@ -278,7 +278,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // this one reads. What must hold here is the role and that the name is a
     // real cell's, which an unlabelled graphic or a static placeholder fails.
     const named = page.getByRole('application', {
-      name: /the center of the library|Room \d+, rank \d+ of \d+|a blank wall|the far field/i,
+      name: /the center of the library|, rank \d+ of \d+|a blank wall|the far field/i,
     });
     await named.waitFor({ timeout: 5000 });
     assert.equal(await named.count(), 1, 'exactly one application region, and it is the map');
@@ -319,7 +319,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
 
     // And it is named by the room it describes (its `aria-label`,
     // `desc.name`), not just "room".
-    const dialog = axFind(await axNodes(page), 'dialog', /^room \d+/i);
+    const dialog = axFind(await axNodes(page), 'dialog', /, rank \d+ of \d+/);
     assert.ok(dialog, 'the card must be named by the room it describes');
 
     await page.keyboard.press('Escape');
@@ -494,6 +494,20 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.ok(
       captions.has(shipped),
       `the catalog tile must carry the room's shipped caption, got ${JSON.stringify(shipped)}`
+    );
+    // The row and its thumbnail are named by the room's title, never its id:
+    // the row by its head (rank, then title), the button by what it does.
+    const title = (await row.locator('.catalog-title').textContent()) ?? '';
+    assert.ok(title && !/^Room \d+$/.test(title), `the sample room must carry a title, got ${JSON.stringify(title)}`);
+    const nameId = await row.getAttribute('aria-labelledby');
+    assert.equal(
+      await page.locator(`[id="${nameId}"]`).textContent(),
+      `${await row.locator('.catalog-rank').textContent()}${title}`,
+      'the row must be named by its rank and title'
+    );
+    assert.equal(
+      await row.locator('.catalog-tile-button').getAttribute('aria-label'),
+      `show details for ${title}`
     );
 
     await row.locator('.catalog-tile-button').click();
