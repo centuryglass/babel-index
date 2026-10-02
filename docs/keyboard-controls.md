@@ -28,8 +28,9 @@ Tab order through the map subtree, top to bottom in the DOM:
    `booksEl.style.display`).
 4. **`.center-book`** (the artist's-statement hotspot traced into the shelf
    gap) - gated like the shelf.
-5. **`.center-controls`' buttons** - the reorder button, plus the two
-   favorite-sort toggles when `favorites` is on. Gated like the shelf.
+5. **`.center-controls`' buttons** - the reorder button, the two
+   favorite-sort toggles when `favorites` is on, then the distill toggle
+   (`aria-pressed`). Gated like the shelf.
 6. **`.search-trigger`** (the "go to search" icon button) - the one stop that
    is not zoom-gated. It is always mounted and always in the tab sequence, so
    with the camera away from the center the list collapses to the canvas and
@@ -136,7 +137,7 @@ inserts a literal `/`.
 
 ## State 4 - A plain center-tile control button focused
 
-`.center-book`, `.center-controls`' reorder/mine/count buttons, and
+`.center-book`, `.center-controls`' reorder/mine/count/distill buttons, and
 `.search-trigger` - plain `<button>`s with no other keyboard behavior
 (activation is native click, as for the shelf's books), sharing one
 `onKeyDown` (`main.tsx`'s `onControlKeyDown`).

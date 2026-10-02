@@ -339,7 +339,6 @@ export function CatalogView({
   onBook,
   onOpenArtistStatement,
   distillMode,
-  onToggleDistill,
   cellOfId,
   history,
   onForgetSearches,
@@ -377,7 +376,6 @@ export function CatalogView({
   onOpenArtistStatement: () => void;
   /** whether generic rooms are currently hidden - see `useDistillMode.ts` */
   distillMode: boolean;
-  onToggleDistill: () => void;
   cellOfId: (id: number) => { x: number; y: number } | null;
   history: string[];
   onForgetSearches: () => void;
@@ -403,7 +401,7 @@ export function CatalogView({
   const [geom, setGeom] = useState({ width: 900, height: 700 });
   const [active, setActive] = useState(0);
   // The distill toggle art's natural size, reported by its `<img>`'s
-  // `onLoad` (see `distillW`). {0, 0} until then, so the button takes no
+  // `onLoad` (see `distillW`). {0, 0} until then, so the image takes no
   // space before the art loads.
   const [distillIconSize, setDistillIconSize] = useState({ w: 0, h: 0 });
   // The center row's grid placement: the cover picture spans `picCols` x
@@ -817,29 +815,24 @@ export function CatalogView({
                 </button>
               )}
               {/*
-                The distill toggle, in the lower right corner as on the map
-                (`framePlan.ts`'s `planDistillToggle`), sized by `distillW`/
-                `distillH`.
+                The distill toggle's art, in the lower right corner as on the
+                map (`framePlan.ts`'s `planDistillToggle`), sized by
+                `distillW`/`distillH`. Decorative here: distill mode changes
+                only the map, so the catalog shows its state without offering
+                the control (`alt=""`, no handler, no tab stop).
               */}
-              <button
-                type="button"
+              <img
                 className="catalog-distill-toggle"
                 style={{ width: distillW, height: distillH }}
-                aria-pressed={distillMode}
-                aria-label={distillMode ? 'disable distillation' : 'enable distillation'}
-                onClick={onToggleDistill}
-              >
-                <img
-                  src={urlFor(distillMode ? DISTILL_ON : DISTILL_OFF, 0) ?? ''}
-                  alt=""
-                  decoding="async"
-                  onLoad={(e) => {
-                    const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-                    if (!w || !h) return;
-                    setDistillIconSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
-                  }}
-                />
-              </button>
+                src={urlFor(distillMode ? DISTILL_ON : DISTILL_OFF, 0) ?? ''}
+                alt=""
+                decoding="async"
+                onLoad={(e) => {
+                  const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                  if (!w || !h) return;
+                  setDistillIconSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+                }}
+              />
             </div>
             <div className="catalog-body">
               <h2 className="catalog-name">the center of the library</h2>

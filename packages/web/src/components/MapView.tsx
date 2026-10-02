@@ -26,6 +26,7 @@ import {
   CENTER_SHUFFLE_RECT, CENTER_MINE_TOGGLE_RECT, CENTER_COUNT_TOGGLE_RECT,
   type Slot as CentreSlot,
 } from '../lib/center.ts';
+import { DISTILL_OFF_RECT, DISTILL_ON_RECT } from '../lib/distillToggle.ts';
 import { TOUCH_DEBUG } from '../lib/touchDebug.ts';
 import { DEBUG } from '../lib/debug.ts';
 import { SearchGlyph, SearchOrbitArrow, SearchOrbitSpinner } from './SearchIcon.tsx';
@@ -64,6 +65,8 @@ const rectStyle = (r: { x: number; y: number; w: number; h: number } | null) =>
 const SHUFFLE_STYLE = rectStyle(CENTER_SHUFFLE_RECT);
 const MINE_TOGGLE_STYLE = rectStyle(CENTER_MINE_TOGGLE_RECT);
 const COUNT_TOGGLE_STYLE = rectStyle(CENTER_COUNT_TOGGLE_RECT);
+const DISTILL_OFF_STYLE = rectStyle(DISTILL_OFF_RECT);
+const DISTILL_ON_STYLE = rectStyle(DISTILL_ON_RECT);
 
 export function MapView({
   mode,
@@ -114,6 +117,8 @@ export function MapView({
   favoriteFor,
   cursorId,
   onRescatter,
+  distillMode,
+  onToggleDistill,
   distillTooltipRef,
   onRecentre,
   history,
@@ -178,6 +183,9 @@ export function MapView({
   /** the room under the keyboard cursor, null on the center cell and on wallpaper */
   cursorId: number | null;
   onRescatter: () => void;
+  /** whether generic rooms are currently hidden - see `useDistillMode.ts` */
+  distillMode: boolean;
+  onToggleDistill: () => void;
   /** the distill toggle's floating tooltip - the render loop positions it, via `distillTooltipRef` in both map-renderer hooks */
   distillTooltipRef: Ref<HTMLDivElement>;
   onRecentre: () => void;
@@ -191,6 +199,7 @@ export function MapView({
   /** A rearrangement's preload is running - spins the search badge's ring. */
   preparingRearrangement: boolean;
 }) {
+  const distillStyle = distillMode ? DISTILL_ON_STYLE : DISTILL_OFF_STYLE;
   return (
     <>
       {/* `display: contents`/`display: none` per `mode`; see the file
@@ -256,8 +265,9 @@ export function MapView({
       */}
       <div ref={favTooltipRef} className="favorite-tooltip" aria-hidden="true" />
       {/*
-        The distill toggle's tooltip - one floating element, since the
-        toggle is canvas-painted onto the center tile's lower right corner.
+        The distill toggle's pointer tooltip - one floating element at the
+        pointer, since the toggle's hover is hit-tested on its painted
+        silhouette. Its button in `.center-controls` carries the keyboard's.
       */}
       <div ref={distillTooltipRef} className="distill-tooltip" aria-hidden="true" />
       {/*
@@ -354,8 +364,9 @@ export function MapView({
         (`rectStyle`). `pointer-events: none` on the container keeps the
         canvas the gesture owner. A sighted click routes through `onTap` ->
         `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
-        (`center.ts`); `onClick` serves the keyboard and screen readers.
-        The two switches render only while `favorites` is true.
+        (`center.ts`) or `distillToggleAtPoint` (`distillToggle.ts`);
+        `onClick` serves the keyboard and screen readers. The two switches
+        render only while `favorites` is true.
 
         A `title` never pops up here, since pointer events never reach the
         button. The `.control-tooltip` child is the visible tooltip, shown
@@ -402,6 +413,25 @@ export function MapView({
             onKeyDown={onControlKeyDown}
           >
             <span className="control-tooltip">sort by most favorited</span>
+          </button>
+        )}
+        {/*
+          The distill toggle, over the active state's traced box, since the
+          two states' art has different outlines. Its pointer highlight and
+          tooltip are driven by the render loop (`hoveredDistill`), so the
+          loop never gives this button a `.hover` class.
+        */}
+        {distillStyle && (
+          <button
+            type="button"
+            data-control="distill"
+            style={distillStyle}
+            aria-pressed={distillMode}
+            aria-label="distill the library"
+            onClick={onToggleDistill}
+            onKeyDown={onControlKeyDown}
+          >
+            <span className="control-tooltip">{distillMode ? 'disable distillation' : 'enable distillation'}</span>
           </button>
         )}
       </div>
@@ -508,8 +538,8 @@ export function MapView({
         {/*
           Debug-only actions with no diegetic equivalent: `rescatter`
           reseeds which cells hold a room, and `center` resets the camera.
-          Distill mode's control is on the center tile; see
-          `distillToggle.ts`.
+          Distill mode's control is on the center tile, in
+          `.center-controls`.
         */}
         <div className="buttons">
           <button onClick={onRescatter}>rescatter</button>
