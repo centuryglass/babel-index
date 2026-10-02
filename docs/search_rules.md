@@ -148,23 +148,29 @@ matches.**
 *Enforcement:* each partially matching term adds a pull to the soft OR, which
 only rises as pulls are added.
 
-**A multi-word tag typed plainly is an exact match, without quotes.** A room
-tagged `outsider art` is found exactly by the query `outsider art`, not only
-by `"outsider art"`. A keyword chip searches its text unquoted, and
-multi-word keywords are common, so without this the commonest search a reader
-makes could not reach the tag it names.
-*Enforcement:* for a query of more than one eligible term, `tagTermsOf`
-builds a whole-query term, and `rankHybrid` classifies it against each room's
-keywords beside the per-term pass. The better reading wins:
-- An exact whole-query match counts as one exact match, never more, so
-  `brutalism mezzotint` hitting two separate keywords (two exact matches)
-  still places ahead of a room tagged with the whole phrase (one).
-- A partial whole-query match replaces the per-term pull only when it is
-  larger.
+**A multi-word tag typed plainly is an exact match, without quotes, alone
+or inside a longer query.** A room tagged `outsider art` is found exactly by
+the query `outsider art`, not only by `"outsider art"`, and a room tagged
+`golden hour` is an exact match for `golden hour jungle`. A keyword chip
+searches its text unquoted, and multi-word keywords are common, so without
+this the commonest search a reader makes could not reach the tag it names.
+*Enforcement:* `tagTermsOf` builds a run for every contiguous span of
+unquoted words holding two or more eligible terms, the whole query included;
+a quoted phrase ends a run. `rankHybrid` reads each room through `readTags`,
+and the best reading wins:
+- A reading splits the terms into exact-matching runs and single terms. Each
+  exact run counts as one exact match, never more, and the words it consumed
+  add nothing on their own, so `old master print watercolor` against
+  `old master print` is one exact match with no partials beside it.
+- The reading kept has the most exact matches, so `brutalism mezzotint`
+  hitting two separate keywords (two exact matches) still places ahead of a
+  room tagged with the whole phrase (one).
+- A run that matches a keyword only partially replaces the reading's pull
+  only when it is larger.
 
-A multi-word keyword inside a longer query (`golden hour` in `golden hour
-jungle`) matches only partially: open issue
-[#398](https://github.com/centuryglass/babel-index/issues/398).
+A query of n words has O(n^2) runs, bounded by `search.maxQueryLength`.
+`matchingRuns` stops extending a run at its first miss against a room, so a
+room's cost stays near linear in the query's length.
 
 **A quoted phrase is one match, not one match per word it contains.**
 Searching `"art nouveau"` credits at most one exact or one partial match for
@@ -183,8 +189,7 @@ across terms, the title rules take the best one.
 **A term matches a title exactly or partially, by the same rule a term
 matches a keyword.** Searching `"the unsurveyed room"` matches a room titled
 `The Unsurveyed Room` exactly; `unsurveyed` matches it partially.
-*Enforcement:* every term the tag rules classify, and the whole-query term,
-is tested against the title with `classifyTagTerm`, called with the title as
+*Enforcement:* every term the tag rules classify, and every run, is tested against the title with `classifyTagTerm`, called with the title as
 a one-element keyword list. A quoted phrase is one match against the title,
 as it is against keywords.
 
@@ -405,7 +410,7 @@ Term = {
 
 ParsedQuery = {
   raw: string,        // the query as typed
-  folded: string,     // fold(raw) - the whole-query term's text
+  folded: string,     // fold(raw)
   terms: Term[],
 }
 ```

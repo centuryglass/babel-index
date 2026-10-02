@@ -495,11 +495,10 @@ test('two exact tag matches still beat one exact title match', () => {
 test('a partial title match does not sum across terms - it is the same string read twice', () => {
   const index = buildSearchIndex([{ title: 'The Unsurveyed Room', story: null }]);
   const { breakdown } = rankHybrid({ query: 'unsurveyed room', count: 1, index });
-  // "unsurveyed", "room" and the whole query each partially match the same
+  // "unsurveyed", "room" and the run of both each partially match the same
   // title; titlePartial is the best of the three, never their sum
-  // (docs/search_rules.md "Title matching"). The whole query wins here - it
-  // covers 15 of the title's 19 characters where either word alone covers
-  // less - which is the whole-query reading working, not a sum.
+  // (docs/search_rules.md "Title matching"). The run wins here - it covers
+  // 15 of the title's 19 characters where either word alone covers less.
   const title = 'the unsurveyed room';
   const best = 'unsurveyed room'.length / title.length;
   assert.ok(Math.abs(breakdown.titlePartial[0] - best) < 1e-6, `expected ${best}, got ${breakdown.titlePartial[0]}`);
@@ -507,7 +506,7 @@ test('a partial title match does not sum across terms - it is the same string re
   assert.equal(breakdown.titleExact[0], 0);
 });
 
-// --- the whole-query reading ------------------------------------------------
+// --- multi-word runs --------------------------------------------------------
 
 test('a multi-word tag typed plainly is an exact match, same as quoted [SR-03]', () => {
   const index = indexOf([['outsider art'], null], [['oak'], null]);
@@ -527,9 +526,9 @@ test('typing a room tag verbatim reports it as a maximally strong match [SR-18]'
   }
 });
 
-test('the better of the two readings wins, so separate exact tags still beat one phrase [SR-03]', () => {
-  // `brutalism mezzotint` matches two keywords exactly per term, and the
-  // whole-query reading matches neither - the per-term reading has to stand.
+test('the best reading wins, so separate exact tags still beat one phrase [SR-03]', () => {
+  // `brutalism mezzotint` matches two keywords exactly per term, and the run
+  // of both matches neither - the per-term reading has to stand.
   const index = indexOf([['brutalism', 'mezzotint'], null], [['brutalism mezzotint'], null]);
   const { breakdown, order } = rankHybrid({ query: 'brutalism mezzotint', count: 2, index });
   assert.equal(order[0], 0, 'two exact tag matches outrank one exact phrase match');
@@ -537,10 +536,53 @@ test('the better of the two readings wins, so separate exact tags still beat one
   assert.equal(breakdown.tagExact[1], 1, 'the phrase room still gets its one exact match');
 });
 
-test('a one-term query gains nothing from the whole-query reading [SR-03]', () => {
+test('a one-term query has no run to count twice [SR-03]', () => {
   const index = indexOf([['oak'], null]);
   const { breakdown } = rankHybrid({ query: 'oak', count: 1, index });
   assert.equal(breakdown.tagExact[0], 1, 'counted once, not once per reading');
+});
+
+test('a multi-word tag inside a longer query is an exact match [SR-03]', () => {
+  const index = indexOf([['golden hour'], null], [['jungle'], null]);
+  const { breakdown, order } = rankHybrid({ query: 'golden hour jungle', count: 2, index });
+  assert.equal(breakdown.tagExact[order.indexOf(0)], 1, '`golden hour` matches as one keyword');
+  assert.equal(breakdown.tagExact[order.indexOf(1)], 1);
+  assert.equal(breakdown.tag[order.indexOf(0)], SEARCH_WEIGHTS.tagExact);
+
+  const old = rankHybrid({ query: 'old master print watercolor', count: 1, index: indexOf([['old master print'], null]) });
+  assert.equal(old.breakdown.tagExact[0], 1);
+  assert.equal(old.breakdown.tagPartialCount[0], 0, 'its words add no partials of their own');
+});
+
+test('a run spans the stopwords inside it, but not a quoted phrase [SR-03]', () => {
+  const lake = rankHybrid({ query: 'lady of the lake mist', count: 1, index: indexOf([['lady of the lake'], null]) });
+  assert.equal(lake.breakdown.tagExact[0], 1);
+
+  const { runs } = tagTermsOf(parseQuery('"golden hour" jungle canopy'));
+  assert.deepEqual(runs.map((r) => r.folded), ['jungle canopy'], 'the quoted phrase stands alone');
+});
+
+test('a word a run consumed does not count again on its own [SR-03]', () => {
+  // `golden hour` exact uses up `golden`; reading `golden` as its own exact
+  // match instead finds one exact too, never two.
+  const index = indexOf([['golden hour', 'golden'], null]);
+  const { breakdown } = rankHybrid({ query: 'golden hour jungle', count: 1, index });
+  assert.equal(breakdown.tagExact[0], 1);
+});
+
+test('two runs inside one query each count as an exact match [SR-03]', () => {
+  const index = indexOf([['golden hour', 'old master print'], null], [['golden hour'], null]);
+  const { breakdown, order } = rankHybrid({ query: 'golden hour old master print', count: 2, index });
+  assert.equal(order[0], 0);
+  assert.equal(breakdown.tagExact[0], 2);
+});
+
+test('a run that matches part of a keyword competes with its words, never sums [SR-03]', () => {
+  const index = indexOf([['golden hour light'], null]);
+  const { breakdown } = rankHybrid({ query: 'golden hour jungle', count: 1, index });
+  const runPull = SEARCH_WEIGHTS.tagPartial * ('golden hour'.length / 'golden hour light'.length);
+  assert.ok(breakdown.tag[0] >= runPull - 1e-6, 'at least the run reading');
+  assert.ok(breakdown.tag[0] < SEARCH_WEIGHTS.tagExact);
 });
 
 // --- strength is absolute, not a share of the query -------------------------
@@ -941,15 +983,15 @@ test('a quoted phrase marks where it matched, and its words mark nowhere else [S
 
 /**
  * Did the tag rule score this query against these folded keywords - the same
- * classification `rankHybrid` runs, whole-query reading included.
+ * classification `rankHybrid` runs, multi-word runs included.
  *
  * Written from `parseQuery`/`classifyTagTerm` rather than asserting against a
  * scorer of its own, so "what marked" is checked against what the ranking
  * actually reads.
  */
 const tagScored = (query, keywords) => {
-  const { terms, whole } = tagTermsOf(parseQuery(query), tokenise(query));
-  return [...terms, ...(whole ? [whole] : [])].some((t) => {
+  const { terms, runs } = tagTermsOf(parseQuery(query));
+  return [...terms, ...runs].some((t) => {
     const { exact, partial } = classifyTagTerm(t, keywords);
     return exact || partial > 0;
   });
@@ -958,9 +1000,9 @@ const tagScored = (query, keywords) => {
 /** What `useSearch` hands the range finders - the same rules, read from one place. */
 const highlightQuery = (query) => {
   const parsed = parseQuery(query);
-  const { whole } = tagTermsOf(parsed, tokenise(query));
+  const { runs } = tagTermsOf(parsed);
   const { words, phrases } = splitQuoted(parsed);
-  return { foldedQuery: whole?.folded ?? '', tokens: [...words, ...phrases.map((p) => p.trim())], words, phrases };
+  return { needles: [...runs.map((r) => r.folded), ...words, ...phrases.map((p) => p.trim())], words, phrases };
 };
 
 test('a keyword marks by substring, where a story would have needed a lemma [SR-34]', () => {
@@ -968,11 +1010,11 @@ test('a keyword marks by substring, where a story would have needed a lemma [SR-
   // `classifyTagTerm` matches it by substring - so it must mark, and the
   // story rule must not be used here. The asymmetry between the two is the point.
   assert.ok(tagScored('nouveau', ['art nouveau']));
-  assert.deepEqual(marked('Art Nouveau', keywordMatchRanges('Art Nouveau', fold('nouveau'), ['nouveau'])), ['Nouveau']);
+  assert.deepEqual(marked('Art Nouveau', keywordMatchRanges('Art Nouveau', ['nouveau'])), ['Nouveau']);
 
-  // The whole query and its tokens, unioned into one range where they overlap.
+  // A run and its tokens, unioned into one range where they overlap.
   assert.deepEqual(
-    marked('Art Nouveau', keywordMatchRanges('Art Nouveau', fold('art nouveau'), ['art', 'nouveau'])),
+    marked('Art Nouveau', keywordMatchRanges('Art Nouveau', ['art nouveau', 'art', 'nouveau'])),
     ['Art Nouveau']
   );
 });
@@ -988,15 +1030,16 @@ test('anything marked scored, and anything that scored is marked [SR-35]', () =>
 
   for (const query of [
     'art', 'nouveau', 'gilt', 'oak', 'cartographer', 'survey', 'catalogue', 'the', 'a', 'zzz', 'art nouveau',
+    'zzz art nouveau qqq', 'oak panelling gilt', 'of the',
     '"art"', '"oak gilded"', '"of gilded"', '" oak "', '"gilded oak" survey',
   ]) {
     // Marked through exactly what `useSearch` passes, not the raw folded
     // query: a term the vocabulary floor drops, or a word inside quotes,
     // cannot score alone, so it must not mark alone either.
-    const { foldedQuery, tokens, words, phrases } = highlightQuery(query);
+    const { needles, words, phrases } = highlightQuery(query);
 
     const kScored = tagScored(query, indexed);
-    const kMarked = keywords.some((k) => keywordMatchRanges(k, foldedQuery, tokens).length > 0);
+    const kMarked = keywords.some((k) => keywordMatchRanges(k, needles).length > 0);
     assert.equal(kMarked, kScored, `keyword agreement for ${JSON.stringify(query)}`);
 
     const sScored = storyWordMatches(words, storyStems) + storyPhraseMatches(phrases, storyStems) > 0;
