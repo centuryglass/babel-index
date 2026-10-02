@@ -22,10 +22,14 @@ you" routes here, and its conventions still apply.
   (`useRearrangement.ts`) zooms out in place, not home to the center.
   - A pointer grab (`onDown` in both render hooks) ends the rearrangement,
     since a pan cannot be honored while the slide runs.
-  - A control's `flyTo` (the center button, zoom buttons, keyboard pan)
-    does not end it, and is overridden by the rearrangement's own next
-    `flyTo`. The controls currently stay enabled while they are inert
-    (issue #306).
+  - A camera control (the 'center' button, the keyboard's pan and zoom,
+    `goToSearch`'s flight) does not end it either. It declines to act and
+    says why through the live region, and the 'center' button is disabled.
+    `main.tsx`'s `refuseHeldCamera` is the one rule; a new camera control
+    calls it before its `flyTo`, or its flight is silently overridden by
+    the rearrangement's own.
+  - `anim` is a `presenceRef`, so `main.tsx`'s `cameraHeld` re-renders when
+    the hold starts or ends. Replace its `current`; never swap the object.
 - **While zooming out to start, the map still draws the old arrangement**
   (`anim.current.before`) until the camera lands. Without that hold the map
   shows the new library, zooms to it, then slides in from the one it

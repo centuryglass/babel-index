@@ -13,7 +13,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import AxeBuilder from '@axe-core/playwright';
-import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, waitFor } from './support.ts';
+import { SEARCH_TIMEOUT, closeLibrary, hud, landed, openLibrary, settled, waitFor } from './support.ts';
 
 describe('the library, in a browser: the keyboard cursor', { concurrency: false }, () => {
   let session;
@@ -568,6 +568,38 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       SEARCH_TIMEOUT,
       'activating a cursor chip must run the same search a card chip does'
     );
+  });
+
+  test('camera controls decline while a rearrangement holds the camera, and say why', async () => {
+    const { page } = session;
+    const centre = page.getByRole('button', { name: 'center', exact: true });
+    await page.locator('canvas').focus();
+    await settled(page);
+    await page.locator('button', { hasText: 'rescatter' }).click();
+
+    // One in-page poll per frame, since the hold can be shorter than a
+    // Playwright round trip. Once the hold shows (the button disabled, the
+    // live region saying why), send an arrow key; read the live region on
+    // the next poll. An arrow that moved the camera would name a cell there.
+    const seen = await page.waitForFunction(
+      () => {
+        const w = window as typeof window & { __heldKey?: boolean };
+        const live = document.querySelector('[role=status]')?.textContent ?? '';
+        if (w.__heldKey) return { live };
+        const button = [...document.querySelectorAll('button')].find((b) => b.textContent === 'center');
+        if (!button?.disabled || !/^rearranging the library/.test(live)) return false;
+        document.querySelector('canvas')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        w.__heldKey = true;
+        return false;
+      },
+      null,
+      { timeout: 10_000 }
+    );
+    const { live } = (await seen.jsonValue()) as { live: string };
+    assert.match(live, /^rearranging the library/, `an arrow during the hold was not refused: ${live}`);
+
+    await settled(page);
+    await waitFor(async () => centre.isEnabled(), 10_000, "the 'center' button never came back");
   });
 
   test('axe finds no WCAG violations with the keyboard cursor active', async () => {

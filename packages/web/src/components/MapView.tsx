@@ -121,6 +121,7 @@ export function MapView({
   onToggleDistill,
   distillTooltipRef,
   onRecentre,
+  cameraHeld,
   history,
   onForgetSearches,
   onEnterCatalog,
@@ -189,6 +190,8 @@ export function MapView({
   /** the distill toggle's floating tooltip - the render loop positions it, via `distillTooltipRef` in both map-renderer hooks */
   distillTooltipRef: Ref<HTMLDivElement>;
   onRecentre: () => void;
+  /** a rearrangement holds the camera; the camera controls are disabled (`main.tsx`'s `refuseHeldCamera`) */
+  cameraHeld: boolean;
   history: string[];
   onForgetSearches: () => void;
   onEnterCatalog: () => void;
@@ -543,7 +546,7 @@ export function MapView({
         */}
         <div className="buttons">
           <button onClick={onRescatter}>rescatter</button>
-          <button onClick={onRecentre}>center</button>
+          <button onClick={onRecentre} disabled={cameraHeld}>center</button>
         </div>
 
         {/*

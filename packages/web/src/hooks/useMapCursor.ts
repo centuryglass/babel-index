@@ -46,6 +46,11 @@ interface UseMapCursorOpts {
   camera: Config['camera'];
   /** writes the one live region */
   setStatus: (status: string) => void;
+  /**
+   * true, having said why, while a rearrangement holds the camera - every key
+   * that moves the camera checks it first (`main.tsx`'s `refuseHeldCamera`)
+   */
+  refuseHeldCamera: () => boolean;
   requestDraw: () => void;
   /** Enter over a room or a generic cell opens its card - only the center is unopenable */
   onOpenCard: (args: OpenCardArgs) => void;
@@ -64,6 +69,7 @@ export function useMapCursor({
   flightTarget,
   camera,
   setStatus,
+  refuseHeldCamera,
   requestDraw,
   onOpenCard,
   goToSearch,
@@ -230,6 +236,7 @@ export function useMapCursor({
 
       if (dir) {
         e.preventDefault();
+        if (refuseHeldCamera()) return;
 
         if (e.ctrlKey || e.metaKey) {
           const found = nextRoom(layout, cursorNow(), dir);
@@ -281,6 +288,7 @@ export function useMapCursor({
         e.key === '+' || e.key === '=' || e.key === '-'
       ) {
         e.preventDefault();
+        if (refuseHeldCamera()) return;
         // Flies to the cursor's own cell at the new zoom, so the cursor stays
         // fixed and the camera lands cell-centered. The zoom chains off
         // `flightTarget()` (see `useMapCamera`'s `flightTarget`).
@@ -297,6 +305,7 @@ export function useMapCursor({
 
       if (e.key === 'Home') {
         e.preventDefault();
+        if (refuseHeldCamera()) return;
         const zoom = overviewZoom(canvasRef.current, camera.overviewCellsPerAxis, cam.current);
         if (e.ctrlKey || e.metaKey) {
           const best = layout.cellOfRank(0);
@@ -319,6 +328,7 @@ export function useMapCursor({
       // Plain `End` is unbound: no cell means to it what (0, 0) means to `Home`.
       if (e.key === 'End' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
+        if (refuseHeldCamera()) return;
         const best = layout.cellOfRank(order.length - 1);
         if (!best) {
           setStatus('no ranked rooms to jump to');
@@ -358,7 +368,7 @@ export function useMapCursor({
     [
       layout, order, flyTo, nudgeBy, flightTarget, cursorNow, camera, canvasRef,
       announceCursorMove, announceSurroundings, cam, onOpenCard, goToSearch,
-      setStatus,
+      setStatus, refuseHeldCamera,
     ]
   );
   // The room under the cursor, or null on the center cell and on wallpaper -

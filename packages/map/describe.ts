@@ -8,7 +8,7 @@
  *
  * - `describeCell` names a cell, and `describeRoom` a room the caller holds.
  * - `describeArrangement`, `describeCatalog` and `describeSort` build the
- *   announcements.
+ *   announcements, and `CAMERA_HELD` covers the rearrangement in between.
  *
  * A `Description` carries three fields:
  *
@@ -130,6 +130,13 @@ export function describeArrangement(layout: Pick<MapLayout, 'roomCount' | 'grade
     ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the center`
     : `rearranged - ${rooms}, spread evenly`;
 }
+
+/**
+ * Said when a rearrangement takes the camera, and again for each camera
+ * control refused while it holds it - the map stops answering, and this is
+ * why. `describeArrangement` follows once the new arrangement is in place.
+ */
+export const CAMERA_HELD = 'rearranging the library - the map moves again once it lands';
 
 export interface DescribeCatalogOptions {
   /** rooms in the list */

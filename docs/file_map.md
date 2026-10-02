@@ -226,6 +226,8 @@ Every tracked file in the repo, with a line or two on what it is for.
       perf/memory profiling; also driven by `tools/perf-capture`.
     * `contentZoomCamera.ts`: Pure zoom/pan-bounds math for
       `useContentZoom.ts`.
+    * `presenceRef.ts`: A ref object that reports when it starts or stops
+      holding a value; backs `main.tsx`'s `anim`.
     * `perfProbe.ts`: Rearrangement frame-timing instrumentation behind
       `?perf`.
     * `webglFlag.ts`: `DEFAULT_WEBGL`, the `?webgl` override and the WebGL2
