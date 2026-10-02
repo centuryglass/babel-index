@@ -102,8 +102,8 @@ Searching `a room of glass` should not spend weight on `a` or `of`.
 `search.minTokenLength` (default 3; `a` would otherwise substring-match most
 keywords) and any word in `STOPWORDS`. A dropped word cannot score, and so
 cannot be highlighted: the same token list feeds both. The tag and title
-rules apply the same floor to unquoted terms; a quoted phrase is always
-eligible.
+rules, and the story's word matching, apply the same floor to unquoted
+terms; a quoted phrase is always eligible.
 
 **A pasted wall of text cannot lock up the search.** A query is truncated to
 `search.maxQueryLength` (default 256) characters.
@@ -206,13 +206,14 @@ title counts toward the exact-match tiebreak the same way one exact tag does.
 A story is indexed as its ordered sequence of lemmas, with each word's span
 in the folded text. Two story readings feed the story pull:
 
-- `storyWords`: how many of the query's distinct words (by lemma) the story
-  contains (`storyWordMatches`). A count, so a hit in a long story is worth
-  the same as in a short one, and a query word the story lacks takes nothing
-  away.
+- `storyWords`: how many of the query's distinct unquoted words (by lemma)
+  the story contains (`storyWordMatches`), plus how many of its quoted
+  phrases it contains (`storyPhraseMatches`, see "Quoted phrases"). A count,
+  so a hit in a long story is worth the same as in a short one, and a query
+  word the story lacks takes nothing away.
 - `storyLongChars`: the character span, in the folded story, of the longest
-  contiguous run of story words whose lemma is one of the query's
-  (`longestMatchRun`). "Contiguous" is in the indexed sequence, so a stopword
+  contiguous run of story words whose lemma is one of the query's unquoted
+  words (`longestMatchRun`). "Contiguous" is in the indexed sequence, so a stopword
   or short word between two matches does not break a run. The query's word
   order does not matter.
 
@@ -282,19 +283,29 @@ A quoted phrase is one term (see "The parsed query"). What quoting changes:
   for separate credit. A room tagged `art` and `nouveau` as two separate
   keywords gets no tag credit from the quoted phrase. This is phrase search's
   usual precision-over-recall tradeoff. Quoting a single word (`"art"`)
-  changes nothing, since both cases go through `classifyTagTerm` with the
-  same folded text.
-- **The floor: a quoted phrase is always eligible** for tag and title
-  matching, whatever its length or stopwords.
-- **The story: quoting adds an ordered run and restricts nothing.** The
-  phrase's words still count toward `storyWords` and `longestMatchRun`
-  wherever they appear, as unquoted words do. `storyPhraseRun` also
-  measures the phrase's words appearing consecutively in the phrase's order,
-  and `storyLongChars` takes the longer of the two runs. With the default
-  `minTokenLength`, that ordered run is never longer than the unordered one,
-  so quoting does not change a story pull. Open issue
-  [#327](https://github.com/centuryglass/babel-index/issues/327) tracks
-  deciding what a quote should do here.
+  changes nothing here, since both cases go through `classifyTagTerm` with
+  the same folded text. It does change story matching (below).
+- **The floor: a quoted phrase is always eligible**, whatever its length or
+  stopwords.
+- **The story: a quoted phrase matches only as its exact folded text.**
+  `"room of glass"` matches `room of glass`, never `glass room` or
+  `room glass`. The phrase and the story both go through `fold()`, and
+  nothing else changes either: no lemmatising, no dropped stopwords or short
+  words, no word boundaries. `"glass room"` matches `fiberglass roommate`;
+  `" glass room "` asks for word edges, and the start and end of a story
+  count as spaces for it.
+  *Enforcement:* `splitQuoted` keeps each phrase folded but untrimmed, and
+  `storyPhraseMatches` tests it as a substring of the room's padded folded
+  story.
+- **The words inside quotes never match a story on their own.** Only
+  unquoted words count toward `storyWords` and `longestMatchRun`, so for
+  `"glass room"` a story with `glass` and `room` apart pulls nothing.
+  *Enforcement:* `splitQuoted` puts only unquoted words in `words`.
+- **A matched phrase counts as one matched word.** It adds 1 to `storyWords`
+  and nothing to `storyLongChars`.
+- **Quoting narrows text matching, not the room.** A room whose story lacks
+  the phrase can still score through its title, a tag, or CLIP, and
+  unquoted words in the same query match as usual.
 
 ## Computing strength
 
@@ -404,7 +415,8 @@ Quotes are found before folding: each `"..."` span becomes one term with
 one term per word. (`tokenise()`, which the story reading uses, splits on any
 non-letter, non-digit character instead.) An unterminated quote is an
 ordinary character. `parseQuery` applies no stopword or length floor;
-`tagTermsOf` applies it to unquoted terms, and `tokenise()` to story tokens.
+`tagTermsOf` applies it to unquoted terms, and `splitQuoted` to unquoted
+story tokens.
 
 ### The per-room index
 
@@ -419,6 +431,8 @@ SearchIndexEntry = {
     sequence: { lemma, start, end }[],  // lemmatised story words in order, with
                                         // their spans in the folded story
     set: Set<string>,                   // the same lemmas, for storyWordMatches' lookups
+    text: string,                       // the folded story, padded with a space at each
+                                        // end, for storyPhraseMatches
   },
 }
 ```
@@ -438,7 +452,7 @@ tagExact          // count of terms exactly equal to a keyword
 tagPartialCount   // count of terms that matched a keyword only partially
 titleExact        // 0 or 1
 titlePartial      // max substring fraction against the title
-storyWords        // distinct query words the story contains
+storyWords        // distinct unquoted words and quoted phrases the story contains
 storyLongChars    // longest contiguous matched run, in characters
 cosine            // raw CLIP cosine, or null without embeddings
 clipStrength      // clipCurveStrength(cosine), in [0, 1], before weights.clip

@@ -14,16 +14,20 @@ export interface StorySequenceEntry {
 }
 
 /**
- * A room's story, tokenised and lemmatised once at build time, held two ways.
+ * A room's story, folded, tokenised and lemmatised once at build time, held
+ * three ways.
  *
- * - `sequence` keeps story order, which the contiguous-run measurements
- *   (`scoring.ts`'s `longestMatchRun`, `storyPhraseRun`) need.
+ * - `sequence` keeps story order, which the contiguous-run measurement
+ *   (`scoring.ts`'s `longestMatchRun`) needs.
  * - `set` holds the same lemmas for `storyWordMatches`' O(1) membership test,
  *   built once so no query rebuilds it.
+ * - `text` is the whole folded story, padded by `phraseHaystack`, which
+ *   `storyPhraseMatches` searches for quoted phrases.
  */
 export interface StoryIndex {
   sequence: StorySequenceEntry[];
   set: Set<string>;
+  text: string;
 }
 
 /** One room's precomputed search text, or `null` for a room with no metadata. */
@@ -89,7 +93,7 @@ export interface ScoreBreakdown {
   titleExact: Float32Array;
   /** the largest substring fraction over every term tested against the title, not a combination - there is only one title */
   titlePartial: Float32Array;
-  /** how many of the query's distinct words the story contains (`storyWordMatches`) */
+  /** how many of the query's distinct unquoted words and quoted phrases the story contains (`storyWordMatches`, `storyPhraseMatches`) */
   storyWords: Int32Array;
   /** longest contiguous matched run, in characters */
   storyLongChars: Float32Array;
