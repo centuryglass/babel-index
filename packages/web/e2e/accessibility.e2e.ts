@@ -445,6 +445,36 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
   });
 
+  test("keyboard focus is visible on the catalog's search field", async () => {
+    const { page } = session;
+    // The catalog styles its own search field, so `keyboard focus is
+    // visible`, which reads the map's first Tab stop, says nothing about it.
+    // Focus arrives by keyboard for the reason that test gives: park it on an
+    // unfocusable node, then Shift+Tab back through the bar until the field
+    // has it.
+    await page.locator('.panel .mode-toggle').click();
+    try {
+      await page.locator('.catalog-count').waitFor({ timeout: 5000 });
+      await page.locator('.catalog-count').click();
+      const onField = () =>
+        page.evaluate(() => document.activeElement?.matches('.catalog-search input[type="search"]') ?? false);
+      for (let i = 0; i < 8 && !(await onField()); i++) await page.keyboard.press('Shift+Tab');
+
+      const ring = await page.evaluate(() => {
+        const el = document.activeElement;
+        const { outlineStyle, outlineWidth } = getComputedStyle(el);
+        return { tag: el.tagName, cls: el.className, outlineStyle, outlineWidth };
+      });
+      assert.ok(await onField(), `Shift+Tab must reach the catalog's search field:\n${JSON.stringify(ring, null, 2)}`);
+      assert.notEqual(ring.outlineStyle, 'none', `the focused catalog search field must show an outline:\n${JSON.stringify(ring, null, 2)}`);
+      assert.ok(parseFloat(ring.outlineWidth) >= 2, `the focus ring must be visible, got ${ring.outlineWidth}`);
+    } finally {
+      await page.locator('.catalog .mode-toggle').click();
+      await page.locator('.catalog').waitFor({ state: 'detached', timeout: 5000 });
+      await settled(page);
+    }
+  });
+
   // --- the sidecar's optional alt caption ------------------------------------
   //
   // Last in this file because it reloads: everything above shares one page,

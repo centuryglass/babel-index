@@ -67,7 +67,7 @@
   width: 100%; padding: 7px 28px 7px 10px; font: inherit; color: var(--paper-ink);
   background: var(--paper); border: 1px solid var(--paper-edge); border-radius: 4px;
 }
-.catalog-search input[type="search"]:focus { border-color: var(--paper-accent); outline: none; }
+.catalog-search input[type="search"]:focus { border-color: var(--paper-accent); }
 .catalog-search .search-clear { right: 8px; width: 16px; height: 16px; }
 /*
   A text label, not a button: fit to its text, squared and lightly padded,
