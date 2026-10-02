@@ -73,6 +73,16 @@ test('a story-only entry names the room without inventing keywords', () => {
   assert.equal(d.description, 'Only a story.');
 });
 
+test('a titled room is named by its title, not its id', () => {
+  const slot = roomAt(2);
+  const metadata = [];
+  metadata[order[2]] = { title: 'The Brass Stair', keywords: [{ text: 'brass', type: null }], story: null };
+
+  const d = describeCell(slot.x, slot.y, { layout, order, metadata });
+  assert.equal(d.name, 'The Brass Stair, rank 3 of 40 — brass');
+  assert.equal(describeRoom(order[2], 2, 40, metadata[order[2]]).name, d.name);
+});
+
 test('the name follows the ranking, not the cell', () => {
   // Same mechanic as `picking.ts`: slots stay put, the order pours into them.
   const slot = roomAt(4);

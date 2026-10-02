@@ -48,10 +48,10 @@ export interface RoomMeta {
 
 /**
  * What a reader calls this room: its title, or "Room {id}" for a room the
- * collection has not retitled. This is the resolver for everywhere a name is
- * shown (catalog rows, the room overlay, the SSR pages); the cursor's
- * announcement and `describeRoom`'s rank message lead with the bare id
- * whether or not a title exists - the id is how the map refers to rooms.
+ * collection has not retitled. This is the resolver for everywhere a room is
+ * named, shown or spoken: catalog rows, the room overlay, the SSR pages,
+ * `describeRoom`'s name (the cursor, the overlay's accessible name) and the
+ * `?` surroundings sentence.
  */
 export function roomTitle(entry: RoomMeta | null, id: number): string {
   return entry?.title || `Room ${id}`;

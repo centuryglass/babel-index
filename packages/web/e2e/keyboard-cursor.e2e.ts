@@ -70,7 +70,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       `one arrow press must move exactly one cell: ${home.x} -> ${afterOneStep.x}`
     );
     await waitFor(
-      async () => /Room \d+|a library wall/.test((await live.textContent()) ?? ''),
+      async () => /, rank \d+ of \d+|a library wall/.test((await live.textContent()) ?? ''),
       2000,
       'an arrow press must announce something about the new cursor cell'
     );
@@ -84,13 +84,13 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await page.waitForTimeout(session.flightMs + 200);
     await page.keyboard.press('Control+ArrowRight');
     await waitFor(
-      async () => /^Room \d+|^nothing further/.test((await live.textContent()) ?? ''),
+      async () => /, rank \d+ of \d+|^nothing further/.test((await live.textContent()) ?? ''),
       2000,
       'ctrl+arrow must announce a room or say it found nothing'
     );
     const ctrlArrowText = await live.textContent();
     if (!/^nothing further/.test(ctrlArrowText)) {
-      assert.match(ctrlArrowText, /^Room \d+/, 'ctrl+arrow must never land announcing a generic shelf');
+      assert.match(ctrlArrowText, /, rank \d+ of \d+/, 'ctrl+arrow must never land announcing a generic shelf');
       // And it must actually have moved the camera - a room announcement
       // without a matching jump would mean the text and the map disagree.
       await waitFor(async () => (await hud(page)).x !== home.x, 2000, 'ctrl+arrow never moved the camera');
@@ -136,7 +136,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     await page.keyboard.press('Control+Home');
     await page.waitForTimeout(session.flightMs + 200);
     await waitFor(
-      async () => /^Room \d+, rank 1 of/.test((await live.textContent()) ?? ''),
+      async () => /, rank 1 of/.test((await live.textContent()) ?? ''),
       2000,
       'ctrl+Home must land on the best-ranked room (rank 1)'
     );
@@ -150,7 +150,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     // Confirm a real room through the dialog's accessible name (`desc.name`,
     // `describeRoom`); `.card-id`'s visible text leads with the room's title
     // when it has one.
-    assert.match(await card.getAttribute('aria-label'), /^Room \d+/);
+    assert.match(await card.getAttribute('aria-label'), /, rank \d+ of \d+/);
 
     await page.keyboard.press('Escape');
     await card.waitFor({ state: 'detached', timeout: 5000 });

@@ -25,7 +25,7 @@
  */
 
 import type { MapLayout } from './ordering.ts';
-import type { RoomMeta } from './metadata.ts';
+import { roomTitle, type RoomMeta } from './metadata.ts';
 
 /** What a reader can be told about one cell or room: a name, its story, and a caption for the picture. */
 export interface Description {
@@ -97,7 +97,7 @@ export function describeRoom(id: number, rank: number, total: number, entry: Roo
 
   return {
     kind: 'room',
-    name: `Room ${id}, rank ${rank + 1} of ${total} — ${keywords ?? 'no description recorded'}`,
+    name: `${roomTitle(entry, id)}, rank ${rank + 1} of ${total} — ${keywords ?? 'no description recorded'}`,
     description: entry?.story ?? null,
     // What the picture shows, as against what the room is - the sidecar's
     // optional `alt`. Separate from `description`: the story is fiction

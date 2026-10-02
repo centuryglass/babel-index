@@ -19,7 +19,7 @@ import {
   type Camera,
   type CursorGranularity,
 } from '../lib/camera.ts';
-import type { RoomMeta } from '../../../map/metadata.ts';
+import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import type { Config } from '../../../config/config.ts';
 
 /** Same shape `roomAtPoint` returns (`picking.ts`'s `RoomPick`) - a real room, or a generic cell. */
@@ -395,7 +395,7 @@ function describeSurroundings(
       if (!found) return null;
       const steps = Math.abs(found.x - cursor.x) + Math.abs(found.y - cursor.y);
       const id = layout.roomAt(found.x, found.y, order).id;
-      return `Room ${id} ${steps} ${label}`;
+      return `${roomTitle(metadata?.[id] ?? null, id)}, ${steps} ${label}`;
     })
     .filter((s): s is string => Boolean(s));
 
