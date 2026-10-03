@@ -80,7 +80,9 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
       // No urls to rewrite - a level names a width, not a location.
       levels: manifest.shared?.levels ?? [{ level: 0, dir: null }],
       distillLevels: manifest.shared?.distillLevels ?? [{ level: 0, dir: null }],
-      favoriteLevels: manifest.shared?.favoriteLevels ?? [{ level: 0, dir: null }],
     },
+    // Overlay art resolves off `sharedBase` by filename, so there are no urls
+    // to rewrite. A manifest uploaded before overlays were data has none.
+    overlays: manifest.overlays ?? {},
   };
 }

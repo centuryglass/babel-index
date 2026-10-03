@@ -208,12 +208,14 @@ Every tracked file in the repo, with a line or two on what it is for.
     * `slide.ts`: The rearrangement's timeline and slideshow, and its
       Canvas2D renderer.
     * `picking.ts`: `roomAtPoint` - which room is under a screen point.
-    * `favoriteBadge.ts`: Geometry and hit-test for the favorite badge on a
-      room tile's upper right corner.
-    * `distillToggle.ts`: Geometry and hit-test for the distill toggle on the
-      center tile's lower right corner.
-    * `clearHistoryBook.ts`: Geometry for the "forget searches" book's spine
-      overlay on the center tile.
+    * `overlay.ts`: `overlayScreenRect`, the one anchoring rule that places
+      every corner overlay's art on a tile.
+    * `overlay-fixtures.ts`: A `manifest.overlays` for the renderer and
+      planner tests.
+    * `favoriteBadge.ts`: Hit-test for the favorite badge on a room tile's
+      upper right corner.
+    * `distillToggle.ts`: Hit-test for the distill toggle on the center
+      tile's lower right corner.
     * `catalog.ts`: The catalog's pure paging, row-height and ordering math.
     * `babelBook.ts`: Random Library of Babel text, shared by
       `BabelBookOverlay.tsx` and the server's `/babel-book` route.
@@ -273,6 +275,8 @@ Every tracked file in the repo, with a line or two on what it is for.
     them (and filename-stem aliases) back to rooms.
   * `manifest.ts`: The collection manifest's types (`Manifest`, `Room`,
     `SharedAssets`, ...). Types only.
+  * `overlays.ts`: The corner overlays' descriptor format
+    (`overlays.json`), its validation, and their tile-cache ids.
   * `moves.ts`: The rearrangement's types (`Move`, `Board`,
     `Rearrangement`, ...), shared by `illusion.ts`, `board.ts` and
     `slide.ts`. Types only.
@@ -427,6 +431,8 @@ imports at bundle time.
 - `.github/dependabot.yml`: Automated dependency-update PRs.
 
 ### Assets:
+- `assets/overlays.json`: The corner overlays' descriptors - art file per
+  face, anchor corner and scale basis (see `packages/map/overlays.ts`).
 - `assets/animation`: Loading-animation frame cycles (`<cycle>/`, source
   only) and the generated `sheets/` and `manifest.json` served from
   `/shared/animation/`.

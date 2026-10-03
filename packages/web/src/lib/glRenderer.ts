@@ -22,9 +22,12 @@ import { assertNever, type DrawList } from './drawList.ts';
 import { createMapPlanner, type DrawResult, type MapFrameOpts } from './framePlan.ts';
 import type { TileCache } from './tiles.ts';
 import type { Pyramid } from './pyramid.ts';
+import type { Overlays } from '../../../map/overlays.ts';
 
 export interface CreateGLRendererOpts {
   cache: TileCache;
+  /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
+  overlays: Overlays;
   pyramid?: Pyramid;
   /** Shared with `glSlideRenderer.ts` so a tile decoded for one renderer is already resident for the other across the handoff. */
   textures?: GLTextureCache;
@@ -140,9 +143,9 @@ export function paintGL(gl: GLContext, list: DrawList, res: GLPaintResources): G
 }
 
 export function createGLRenderer({
-  cache, pyramid, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+  cache, overlays, pyramid, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLRendererOpts) {
-  const planner = createMapPlanner({ cache, pyramid });
+  const planner = createMapPlanner({ cache, overlays, pyramid });
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
   function draw({ gl, ...opts }: GLDrawOpts): GLDrawResult {

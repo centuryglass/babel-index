@@ -63,6 +63,7 @@ import type { Board, Motion, Move } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
 import { paintCanvas2D, type DrawContext } from './render.ts';
 import { createSlidePlanner, type SlideDrawResult, type SlideFrameOpts } from './slidePlan.ts';
+import type { Overlays } from '../../../map/overlays.ts';
 
 export type { SlideDrawResult };
 
@@ -315,6 +316,8 @@ export function createSlideshow({ board, moves, apply, timing }: CreateSlideshow
 
 export interface CreateSlideRendererOpts {
   cache: TileCache;
+  /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
+  overlays: Overlays;
   pyramid?: Pyramid;
 }
 
@@ -326,8 +329,8 @@ export type SlideDrawOpts = SlideFrameOpts & { ctx: DrawContext };
  * `render.ts`'s `paintCanvas2D` paints it, so a frame's decisions are
  * assertable without a browser.
  */
-export function createSlideRenderer({ cache, pyramid }: CreateSlideRendererOpts) {
-  const planner = createSlidePlanner({ cache, pyramid });
+export function createSlideRenderer({ cache, overlays, pyramid }: CreateSlideRendererOpts) {
+  const planner = createSlidePlanner({ cache, overlays, pyramid });
 
   function draw({ ctx, ...opts }: SlideDrawOpts): SlideDrawResult {
     const result = planner.plan(opts);

@@ -84,10 +84,10 @@ still apply.
     level counts only where every one of those files has it.
   - `shared.distillLevels` (`generic_distill/`) is never intersected with
     `levels`, because not every generic tile has a distill alternate.
-  - `shared.favoriteLevels` covers the hand-tuned favorite badge art; see
-    `favorites.md`, "The on-map badge".
-  - Every other shared id (the distill toggle's faces, the forget-searches
-    overlay) is flat level-0 art, reached through `servableLevel`.
+  - Each corner overlay in `manifest.overlays` carries its own `levels`:
+    discovered per overlay for a `pyramid` one (the hand-tuned favorite
+    badge; see `favorites.md`, "The on-map badge"), level 0 only for a
+    `tile` one, reached through `servableLevel`.
 
   `main.tsx` pins the center at level 0 and each generic or distill tile at
   the coarsest level its own array has - never a hardcoded `FALLBACK_LEVEL`,

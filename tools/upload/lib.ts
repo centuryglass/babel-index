@@ -148,29 +148,21 @@ export function buildUploadList(
         });
   }
 
-  // Fixed app art, not part of any collection's manifest.shared: the badges and
-  // toggles resolve off `manifest.sharedBase` in packages/web/src/lib/rooms.ts,
-  // the leather texture behind the dark chrome via a relative `url(shared/...)`
-  // in packages/web/css/base.css. Always uploaded, unlike the manifest-gated
-  // center/generic tiles - there is no manifest field to gate on.
-  for (const file of [
-    'fav_on.png', 'fav_off.png',
-    'fav_center_switch_base.png', 'fav_mine_on.png', 'fav_count_on.png',
-    'distill_off.png', 'distill_on.png',
-    'clear_history_book.png',
-    'leather_texture_tile.png',
-  ])
-    uploads.push({ local: join(sharedDir, file), key: `shared/${file}` });
+  // The corner overlays' art (`manifest.overlays`, from `--shared-dir`'s
+  // `overlays.json`): every face at level 0, and at each pyramid level the
+  // scan found for a `pyramid` overlay. They resolve off `manifest.sharedBase`
+  // in packages/web/src/lib/rooms.ts.
+  for (const overlay of Object.values(manifest.overlays ?? {}))
+    for (const level of overlay.levels)
+      for (const file of Object.values(overlay.faces)) {
+        const path = level.level === 0 || !level.dir ? file : `${level.dir}/${file}`;
+        uploads.push({ local: join(sharedDir, path), key: `shared/${path}` });
+      }
 
-  // The favorite badge's pyramid (`manifest.shared.favoriteLevels`,
-  // `scan.ts`'s `discoverFavoriteLevels`): `fav_on.png`/`fav_off.png` are
-  // scaled per tile-width level, gated on the manifest field. Same shape as
-  // this function's `shared.levels` loop, for these two files.
-  for (const level of manifest.shared?.favoriteLevels ?? []) {
-    if (level.level === 0 || !level.dir) continue;
-    for (const file of ['fav_on.png', 'fav_off.png'])
-      uploads.push({ local: join(sharedDir, level.dir, file), key: `shared/${level.dir}/${file}` });
-  }
+  // The leather texture behind the dark chrome, reached by a relative
+  // `url(shared/...)` in packages/web/css/base.css. Always uploaded: there is
+  // no manifest field to gate on.
+  uploads.push({ local: join(sharedDir, 'leather_texture_tile.png'), key: 'shared/leather_texture_tile.png' });
 
   // The animation files (see animationKeys), mapped from the
   // `shared/animation/...` key to a path under sharedDir, like the

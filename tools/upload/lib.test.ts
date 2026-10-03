@@ -43,7 +43,16 @@ function manifest(): Manifest {
       genericDistill: [{ file: 'a.jpg', url: 'images/shared/generic_distill/a.jpg' }],
       levels: [{ level: 0, dir: null }],
       distillLevels: [{ level: 0, dir: null }],
-      favoriteLevels: [{ level: 0, dir: null }],
+    },
+    overlays: {
+      'favorite-badge': {
+        anchor: 'top-right', scale: 'pyramid', faces: { on: 'fav_on.png', off: 'fav_off.png' },
+        levels: [{ level: 0, dir: null }],
+      },
+      'distill-toggle': {
+        anchor: 'bottom-right', scale: 'tile', faces: { off: 'distill_off.png', on: 'distill_on.png' },
+        levels: [{ level: 0, dir: null }],
+      },
     },
   };
 }
@@ -63,12 +72,8 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'sample/shared/generic/a.jpg',
     'sample/shared/generic_distill/a.jpg',
     'sample/tagLinks.json',
-    'shared/clear_history_book.png',
     'shared/distill_off.png',
     'shared/distill_on.png',
-    'shared/fav_center_switch_base.png',
-    'shared/fav_count_on.png',
-    'shared/fav_mine_on.png',
     'shared/fav_off.png',
     'shared/fav_on.png',
     'shared/leather_texture_tile.png',
@@ -109,6 +114,22 @@ test('buildUploadList covers the distill tiles at every non-zero level too, off 
   assert.equal(distillLevel.local, 'tile-collection/shared/generic_distill/512/a.jpg');
 });
 
+test('buildUploadList uploads every overlay face at each level its manifest entry lists, and no other', () => {
+  const m = manifest();
+  m.overlays['favorite-badge'].levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  const byKey = new Map(
+    buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join).map((u) => [u.key, u.local])
+  );
+  assert.equal(byKey.get('shared/fav_on.png'), 'assets/fav_on.png');
+  assert.equal(byKey.get('shared/512/fav_on.png'), 'assets/512/fav_on.png');
+  assert.equal(byKey.get('shared/512/fav_off.png'), 'assets/512/fav_off.png');
+  assert.ok(!byKey.has('shared/512/distill_on.png'), 'a tile-scale overlay has only level 0');
+
+  m.overlays = {};
+  const bare = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
+  assert.ok(!bare.some((u) => u.key.includes('fav_') || u.key.includes('distill_')), 'no overlays, no overlay art');
+});
+
 test('buildUploadList uploads one entry per sheet file for a sheet-packed level, not per room', () => {
   const m = manifest();
   m.levels.push({
@@ -127,7 +148,7 @@ test('buildUploadList uploads one entry per sheet file for a sheet-packed level,
   assert.equal(sheet.local, 'tile-collection/256-sheets/sheet-0000.jpg');
 });
 
-test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the fixed favorite badge, distill toggle, clear-history book, and leather texture art', () => {
+test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the manifest does not have, but always uploads the leather texture', () => {
   const m = manifest();
   m.metadata = null;
   m.tagLinks = null;
@@ -135,7 +156,6 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
   m.shared = {
     center: null, generic: [], genericDistill: [],
     levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],
-    favoriteLevels: [{ level: 0, dir: null }],
   };
   const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   assert.deepEqual(
@@ -145,12 +165,8 @@ test('buildUploadList omits metadata/embeddings/tagLinks/shared entries the mani
       'sample/002.jpg',
       'sample/512/001.jpg',
       'sample/512/002.jpg',
-      'shared/clear_history_book.png',
       'shared/distill_off.png',
       'shared/distill_on.png',
-      'shared/fav_center_switch_base.png',
-      'shared/fav_count_on.png',
-      'shared/fav_mine_on.png',
       'shared/fav_off.png',
       'shared/fav_on.png',
       'shared/leather_texture_tile.png',

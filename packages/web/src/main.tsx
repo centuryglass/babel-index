@@ -24,6 +24,7 @@ import { favoriteOrder, favoriteStrength, favoriteCount, type SortMode } from '.
 import { availableSensitiveTags, countBlocked, filterBlockedIds } from '../../map/metadata.ts';
 import { buildSlugTable } from '../../map/slug.ts';
 import type { ManifestResponse } from '../../map/manifest.ts';
+import { overlayFaceId } from '../../map/overlays.ts';
 import type { Config } from '../../config/config.ts';
 import { MapView } from './components/MapView.tsx';
 import { CatalogView } from './components/CatalogView.tsx';
@@ -57,8 +58,7 @@ import {
   CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, clampZoom, ZOOM_LIMITS, type Camera,
 } from './lib/camera.ts';
 import {
-  createTileCache, CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON, genericId, genericDistillId,
+  createTileCache, CENTER, FAVORITE_BADGE, FAVORITE_SWITCH, genericId, genericDistillId,
 } from './lib/tiles.ts';
 import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
@@ -421,28 +421,24 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       tiles.pin(id);
       tiles.request(id, coarsestDistillLevel);
     }
-    // The favorite badge's two faces and the center tile's sort-switch art,
-    // pinned the same way - tiny images, gated on the store existing. Only
-    // level 0 is warmed here; the badge's coarser `manifest.shared.favoriteLevels`
-    // rungs are requested lazily by `render.ts`'s draw loop as the zoom needs
-    // them, so there is no opening-zoom level to precompute for them here.
-    if (favorites.enabled) {
-      for (const id of [FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON]) {
-        tiles.pin(id);
-        tiles.request(id, 0);
+    // Every corner overlay's faces, pinned the same way - tiny images. The
+    // favorite art is gated on the store existing; distill mode needs none.
+    // Only level 0 is warmed: a `pyramid` overlay's coarser rungs are
+    // requested lazily by the planners as the zoom needs them, so there is
+    // no opening-zoom level to precompute for them here.
+    for (const [id, overlay] of Object.entries(manifest.overlays)) {
+      if (!favorites.enabled && (id === FAVORITE_BADGE || id === FAVORITE_SWITCH)) continue;
+      for (const face of Object.keys(overlay.faces)) {
+        tiles.pin(overlayFaceId(id, face));
+        tiles.request(overlayFaceId(id, face), 0);
       }
-    }
-    // The distill toggle's two faces - pinned unconditionally, unlike the
-    // favorite art above, since distill mode needs no favorite store.
-    for (const id of [DISTILL_OFF, DISTILL_ON]) {
-      tiles.pin(id);
-      tiles.request(id, 0);
     }
     return tiles;
   }, [manifest, requestDraw, locateTile, favorites.enabled]);
 
-  const renderer = useMemo(() => createRenderer({ cache }), [cache]);
-  const slideRenderer = useMemo(() => createSlideRenderer({ cache }), [cache]);
+  const overlays = manifest.overlays;
+  const renderer = useMemo(() => createRenderer({ cache, overlays }), [cache, overlays]);
+  const slideRenderer = useMemo(() => createSlideRenderer({ cache, overlays }), [cache, overlays]);
 
   // The rearrangement in progress, or null. A ref, not state: it changes
   // every frame, and state would tear down the render effect sixty times a
@@ -887,7 +883,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   useMapRendererGL({
     canvasRef: WEBGL ? canvasRef : inertCanvasRef,
     searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
-    mode, layout, order, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
+    mode, layout, order, cache, overlays, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, minFavoriteInteractiveWidth: config.favorites.minInteractiveTileWidth,
     favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
     warmTexturesRef, warmTimeoutMs: config.slide.prepareTimeoutMs, loadingAnim, cancelSearchPreload,

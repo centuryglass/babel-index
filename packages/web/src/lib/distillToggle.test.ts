@@ -4,34 +4,10 @@ import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import {
   DISTILL_OFF_PATH,
   DISTILL_ON_PATH,
-  distillIconScreenRect,
   distillToggleAtPoint,
 } from './distillToggle.ts';
-import { BASE_TILE } from './pyramid.ts';
 
 const GEO = layout({ width: 1, height: 1 });
-// An arbitrary stand-in for the art's decoded pixel size - drawing reads no
-// constant, so these tests supply their own and exercise the scaling math
-// independent of whatever the real asset happens to be.
-const ICON_SIZE = { w: 283, h: 206 };
-
-test("the icon is anchored to the tile's lower right corner and scales with cellPx", () => {
-  const cellPx = { x: BASE_TILE.w, y: BASE_TILE.h }; // 1x scale
-  const rect = distillIconScreenRect(cellPx, 100, 200, ICON_SIZE);
-  assert.equal(rect.w, ICON_SIZE.w);
-  assert.equal(rect.h, ICON_SIZE.h);
-  // Right/bottom edges of the icon meet the right/bottom edges of the tile.
-  assert.equal(rect.x + rect.w, 100 + cellPx.x);
-  assert.equal(rect.y + rect.h, 200 + cellPx.y);
-});
-
-test('halving the scale halves the icon', () => {
-  const full = distillIconScreenRect({ x: BASE_TILE.w, y: BASE_TILE.h }, 0, 0, ICON_SIZE);
-  const half = distillIconScreenRect({ x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, 0, 0, ICON_SIZE);
-  assert.equal(half.w, full.w / 2);
-  assert.equal(half.h, full.h / 2);
-});
-
 test('DISTILL_OFF_PATH/DISTILL_ON_PATH are closed absolute paths tracing the icons', () => {
   assert.ok(DISTILL_OFF_PATH, 'the trace must carry a distill_off path for this test to mean anything');
   assert.ok(DISTILL_ON_PATH, 'the trace must carry a distill_on path for this test to mean anything');

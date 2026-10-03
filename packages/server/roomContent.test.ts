@@ -17,8 +17,8 @@ function baseManifest(overrides: Partial<Manifest> = {}): Manifest {
     shared: {
       center: null, generic: [], genericDistill: [],
       levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],
-      favoriteLevels: [{ level: 0, dir: null }],
     },
+    overlays: {},
     rooms: [
       { id: 0, file: 'a.jpg', url: 'images/a.jpg', bytes: 1 },
       { id: 1, file: 'b.jpg', url: 'images/b.jpg', bytes: 1 },

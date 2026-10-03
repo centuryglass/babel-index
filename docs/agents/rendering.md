@@ -20,6 +20,17 @@ second.
   - Painter behavior (blending, smoothing, stroke placement, texture
     filtering) can still drift. `npm run test:parity` catches it; run it by
     hand when touching either painter.
+- **Corner overlays are data plus one rule.** `assets/overlays.json`
+  (validated by `packages/map/overlays.ts`, served as `manifest.overlays`)
+  gives each overlay's art per face, anchor corner and scale basis.
+  `framePlan.ts`'s `planOverlay` requests the art and places it with
+  `overlay.ts`'s `overlayScreenRect`.
+  - Which cells carry an overlay, which face shows and the hover glow stay
+    in the per-overlay `plan*` helpers; hit areas come from the shelf trace.
+  - An overlay id or face missing from the manifest draws nothing, without
+    an error, so renaming one in `overlays.json` needs the matching
+    constant in `tiles.ts`. `scan.ts` refuses to start on a malformed file
+    or a face whose art is missing.
 - **The GL painter can lose a planned image.** A tile the cache has decoded
   may not have a texture yet (`gl/textureCache.ts`). `paintGL` then draws
   the item's `fallback` and reports the cell, and the GL renderers move it

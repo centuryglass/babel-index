@@ -1,0 +1,22 @@
+{
+  "favorite-badge": {
+    "anchor": "top-right",
+    "scale": "pyramid",
+    "faces": { "on": "fav_on.png", "off": "fav_off.png" }
+  },
+  "favorite-switch": {
+    "anchor": "top-left",
+    "scale": "tile",
+    "faces": { "base": "fav_center_switch_base.png", "mine": "fav_mine_on.png", "count": "fav_count_on.png" }
+  },
+  "distill-toggle": {
+    "anchor": "bottom-right",
+    "scale": "tile",
+    "faces": { "off": "distill_off.png", "on": "distill_on.png" }
+  },
+  "clear-history-book": {
+    "anchor": "bottom-right",
+    "scale": "tile",
+    "faces": { "black": "clear_history_book.png" }
+  }
+}

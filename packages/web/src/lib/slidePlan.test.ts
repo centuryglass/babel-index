@@ -5,6 +5,7 @@ import type { DrawItem } from './drawList.ts';
 import { CENTER, FAV_ON, FAV_OFF, genericId, type Drawable, type RoomId, type TileCache } from './tiles.ts';
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue } from '../../../map/moves.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 
 const ZOOM = 220;
 
@@ -56,7 +57,7 @@ test('idFor resolves a generic from its home cell and passes rooms through', () 
 
 test('a sliding generic keeps the face of its home cell, not of where it is drawn', () => {
   const { cache, idOf } = readyCache();
-  const planner = createSlidePlanner({ cache });
+  const planner = createSlidePlanner({ cache, overlays: TEST_OVERLAYS });
   const b = board();
   const origin = { x: 8, y: 8 };
   const indexAt = (x: number, y: number) => 100 + x * 10 + y;
@@ -80,7 +81,7 @@ test('a sliding generic keeps the face of its home cell, not of where it is draw
 
 test('badges ride on room cells only, and the center chrome is planned after every tile', () => {
   const { cache, idOf } = readyCache();
-  const planner = createSlidePlanner({ cache });
+  const planner = createSlidePlanner({ cache, overlays: TEST_OVERLAYS });
   const result = planner.plan({
     width: 1600, height: 900, dpr: 1, cam: { x: 0.5, y: 0.5, zoom: ZOOM }, board: board(), origin: { x: 8, y: 8 },
     favorites: { isFavorite: () => false }, distillMode: false,

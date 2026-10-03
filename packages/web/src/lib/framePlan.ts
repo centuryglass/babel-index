@@ -34,14 +34,14 @@
 import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
 import {
-  CENTER, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
+  CENTER, FAVORITE_BADGE, FAVORITE_SWITCH, DISTILL_TOGGLE, CLEAR_HISTORY,
   genericId, genericDistillId, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import { areSpinesLegible, BOOK_COUNT, type Slot, type SpineFontLimits } from './center.ts';
-import { favoriteIconScreenRect, favoriteSwitchScreenRect, FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
-import { distillIconScreenRect, DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
-import { clearHistoryBookScreenRect } from './clearHistoryBook.ts';
+import { FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
+import { DISTILL_OFF_PATH, DISTILL_ON_PATH } from './distillToggle.ts';
+import { overlayScreenRect, type Rect } from './overlay.ts';
+import { overlayFaceId, type Overlays } from '../../../map/overlays.ts';
 import { perfRecordSheetFirstDraw } from './perfProbe.ts';
 import { createDrawList, BLANK_FILL, FADE_FILL, CURSOR_STROKE, type DrawList } from './drawList.ts';
 import type { LoadingFrame } from './loadingAnimation.ts';
@@ -223,17 +223,15 @@ export function planGenericFade(
 
 /**
  * The hit's decoded pixel size: a sheet sub-rect's `sw`/`sh`, else the
- * image's natural size. Sheet packing never actually happens for the shared
- * corner-overlay ids this feeds - `rooms.ts` resolves them flat - but sizing
- * from the hit keeps the rule the same as every other tile lookup. The cast
- * is sound because `tiles.ts`'s `Drawable` doc makes a real tile's image an
- * `ImageBitmap` in the browser.
+ * image's natural size. Sheet packing never happens for overlay art -
+ * `rooms.ts` resolves it flat - but sizing from the hit keeps the rule the
+ * same as every other tile lookup. The cast is sound because `tiles.ts`'s
+ * `Drawable` doc makes a real tile's image an `ImageBitmap` in the browser.
  *
- * Each corner overlay's screen rect (`favoriteIconScreenRect`,
- * `distillIconScreenRect`, `clearHistoryBookScreenRect`) is sized from this
- * rather than a constant, so replacement art of a different size moves where
- * the overlay draws; hit-testing is independent of it (see each rect's own
- * doc), so a size change cannot silently change what is clickable.
+ * Overlay art is sized from this, not a constant, so replacement art of a
+ * different size moves where the overlay draws; hit-testing is independent
+ * of it (see `overlay.ts`), so a size change cannot change what is
+ * clickable.
  */
 function naturalIconSize(hit: TileHit): { w: number; h: number } {
   if (hit.rect) return { w: hit.rect.sw, h: hit.rect.sh };
@@ -242,17 +240,37 @@ function naturalIconSize(hit: TileHit): { w: number; h: number } {
 }
 
 /**
- * Plan one tile's favorite badge, only if art for the tile's draw level
- * (`level`, the per-frame pick) has landed. Rule 1 does not apply, and there
- * is no fallback to another rung:
+ * Plan one face of overlay `id` on a tile drawn at `level`, if the
+ * manifest describes that overlay and face and the art has landed. Returns
+ * where it drew, or null. Rule 1 does not apply: art still loading draws
+ * nothing this frame.
  *
- * - A still-loading level draws nothing this frame.
- * - A level with no generated badge art (`FAV_ON`/`FAV_OFF` stop at tile
- *   width 128; see `manifest.shared.favoriteLevels`) never draws one.
+ * The descriptor's `scale` picks the art's level:
+ * - `tile` art is requested at level 0, whatever the tile's level.
+ * - `pyramid` art is requested at `level` and drawn only if that exact
+ *   level came back, never the cache's coarser-or-finer substitute. Its
+ *   screen size tracks the tile whichever rung backs it, so a substitute
+ *   would only be blurrier, and a level with no art draws nothing.
  *
- * `favoriteIconScreenRect` sizes the badge from `cellPx.x` whichever rung
- * backs it, so a coarser asset at a fine cell would draw a softer badge, not a
- * smaller one.
+ * Placement is `overlayScreenRect`, off the descriptor's `anchor`.
+ */
+export function planOverlay(
+  list: DrawList, cache: TileCache, overlays: Overlays, id: string, face: string,
+  cellPx: { x: number; y: number }, sx: number, sy: number, level: number
+): Rect | null {
+  const overlay = overlays[id];
+  if (!overlay || !(face in overlay.faces)) return null;
+  const want = overlay.scale === 'pyramid' ? level : 0;
+  const hit = cache.get(overlayFaceId(id, face), want);
+  if (!hit || hit.level !== want) return null;
+  const r = overlayScreenRect(overlay.anchor, cellPx, sx, sy, naturalIconSize(hit), hit.level);
+  list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
+  return r;
+}
+
+/**
+ * Plan one tile's favorite badge (`FAVORITE_BADGE`), the face matching
+ * `isFavorite`.
  *
  * `hovered` adds the gold glow in the badge's traced silhouette
  * (`FAVORITE_TOGGLE_PATH`) - shape, not box, like the shelf's open book - and
@@ -261,80 +279,65 @@ function naturalIconSize(hit: TileHit): { w: number; h: number } {
  * rule.
  */
 export function planFavoriteBadge(
-  list: DrawList, cache: TileCache, isFavorite: boolean,
+  list: DrawList, cache: TileCache, overlays: Overlays, isFavorite: boolean,
   cellPx: { x: number; y: number }, sx: number, sy: number, level: number, hovered = false
 ): void {
-  const hit = cache.get(isFavorite ? FAV_ON : FAV_OFF, level);
-  if (!hit || hit.level !== level) return;
-  const r = favoriteIconScreenRect(cellPx, sx, sy, naturalIconSize(hit), level);
-  list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
-  if (hovered && FAVORITE_TOGGLE_PATH)
+  const r = planOverlay(list, cache, overlays, FAVORITE_BADGE, isFavorite ? 'on' : 'off', cellPx, sx, sy, level);
+  if (r && hovered && FAVORITE_TOGGLE_PATH)
     list.glow(FAVORITE_TOGGLE_PATH, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, r);
 }
 
 /**
- * Plan the "forget searches" book's black spine overlay, if its art has
- * landed - rule 1 does not apply, same as `planFavoriteBadge`. Anchored to
- * that book's own bottom-right corner, not stretched to fill its rect - see
- * `clearHistoryBookScreenRect`'s doc for why. No hover treatment of its own:
- * the spine titles' glow, drawn on top, already covers the book.
+ * Plan the "forget searches" book's black spine (`CLEAR_HISTORY`). The art
+ * is anchored to the tile corner, not to the book's traced rect: its
+ * transparent margin carries where on the shelf the spine lands. No hover
+ * treatment of its own: the spine titles' glow, drawn on top, already covers
+ * the book, whose hit-test stays in `center.ts`.
  */
 export function planClearHistoryBook(
-  list: DrawList, cache: TileCache, cellPx: { x: number; y: number }, sx: number, sy: number
+  list: DrawList, cache: TileCache, overlays: Overlays,
+  cellPx: { x: number; y: number }, sx: number, sy: number, level: number
 ): void {
-  const hit = cache.get(CLEAR_HISTORY_BOOK, 0);
-  if (!hit) return;
-  const r = clearHistoryBookScreenRect(cellPx, sx, sy, naturalIconSize(hit));
-  list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
+  planOverlay(list, cache, overlays, CLEAR_HISTORY, 'black', cellPx, sx, sy, level);
 }
 
 /**
- * Plan the center tile's distill toggle: the overlay art matching
- * `distillMode` at the tile's lower right corner (`distillIconScreenRect`),
- * plus the hover glow traced onto the active state's own silhouette - the
- * `planFavoriteBadge` treatment, same gold, same reasons.
+ * Plan the center tile's distill toggle (`DISTILL_TOGGLE`): the face
+ * matching `distillMode`, plus the hover glow traced onto the active state's
+ * own silhouette - the `planFavoriteBadge` treatment, same gold, same
+ * reasons.
  */
 export function planDistillToggle(
-  list: DrawList, cache: TileCache, distillMode: boolean, hovered: boolean,
-  cellPx: { x: number; y: number }, sx: number, sy: number
+  list: DrawList, cache: TileCache, overlays: Overlays, distillMode: boolean, hovered: boolean,
+  cellPx: { x: number; y: number }, sx: number, sy: number, level: number
 ): void {
-  const hit = cache.get(distillMode ? DISTILL_ON : DISTILL_OFF, 0);
-  if (!hit) return;
-  const r = distillIconScreenRect(cellPx, sx, sy, naturalIconSize(hit));
-  list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
+  const r = planOverlay(list, cache, overlays, DISTILL_TOGGLE, distillMode ? 'on' : 'off', cellPx, sx, sy, level);
   const activePath = distillMode ? DISTILL_ON_PATH : DISTILL_OFF_PATH;
-  if (hovered && activePath) list.glow(activePath, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, r);
+  if (r && hovered && activePath) list.glow(activePath, { x: sx, y: sy, w: cellPx.x, h: cellPx.y }, r);
 }
 
 /**
- * Plan the center tile's favorites-sort switch: the base plate plus whichever
- * "on" face matches `sortMode` - neither face for `'relevance'`, the switch's
- * off position. Each piece draws only once its own art has landed, like
- * `planFavoriteBadge`.
+ * Plan the center tile's favorites-sort switch (`FAVORITE_SWITCH`): the
+ * `base` plate plus whichever face matches `sortMode` - neither for
+ * `'relevance'`, the switch's off position. Each face draws only once its
+ * own art has landed.
  *
- * The three pieces share the tile's upper-left anchor but each is sized from
- * its own decoded pixels (`naturalIconSize`), not one shared rect: the real
- * art of `fav_mine_on.png`/`fav_count_on.png`/`fav_center_switch_base.png` is
- * close but not pixel-identical, and forcing a face into the base plate's
- * rect stretched it off the base's own indicator.
+ * Each face is sized from its own decoded pixels, not the base's rect: the
+ * faces' art is close to the base's size but not pixel-identical, and
+ * forcing a face into the base plate's rect stretches it off the base's own
+ * indicator.
  *
  * `slidePlan.ts` plans this too because the center tile is the
  * rearrangement's fixed tile: its controls must keep drawing across the
  * handoff between renderers, not blink out mid-animation.
  */
 export function planFavoriteSwitch(
-  list: DrawList, cache: TileCache, sortMode: SortMode,
-  cellPx: { x: number; y: number }, sx: number, sy: number
+  list: DrawList, cache: TileCache, overlays: Overlays, sortMode: SortMode,
+  cellPx: { x: number; y: number }, sx: number, sy: number, level: number
 ): void {
-  const piece = (id: RoomId) => {
-    const hit = cache.get(id, 0);
-    if (!hit) return;
-    const r = favoriteSwitchScreenRect(cellPx, sx, sy, naturalIconSize(hit));
-    list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
-  };
-  piece(FAV_CENTER_SWITCH_BASE);
-  if (sortMode === 'mine') piece(FAV_MINE_ON);
-  else if (sortMode === 'count') piece(FAV_COUNT_ON);
+  planOverlay(list, cache, overlays, FAVORITE_SWITCH, 'base', cellPx, sx, sy, level);
+  if (sortMode === 'mine') planOverlay(list, cache, overlays, FAVORITE_SWITCH, 'mine', cellPx, sx, sy, level);
+  else if (sortMode === 'count') planOverlay(list, cache, overlays, FAVORITE_SWITCH, 'count', cellPx, sx, sy, level);
 }
 
 /**
@@ -354,6 +357,8 @@ export function planLoadingFrame(
 
 export interface CreateMapPlannerOpts {
   cache: TileCache;
+  /** `manifest.overlays`: the corner overlays' art, anchors and scales. */
+  overlays: Overlays;
   pyramid?: Pyramid;
 }
 
@@ -361,7 +366,7 @@ export interface CreateMapPlannerOpts {
  * One renderer's map planner. `plan()` fills `list` for a frame and returns
  * its stats; the list is reused, so paint it before the next `plan()`.
  */
-export function createMapPlanner({ cache, pyramid = PYRAMID }: CreateMapPlannerOpts) {
+export function createMapPlanner({ cache, overlays, pyramid = PYRAMID }: CreateMapPlannerOpts) {
   const list = createDrawList();
   // Survives across frames purely so hysteresis has something to compare to.
   let level: number | null = null;
@@ -431,7 +436,7 @@ export function createMapPlanner({ cache, pyramid = PYRAMID }: CreateMapPlannerO
         // controls, not a room) and never a generic cell (nothing to favorite).
         if (favorites && !isCtr && !isGeneric) {
           const hovered = hoveredFavorite != null && hoveredFavorite.x === gx && hoveredFavorite.y === gy;
-          planFavoriteBadge(list, cache, favorites.isFavorite(order[rank]), cellPx, sx, sy, level, hovered);
+          planFavoriteBadge(list, cache, overlays, favorites.isFavorite(order[rank]), cellPx, sx, sy, level, hovered);
         }
         if (!isCtr) continue;
         const cell = { x: sx, y: sy, w: cellPx.x, h: cellPx.y };
@@ -441,7 +446,7 @@ export function createMapPlanner({ cache, pyramid = PYRAMID }: CreateMapPlannerO
         // second "is there history" flag to drift. Planned before the shelf's
         // titles so the gilt text composites on top.
         if (centreSlots?.[BOOK_COUNT - 1]?.action === 'forgetHistory')
-          planClearHistoryBook(list, cache, cellPx, sx, sy);
+          planClearHistoryBook(list, cache, overlays, cellPx, sx, sy, level);
         // The center room's spines carry the search history; `composeSpines`
         // gates on legible spine width, so far out it draws nothing.
         if (centreSlots && spineFontLimits)
@@ -451,7 +456,7 @@ export function createMapPlanner({ cache, pyramid = PYRAMID }: CreateMapPlannerO
         // existing and on `areSpinesLegible`, the same zoom gate the shelf's
         // titles use.
         if (favorites && areSpinesLegible(cell))
-          planFavoriteSwitch(list, cache, sortMode, cellPx, sx, sy);
+          planFavoriteSwitch(list, cache, overlays, sortMode, cellPx, sx, sy, level);
         // The distill toggle, in the center tile's lower right corner -
         // ungated by `favorites`, since distill mode needs no favorite store.
         // `distillMode === undefined` means the caller does not use distill
@@ -459,7 +464,7 @@ export function createMapPlanner({ cache, pyramid = PYRAMID }: CreateMapPlannerO
         // toggle then plans nothing rather than requesting art nobody asked
         // for.
         if (distillMode !== undefined)
-          planDistillToggle(list, cache, distillMode, hoveredDistill, cellPx, sx, sy);
+          planDistillToggle(list, cache, overlays, distillMode, hoveredDistill, cellPx, sx, sy, level);
         // The loading indicator's frame, over the center book's page. Its
         // region is disjoint from everything above, so the order among them is
         // cosmetic.
