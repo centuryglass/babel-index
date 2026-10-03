@@ -84,7 +84,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from babel_index_review import core, story_frame, tag_explainer, titles
+from babel_index_review import collection_memory, core, story_frame, tag_explainer, titles
 from babel_index_review.review_widgets import (
     COLOR_MUTED,
     THUMB_SIZE,
@@ -513,6 +513,8 @@ class ReviewWindow(QMainWindow):
         self.pitch_model_combo = QComboBox()
         self.draft_model_combo = QComboBox()
         self.revise_model_combo = QComboBox()
+        self.memory_model_combo = QComboBox()
+        self.memory_model_combo.setToolTip("Tags a story's tropes and payload into collection memory when it is marked Final")
         self.form_combo = QComboBox()
         self.form_combo.addItem("Drawn by weight", None)
         for option in self.story_engine.frame.forms.options:
@@ -541,6 +543,8 @@ class ReviewWindow(QMainWindow):
         grid.addLayout(chance_row, 2, 1)
         grid.addWidget(QLabel("Pitch instructions"), 2, 2)
         grid.addWidget(self.instructions_edit, 2, 3)
+        grid.addWidget(QLabel("Memory model"), 3, 0)
+        grid.addWidget(self.memory_model_combo, 3, 1)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(3, 1)
         self.settings_frame.hide()
@@ -768,6 +772,7 @@ class ReviewWindow(QMainWindow):
                 pitch_model=self.pitch_model_combo,
                 draft_model=self.draft_model_combo,
                 revise_model=self.revise_model_combo,
+                memory_model=self.memory_model_combo,
             )
         return combos
 
@@ -1220,7 +1225,10 @@ class ReviewWindow(QMainWindow):
         self._refresh_engine()
         if checked:
             self._record_outcome(key, "accepted", entry.get("story"))
+            self._remember(key, entry.get("story"))
             self._navigate_skip_final(1)
+        else:
+            collection_memory.forget(self.tile_dir, [key])
 
     def _on_inpaint_toggled(self, checked: bool):
         if self._loading or self.current_key is None:
@@ -1965,6 +1973,37 @@ class ReviewWindow(QMainWindow):
             return
         edited = any(v["reason"] in ("hand edit", "restore") for v in draft.history)
         self.story_engine.record_outcome(subject, outcome, story, draft_id=draft.id, edited=edited)
+
+    def _remember(self, key: str, story: str | None):
+        """Tag a newly Final story into collection memory, in the background.
+
+        Skipped when the engine failed to load, since the memory model picker
+        is one of its settings. A failure only warns: the next
+        ``collection_memory`` run tags whatever the GUI missed.
+        """
+        if self.story_engine is None or not (story or "").strip():
+            return
+        subject = story_frame.subject_for(key)
+        workspace = self._workspace(subject) if self.store is not None else None
+        origin = collection_memory.provenance(self.tile_dir, key, workspace)
+        tropes = collection_memory.known_tropes(self.tile_dir)
+        model = self.memory_model_combo.currentData()
+        tile_dir = self.tile_dir
+
+        def done(entry):
+            current = self.index.get(key, {})
+            if current.get("final") and current.get("story") == entry.story:
+                collection_memory.record(tile_dir, key, entry)
+
+        def failed(message: str):
+            QMessageBox.warning(
+                self,
+                "Collection memory",
+                f"Tagging {key} failed: {message}\n\n"
+                "Run python -m babel_index_review.collection_memory to catch up.",
+            )
+
+        self._run(lambda: collection_memory.tag(story, model, tropes, origin), model, done, failed)
 
     # -- Revising --------------------------------------------------------------------------------
     def _on_revise(self, draft_id: str, request: str):
