@@ -51,7 +51,7 @@ Every tracked file in the repo, with a line or two on what it is for.
   * `index.ts`: CLI - argv, the esbuild client bundle, the listening socket.
   * `app.ts`: Express routes - manifest, search, favorites, logs, images,
     SSR pages. `docs/api.md` must change with any `/api/*` shape.
-  * `scan.ts`: Scans an images directory (and `--shared-dir`) into the
+  * `scan.ts`: Scans an images directory, with its `shared/` tiles, into the
     collection manifest.
   * `remote.ts`: Reads a manifest from a remote host (R2) instead of a local
     directory, rebasing its urls.
@@ -296,7 +296,7 @@ Every tracked file in the repo, with a line or two on what it is for.
     grids.
   * `layout.ts`: On-disk level layout and sheet arithmetic, shared with the
     server; no imaging.
-  * `shared-mips.ts`: The same per-file pyramid for the `--shared-dir`
+  * `shared-mips.ts`: The same per-file pyramid for a collection's `shared/`
     center and `generic/` tiles.
 
 ### Associated tools:
@@ -418,17 +418,15 @@ imports at bundle time.
 - `.github/dependabot.yml`: Automated dependency-update PRs.
 
 ### Assets:
-- `assets/center_tile.png`: The blank center tile at cell (0, 0), which
-  carries the diegetic controls.
-- `assets/generic`: The generic "default" tiles.
-- `assets/generic_distill`: Distill mode's alternate for each generic tile,
-  matched by filename stem; a generic tile crossfades to it when distill mode
-  hides the filler.
 - `assets/animation`: Loading-animation frame cycles (`<cycle>/`, source
   only) and the generated `sheets/` and `manifest.json` served from
   `/shared/animation/`.
 - `assets/tile-collection-sample`: A minimal demo collection with metadata, embeddings,
-  pyramid and tag links.
+  pyramid and tag links. Its `shared/` holds the blank center tile at cell
+  (0, 0), which carries the diegetic controls; the generic "default" tiles
+  (`generic/`); and distill mode's alternate for each generic tile
+  (`generic_distill/`), matched by filename stem, which a generic tile
+  crossfades to when distill mode hides the filler.
 
 ### Reference:
 - `reference`: Inpainting pipeline source material (Blender renders, a canny

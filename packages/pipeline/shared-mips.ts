@@ -1,9 +1,10 @@
 /**
- * Writes pyramid levels for the shared tiles. `npm run generate:mips --
- * --images <dir> --shared-dir <dir>` calls this after the collection itself.
+ * Writes pyramid levels for a collection's shared tiles. `npm run
+ * generate:mips -- --images <dir>` calls this after the collection itself.
  *
  * Each file gets the same per-file `<width>/<file>` ladder `mips.ts`'s
- * `writeMips` writes for a room, rooted at the shared directory:
+ * `writeMips` writes for a room, rooted at the collection's `shared/`
+ * directory (`scan.ts`'s `SHARED_TILES_DIR`):
  *   - the center render found there;
  *   - every image in its `generic/` subdirectory;
  *   - every image in its `generic_distill/` subdirectory.
@@ -37,26 +38,26 @@ export interface SharedMipsResult {
 }
 
 /**
- * @param opts.sharedDir the shared directory (`--shared-dir`)
+ * @param opts.tilesDir the collection's shared tile directory
  * @param opts.center names the center tile, same as `scan.ts`'s `--center`
  * @param opts.quality JPEG/WebP quality for the generated levels
  */
 export async function writeSharedMips({
-  sharedDir,
+  tilesDir,
   center,
   quality = 82,
 }: {
-  sharedDir: string;
+  tilesDir: string;
   center?: string;
   quality?: number;
 }): Promise<SharedMipsResult> {
-  const files = await listImages(sharedDir);
+  const files = await listImages(tilesDir);
   const centerFile = resolveCenterFile(files, center);
   const centerResult = centerFile
-    ? { file: centerFile, ...(await writeMips({ file: join(sharedDir, centerFile), outDir: sharedDir, inPlace: true, quality })) }
+    ? { file: centerFile, ...(await writeMips({ file: join(tilesDir, centerFile), outDir: tilesDir, inPlace: true, quality })) }
     : null;
 
-  const genericDir = join(sharedDir, GENERIC_DIR);
+  const genericDir = join(tilesDir, GENERIC_DIR);
   const genericFiles = await listImages(genericDir);
   const generic = await Promise.all(
     genericFiles.map(async (file) => ({
@@ -65,7 +66,7 @@ export async function writeSharedMips({
     }))
   );
 
-  const distillDir = join(sharedDir, GENERIC_DISTILL_DIR);
+  const distillDir = join(tilesDir, GENERIC_DISTILL_DIR);
   const distillFiles = await listImages(distillDir);
   const genericDistill = await Promise.all(
     distillFiles.map(async (file) => ({

@@ -142,14 +142,9 @@ async function main() {
   const argv = parseArgs(process.argv.slice(2));
   const imagesDir = argv.images ?? 'assets/tile-collection-sample';
   const outDir = argv.out ?? imagesDir;
-  // Must match the server's `--shared-dir` (packages/server/index.ts, which
-  // defaults to `assets` too), or the room set embedded here and the set the
-  // server ranks against drift. Rows are matched by order, so a drift ranks the
-  // wrong rooms.
-  const sharedDir = argv['shared-dir'] ?? 'assets';
 
   // One source of truth for which files are rooms and in what id order.
-  const manifest = await scanDirectory(imagesDir, { center: argv.center, sharedDir });
+  const manifest = await scanDirectory(imagesDir, { center: argv.center });
   const files = manifest.rooms.map((r) => r.file);
   if (!files.length) throw new Error(`no collection rooms in ${imagesDir}`);
   console.log(`${files.length} rooms (center tile: ${manifest.shared.center?.file ?? '(none)'}), model ${MODEL_ID}`);

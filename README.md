@@ -185,8 +185,8 @@ Every flag is optional:
 | Flag                     | Effect                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------ |
 | `--images <dir>`         | serve this directory as the collection (default `assets/tile-collection-sample`)                             |
-| `--shared-dir <dir>`     | where the center and generic tiles live (default `assets`)                                       |
-| `--center <file>`        | name the center tile, if it isn't `center_tile.*` or `center.*`                                  |
+| `--shared-dir <dir>`     | where the fixed app art (favorite badge, toggles, loading animation) lives (default `assets`)   |
+| `--center <file>`        | name the center tile in `<images>/shared/`, if it isn't `center_tile.*` or `center.*`           |
 | `--port <n>`             | listen port (default 5173); startup fails if it is taken                                        |
 | `--config <file>`        | override tuning values (default `./config.json`, if present)                                    |
 | `--favorites <file>`     | record global favorite counts in this JSON file; without it, no favorite controls appear        |
@@ -215,6 +215,8 @@ npm run generate:mips -- --images <dir>         # resolution pyramid, so zoomed-
 npm run generate:embeddings -- --images <dir>   # CLIP embeddings (needs the optional CLIP install)
 ```
 
+The center tile and the generic tiles come from the collection's own
+`shared/` subdirectory; copy `assets/tile-collection-sample/shared/` to start.
 Titles, keywords and stories come from a `metadata.json` beside the
 images, specified in [`docs/tile-collection.md`](docs/tile-collection.md);
 [`tools/curation/`](tools/curation/README.md) holds the tools that produce
@@ -269,7 +271,7 @@ these gate a merge and which gate a deploy.
 | `deploy/`            | the VPS deploy script, its health check, and the nginx config                     |
 | `infra/`             | Terraform for the Cloudflare R2 bucket the live collection is served from             |
 | `tools/`             | offline CLIs: embeddings, R2 upload, tile geometry, doc checks, curation (Python) |
-| `assets/`            | the sample collection and the shared center and generic tiles                         |
+| `assets/`            | the sample collection and the fixed app art                                           |
 
 [`docs/file_map.md`](docs/file_map.md) describes every file.
 

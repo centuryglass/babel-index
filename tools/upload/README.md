@@ -48,18 +48,20 @@ shape as a local scan:
 <prefix>/embeddings.json
 <prefix>/manifest.json            the scanDirectory() result, read by --remote
 <prefix>/upload-manifest.json     this tool's own bookkeeping (below)
-shared/center_tile.png
-shared/generic/a.jpg
+<prefix>/shared/center_tile.png   the collection's shared tiles, from <images>/shared/
+<prefix>/shared/generic/a.jpg
+shared/fav_on.png                 fixed app art, from --shared-dir
 shared/animation/manifest.json    only if the loading indicator is built
 shared/animation/sheets/*.png     the loading-animation frame sheets
 ```
 
 `prefix` defaults to the basename of `--images`, so different collections don't
-collide in one bucket. The shared tiles live outside any prefix, at the
-bucket root, since multiple collections can point at the same center/generic
-assets. The loading-animation manifest and sheets ride up the same way, read
-from `<shared-dir>/animation/`; a shared dir without one (no indicator built)
-uploads nothing there.
+collide in one bucket. The center and generic tiles are collection content
+and sit under the prefix. The fixed app art (the favorite badge, the toggles,
+the leather texture) lives outside any prefix, at `shared/`, since every
+collection uses the same files. The loading-animation manifest and sheets ride
+up the same way, read from `<shared-dir>/animation/`; a shared dir without one
+(no indicator built) uploads nothing there.
 
 `manifest.json` is the `scanDirectory()` result, the same shape
 `/api/manifest` serves locally, written on every run. `--remote` fetches it,

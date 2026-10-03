@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Upload a tile collection to Cloudflare R2: room images at every generated pyramid
- * level, the keyword/story sidecar, the CLIP embeddings blob, the shared
- * center/generic tiles, and the `scanDirectory()` manifest that
+ * level, the keyword/story sidecar, the CLIP embeddings blob, the collection's
+ * shared center/generic tiles, the fixed app art from `--shared-dir`, and the
+ * `scanDirectory()` manifest that
  * `packages/server/remote.ts` reads. tools/upload/README.md owns the usage,
  * credentials, bucket layout, incremental-upload and cache-purge behavior.
  *

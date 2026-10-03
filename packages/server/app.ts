@@ -88,7 +88,7 @@ export interface CreateAppOptions {
    *  where the manifest's urls already point directly at R2/Cloudflare and
    *  this server never serves images at all (see remote.ts) */
   imagesDir?: string | null;
-  /** directory the shared tiles are served from, under /shared (local mode
+  /** directory the fixed app art is served from, under /shared (local mode
    *  default: the images directory) */
   sharedDir?: string | null;
   /** resolved config (see packages/config); the defaults when absent */
@@ -388,9 +388,9 @@ export function createApp({
     // cannot climb out of the images directory.
     app.use('/images', express.static(imagesDir, { maxAge: '1h', immutable: true }));
 
-    // The shared tiles (center + generic tiles) live outside the collection, so
-    // they get their own mount. When sharedDir is the images directory the two
-    // overlap harmlessly - the manifest still addresses shared tiles via /shared.
+    // The fixed app art (`--shared-dir`) is not collection content, so it gets
+    // its own mount. The collection's shared tiles sit under imagesDir and are
+    // served by the mount above.
     app.use('/shared', express.static(sharedDir, { maxAge: '1h', immutable: true }));
   }
 

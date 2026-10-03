@@ -38,9 +38,9 @@ function sampleManifest(): Manifest {
     imagesBase: '/images',
     sharedBase: '/shared',
     shared: {
-      center: { file: 'center.png', url: '/shared/center.png' },
-      generic: [{ file: 'g1.png', url: '/shared/generic/g1.png' }],
-      genericDistill: [{ file: 'g1.jpg', url: '/shared/generic_distill/g1.jpg' }, null],
+      center: { file: 'center.png', url: '/images/shared/center.png' },
+      generic: [{ file: 'g1.png', url: '/images/shared/generic/g1.png' }],
+      genericDistill: [{ file: 'g1.jpg', url: '/images/shared/generic_distill/g1.jpg' }, null],
       levels: [{ level: 0, dir: null }],
       distillLevels: [{ level: 0, dir: null }],
       favoriteLevels: [{ level: 0, dir: null }],
@@ -80,11 +80,28 @@ test('scanRemote points every url directly at the remote host, not through this 
       assert.equal(manifest.embeddings.url, `${base}/tile-collection-sample/embeddings.bin`);
       assert.equal(manifest.metadata.url, `${base}/tile-collection-sample/metadata.json`);
       assert.equal(manifest.tagLinks.url, `${base}/tile-collection-sample/tagLinks.json`);
-      assert.equal(manifest.shared.center.url, `${base}/shared/center.png`);
-      assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
-      assert.equal(manifest.shared.genericDistill[0].url, `${base}/shared/generic_distill/g1.jpg`);
+      assert.equal(manifest.shared.center.url, `${base}/tile-collection-sample/shared/center.png`);
+      assert.equal(manifest.shared.generic[0].url, `${base}/tile-collection-sample/shared/generic/g1.png`);
+      assert.equal(
+        manifest.shared.genericDistill[0].url,
+        `${base}/tile-collection-sample/shared/generic_distill/g1.jpg`
+      );
       assert.equal(manifest.shared.genericDistill[1], null);
       assert.deepEqual(manifest.shared.levels, [{ level: 0, dir: null }], 'no urls in a level, so nothing to rebase');
+    }
+  );
+});
+
+test('scanRemote still resolves shared tiles a manifest roots at sharedBase', async () => {
+  const legacy = sampleManifest();
+  legacy.shared.center = { file: 'center.png', url: '/shared/center.png' };
+  legacy.shared.generic = [{ file: 'g1.png', url: '/shared/generic/g1.png' }];
+  await remoteHost(
+    { '/tile-collection-sample/manifest.json': { body: JSON.stringify(legacy), type: 'application/json' } },
+    async (base) => {
+      const manifest = await scanRemote(base, 'tile-collection-sample');
+      assert.equal(manifest.shared.center.url, `${base}/shared/center.png`);
+      assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
     }
   );
 });

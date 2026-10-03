@@ -1,8 +1,8 @@
 # Tile collection format
 
-A tile collection is a directory of room images plus two optional JSON
-sidecars: `metadata.json` for each room's text, and `tagLinks.json` for
-keyword links. `npm start -- --images <dir>` serves any such directory,
+A tile collection is a directory of room images, the shared tiles that fill
+the rest of the map, and two optional JSON sidecars: `metadata.json` for each
+room's text, and `tagLinks.json` for keyword links. `npm start -- --images <dir>` serves any such directory,
 and [`assets/tile-collection-sample/`](../assets/tile-collection-sample) is a
 complete example.
 
@@ -12,7 +12,15 @@ complete example.
   metadata.json             optional, per-room text
   tagLinks.json             optional, keyword -> url
   embeddings.bin/.json      optional, written by `npm run generate:embeddings`
+  shared/
+    center_tile.png         the blank center tile at cell (0, 0), carrying the controls
+    generic/                the generic "default" tiles
+    generic_distill/        optional, distill mode's alternate per generic tile, by filename stem
 ```
+
+`shared/` is optional too: without it the map has no center tile and no
+generic tiles. Its images are never rooms. The center is `center_tile.*`,
+else `center.*`, else the file `--center` names.
 
 The generators that fill the rest of the directory (the resolution pyramid,
 CLIP embeddings) are in [`README.md`](../README.md)'s "Your own rooms".

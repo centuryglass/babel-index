@@ -16,7 +16,7 @@ ranking compares vectors from two different spaces.
 
 ```sh
 npm run generate:embeddings                        # against assets/tile-collection-sample/
-npm run generate:embeddings -- --images <dir> [--center center.jpg] [--shared-dir assets] [--out <dir>]
+npm run generate:embeddings -- --images <dir> [--center center.jpg] [--out <dir>]
 ```
 
 Plain `node tools/embed/embed.ts` does not work: the tool imports `.ts` modules,

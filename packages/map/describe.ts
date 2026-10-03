@@ -23,7 +23,7 @@
  *   of the room (see `metadata.ts`). A real room's is never generated at
  *   runtime. Every generic cell shares one fixed sentence in `describeCell`,
  *   since all generic tiles show the same kind of image. Per-tile generic
- *   captions wait on real art: `assets/generic/` is placeholder art.
+ *   captions wait on real art: the generic tiles are placeholder art.
  */
 
 import type { MapLayout } from './ordering.ts';
