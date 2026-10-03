@@ -23,7 +23,9 @@ a collection directory needs, it doesn't run alongside the app.
   LAN-servable alternative.
 - `story_engine/`: the staged story generator (pitch, draft, revise), with
   each tile's review state in a workspace file (`workspace.py`) and a JSON
-  Lines trace of its model calls. Kept free of Babel Index
+  Lines trace of its model calls. `memory.py` tags accepted stories and
+  counts the patterns the collection repeats; `babel_index_review/collection_memory.py`
+  stores them. Kept free of Babel Index
   specifics so it can be lifted out later; `babel_index_review/story_frame.py`
   holds this project's configuration. Its module docstrings cover the
   stages, and `docs/story_workflow.md`'s "Proposed additions" lists the

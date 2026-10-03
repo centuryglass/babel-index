@@ -28,7 +28,7 @@ builds its prompt, so the full text is one click away.
  6. Choose ............ pick one draft (or re-pitch / redraft);
    |                    critique can continue on it afterwards
  7. Accept ............ mark Final
-   |                    [proposed: record into collection memory, #414]
+   |                    tagged into collection memory
 ```
 
 A tile's reading, pitches and drafts live in one workspace file that grows
@@ -66,12 +66,15 @@ comments and the maintainer's local `story_preferences.md`.
 | Weighted option lists | [`story_engine/options.py`](../story_engine/options.py) |
 | Workspace: one tile's reading, pitches, drafts and choice | [`story_engine/workspace.py`](../story_engine/workspace.py) |
 | Trace log | [`story_engine/trace.py`](../story_engine/trace.py) |
+| Collection memory: tagging prompt and pattern counts | [`story_engine/memory.py`](../story_engine/memory.py) |
+| Collection memory: storage, provenance, backfill and report | [`babel_index_review/collection_memory.py`](../babel_index_review/collection_memory.py) |
 | Babel Index's frame: subject, presentation, voice, style rules | [`babel_index_review/story_frame.py`](../babel_index_review/story_frame.py) |
 | The base scene every image shares | `core.py`'s `BASE_SCENE` |
 | Seeds, forms, constraints | `data/story_seeds.json`, `data/story_forms.json`, `data/story_constraints.json` |
 | Model backends | `tag/describe_image.py` |
 | Workspaces on disk | `DIR/story_traces/<tile stem>.json` |
 | Traces on disk | `DIR/story_traces/<tile stem>.jsonl` |
+| Collection memory on disk | `DIR/collection_memory.json` |
 
 ## Current workflow
 
@@ -252,6 +255,10 @@ outcome (`accepted`), which draft it came from, and whether it was edited by
 hand after being chosen. Clearing an engine-written story records
 `discarded`.
 
+Accepting also tags the story into collection memory (see "Collection
+memory"), in the background, with the Memory model from Engine settings.
+Unmarking Final drops it from memory.
+
 **Choices:** Final, or not yet. A Final tile is locked against choosing,
 revising, clearing and editing the story until it is unmarked.
 
@@ -281,6 +288,28 @@ The mobile app (`mobile_app.py`), `tile_process.py --generate-stories` and
 `subagent_stories.py` still write stories with the old single-prompt
 generator, `core.default_prompt`, and skip every stage above. Issue #413
 decides whether each is ported to the engine, kept or deleted.
+
+### Collection memory
+
+`DIR/collection_memory.json` holds every Final story, each tagged with:
+- its tropes and payload, from one text-only model call
+  (`story_engine.memory.tag_prompt`). The tagger is given the trope labels
+  already in memory and reuses them, so labels recur and can be counted;
+- its seed, form and constraint, from the chosen draft in the workspace, or
+  null for a story the engine didn't write.
+
+`python -m babel_index_review.collection_memory DIR` syncs memory with
+`metadata.json` and prints a report. The sync tags new or edited Final
+stories and drops entries whose tile is no longer Final. Its first run
+backfills the collection. The report (`story_engine.memory.analyze`) counts:
+- tropes, seeds, forms and constraints;
+- openers and word n-grams that several stories share;
+- names used in several stories, and pairs of names one letter apart
+  ("Vane" / "Vance").
+
+`--no-sync` reports without model calls, and `--json` prints the report as
+data. The writer never reads memory. Lint rules derived from it are still
+proposed (see "Lint rules").
 
 ### The workspace
 
@@ -314,15 +343,6 @@ one-time workspace import.
 | `outcome` | `accepted` or `discarded`, edited or not |
 
 ## Proposed additions
-
-### Collection memory (#414)
-
-When a story is accepted, it is tagged into collection memory:
-- its tropes and payload, from an LLM call;
-- its seed, form and constraint, from the workspace;
-- opener and n-gram statistics across the collection.
-
-Existing stories are backfilled once. The writer never reads collection memory.
 
 ### Lint rules (#414)
 

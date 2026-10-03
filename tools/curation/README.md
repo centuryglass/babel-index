@@ -115,8 +115,9 @@ The story engine panel (`story_engine/`, configured by
    story, and from then on the two are one text. Mark it Final to accept it.
 
 Engine settings holds a model for each stage, the form, the odd-constraint
-chance, and extra instructions for the next pitch call. Model picks are
-remembered between sessions.
+chance, and extra instructions for the next pitch call. Its Memory model tags
+each story marked Final into collection memory (see "Collection memory"
+below). Model picks are remembered between sessions.
 
 Each tile's reading, pitches and drafts are kept in
 `DIR/story_traces/<tile>.json`, and every model call, choice and outcome is
@@ -173,6 +174,21 @@ as it goes. Also editable directly in the review GUI. Uniqueness holds even
 with `--workers` above 1: a title claimed by one in-flight tile is
 immediately unavailable to every other, so two tiles can never land on the
 same title.
+
+**Collection memory**
+
+```sh
+python -m babel_index_review.collection_memory DIR [--model MODEL] [--workers N] [--retag] [--no-sync] [--json]
+```
+
+Tags every Final story's tropes and payload into `DIR/collection_memory.json`,
+with the seed, form and constraint it was drafted from, then prints what the
+collection repeats: tropes, seeds, forms, constraints, shared openers and
+n-grams, reused names and near-duplicate names. The first run backfills the
+whole collection. Later runs tag only new or edited Final stories, since the
+review GUI tags each one as it is marked Final. `--no-sync` prints the report
+without model calls. See [`docs/story_workflow.md`](docs/story_workflow.md)'s
+"Collection memory".
 
 **Parallel requests**
 
