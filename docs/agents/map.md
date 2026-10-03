@@ -67,14 +67,16 @@ still apply.
   value (`roomAt`'s `{ generic: true }`). The renderers are the only places a
   cell resolves to a tile id; `slide.ts` reads the generic index at each
   tile's *home* cell, so a sliding line keeps its faces mid-ride.
-- **The shared tiles live outside `--images`.** `scan.ts` finds them in
-  `--shared-dir` (default `assets/`): the center by name (`center_tile.*`,
-  else `center.*`, else `--center`), and the generic tiles as every image in
-  `generic/`. They ride in the manifest as `shared: { center, generic }` and
-  are served from `/shared/`, not `/images/`. A `center.*` in the collection dir
-  counts as a generic tile only when `sharedDir === imagesDir`.
+- **The shared tiles live in the collection's `shared/`, the fixed app art
+  in `--shared-dir`.** `scan.ts` finds the center in `<images>/shared/` by
+  name (`center_tile.*`, else `center.*`, else `--center`), and the generic
+  tiles as every image in its `generic/`. They ride in the manifest as
+  `shared: { center, generic }` with `images/shared/...` urls, so an upload
+  puts them under the collection's prefix. The favorite badge, toggles and
+  loading animation stay in `--shared-dir` (default `assets/`), served from
+  `/shared/` off `sharedBase`. An image beside the rooms is always a room.
 - **Shared art has its own pyramids, in separate manifest arrays that are
-  not interchangeable.** `generate:mips --shared-dir`
+  not interchangeable.** `generate:mips`
   (`packages/pipeline/shared-mips.ts`) writes the same per-file
   `<width>/<file>` ladder a room gets, never packed into sheets, and
   `scan.ts` discovers what is on disk:

@@ -58,7 +58,10 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
   const imagesBase = `${root}/${prefix}`;
   const sharedBase = `${root}/shared`;
   const toImages = (u: string) => rebase(u, oldImagesBase, imagesBase);
-  const toShared = (u: string) => rebase(u, oldSharedBase, sharedBase);
+  // A shared tile is collection content under `imagesBase`, but a manifest
+  // uploaded before it moved there still roots it at `sharedBase`, so both
+  // rewrites apply. `rebase` leaves a url with neither prefix untouched.
+  const toTile = (u: string) => rebase(toImages(u), oldSharedBase, sharedBase);
 
   return {
     ...manifest,
@@ -71,9 +74,9 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
     metadata: manifest.metadata && { ...manifest.metadata, url: toImages(manifest.metadata.url) },
     tagLinks: manifest.tagLinks && { ...manifest.tagLinks, url: toImages(manifest.tagLinks.url) },
     shared: {
-      center: manifest.shared?.center && { ...manifest.shared.center, url: toShared(manifest.shared.center.url) },
-      generic: (manifest.shared?.generic ?? []).map((g) => ({ ...g, url: toShared(g.url) })),
-      genericDistill: (manifest.shared?.genericDistill ?? []).map((g) => g && { ...g, url: toShared(g.url) }),
+      center: manifest.shared?.center && { ...manifest.shared.center, url: toTile(manifest.shared.center.url) },
+      generic: (manifest.shared?.generic ?? []).map((g) => ({ ...g, url: toTile(g.url) })),
+      genericDistill: (manifest.shared?.genericDistill ?? []).map((g) => g && { ...g, url: toTile(g.url) }),
       // No urls to rewrite - a level names a width, not a location.
       levels: manifest.shared?.levels ?? [{ level: 0, dir: null }],
       distillLevels: manifest.shared?.distillLevels ?? [{ level: 0, dir: null }],

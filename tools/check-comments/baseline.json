@@ -50,9 +50,6 @@
   "packages/map/scoring.ts": {
     "conviction": 1
   },
-  "packages/pipeline/index.ts": {
-    "conviction": 1
-  },
   "packages/server/app.test.ts": {
     "conviction": 2
   },

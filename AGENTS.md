@@ -99,7 +99,7 @@ npm run check:requirements -- --update-baseline   # ... lower the allowed-uncove
 npm run check:comments             # comments and docs vs the mechanical "Comments and docs" rules, a required check
 npm run check:comments -- --list                  # ... and print every failing finding, baselined or not
 npm run check:comments -- --update-baseline       # ... lower the per-file allowance once findings are fixed
-npm run generate:mips -- --images <dir> [--shared-dir <dir>] [--center <name>]   # write the resolution pyramid in place; --shared-dir also pyramids the center render + generic/ tiles there
+npm run generate:mips -- --images <dir> [--center <name>]   # write the resolution pyramid in place, including <dir>/shared/'s center and generic tiles
 npm run generate:embeddings -- --images <dir>   # CLIP image embeddings: embeddings.bin + .json (needs the optional transformers install)
 npm run generate:search-fixture [-- --tile-collection <dir>]   # refresh packages/map/search-fixture/ and its report.json; run after any search weight or formula change
 npm run generate:animation                 # pack assets/animation/<cycle>/ frames into sprite sheets + manifest

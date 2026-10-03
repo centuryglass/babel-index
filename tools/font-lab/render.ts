@@ -427,7 +427,7 @@ async function main() {
   const caseFrame = g1.opening;
   const slots = buildSlots(books.length);
 
-  const centerUri = await dataUri(join(ROOT, 'assets', 'center_tile.png'), 'image/png');
+  const centerUri = await dataUri(join(ROOT, 'assets', 'tile-collection-sample', 'shared', 'center_tile.png'), 'image/png');
   const faces = [];
   for (const face of requiredFaces) {
     faces.push({ ...face, uri: await dataUri(faceFile(face), 'font/woff2') });

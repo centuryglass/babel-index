@@ -28,8 +28,8 @@ export interface SharedAsset extends Partial<ImageSize> {
 }
 
 /**
- * The shared tiles served from `--shared-dir`, and the pyramid rungs each set
- * has on disk. Read by `rooms.ts` (url resolution), `main.tsx` (warming),
+ * The shared tiles from the collection's `shared/` subdirectory (`scan.ts`'s
+ * `SHARED_TILES_DIR`), and the pyramid rungs each set has on disk. Read by `rooms.ts` (url resolution), `main.tsx` (warming),
  * and the favorite badge's drawing (`favoriteBadge.ts`, `render.ts`). The rest
  * of the fixed app art (the distill toggle, the "forget searches" overlay) is
  * in none of these and stays flat at level 0 (see `rooms.ts`'s header).
@@ -48,8 +48,8 @@ export interface SharedAssets {
   genericDistill: (SharedAsset | null)[];
   /**
    * The per-file rungs the center and every generic tile share on disk: the
-   * intersection of what `discoverLevels` finds under the shared directory's
-   * root (the center) and its `generic/` subdirectory. Always at least
+   * intersection of what `discoverLevels` finds under the collection's
+   * `shared/` root (the center) and its `generic/` subdirectory. Always at least
    * `[{level: 0, dir: null}]`.
    */
   levels: LevelInfo[];
@@ -62,9 +62,9 @@ export interface SharedAssets {
   /**
    * The favorite badge's pyramid: `fav_on.png`/`fav_off.png` scaled to the
    * tile's per-level widths (`scan.ts`'s `discoverFavoriteLevels`). A level
-   * counts only when both badge faces are present. The scaled files share the
-   * center tile's `<width>/` directories, but the discovery is independent of
-   * `levels`.
+   * counts only when both badge faces are present. The badge is fixed app
+   * art under `--shared-dir`, not collection content, and its discovery is
+   * independent of `levels`.
    */
   favoriteLevels: LevelInfo[];
 }

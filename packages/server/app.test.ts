@@ -23,12 +23,15 @@ async function serving(
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'babel-api-'));
   const contents = files ?? {
-    'center.png': fixture.png(1024, 1024),
+    'shared/center.png': fixture.png(1024, 1024),
     '001.jpg': fixture.jpeg(512, 512),
     '002.jpg': fixture.jpeg(512, 512),
     '003.png': fixture.png(256, 256),
   };
-  for (const [name, body] of Object.entries(contents)) await writeFile(join(dir, name), body);
+  for (const [name, body] of Object.entries(contents)) {
+    await mkdir(dirname(join(dir, name)), { recursive: true });
+    await writeFile(join(dir, name), body);
+  }
 
   const app = createApp({
     manifest: await scanDirectory(dir),
@@ -174,13 +177,13 @@ test('every url in the manifest actually serves', async () => {
   });
 });
 
-test('shared tiles are served from a shared directory outside the collection', async () => {
-  // The demo shape: the rooms are one directory, the shared tiles another.
+test('shared tiles are served from the collection, and fixed app art from --shared-dir', async () => {
   const rootFiles = {
     'rooms/001.jpg': fixture.jpeg(512, 512),
     'rooms/002.jpg': fixture.jpeg(512, 512),
-    'center_tile.png': fixture.png(1024, 768),
-    'generic/v1.webp': fixture.webpVp8(1024, 768),
+    'rooms/shared/center_tile.png': fixture.png(1024, 768),
+    'rooms/shared/generic/v1.webp': fixture.webpVp8(1024, 768),
+    'assets/fav_on.png': fixture.png(92, 198),
   };
   const root = await mkdtemp(join(tmpdir(), 'babel-shareddir-'));
   try {
@@ -190,10 +193,11 @@ test('shared tiles are served from a shared directory outside the collection', a
       await writeFile(path, body);
     }
     const imagesDir = join(root, 'rooms');
+    const sharedDir = join(root, 'assets');
     const app = createApp({
-      manifest: await scanDirectory(imagesDir, { sharedDir: root }),
+      manifest: await scanDirectory(imagesDir, { sharedDir }),
       imagesDir,
-      sharedDir: root,
+      sharedDir,
     });
     const server = app.listen(0);
     await new Promise<void>((r) => server.once('listening', () => r()));
@@ -201,9 +205,9 @@ test('shared tiles are served from a shared directory outside the collection', a
     try {
       const m = await (await fetch(`${origin}/api/manifest`)).json();
       assert.equal(m.count, 2, 'the shared tiles are not collection rooms');
-      assert.equal(m.shared.center.url, 'shared/center_tile.png');
-      assert.deepEqual(m.shared.generic.map((v) => v.url), ['shared/generic/v1.webp']);
-      for (const { url } of [m.shared.center, ...m.shared.generic]) {
+      assert.equal(m.shared.center.url, 'images/shared/center_tile.png');
+      assert.deepEqual(m.shared.generic.map((v) => v.url), ['images/shared/generic/v1.webp']);
+      for (const url of [m.shared.center.url, ...m.shared.generic.map((v) => v.url), `${m.sharedBase}/fav_on.png`]) {
         const res = await fetch(`${origin}/${url}`);
         assert.equal(res.status, 200, url);
         assert.ok((await res.arrayBuffer()).byteLength > 0, url);
@@ -231,7 +235,7 @@ test('the metadata sidecar is advertised and actually serves', async () => {
     },
     {
       files: {
-        'center.png': fixture.png(64, 64),
+        'shared/center.png': fixture.png(64, 64),
         '001.jpg': fixture.jpeg(64, 64),
         '002.jpg': fixture.jpeg(64, 64),
         'metadata.json': JSON.stringify(sidecar),
@@ -253,7 +257,7 @@ test('tagLinks.json is advertised and actually serves', async () => {
     },
     {
       files: {
-        'center.png': fixture.png(64, 64),
+        'shared/center.png': fixture.png(64, 64),
         '001.jpg': fixture.jpeg(64, 64),
         'tagLinks.json': JSON.stringify(tagLinks),
       },
@@ -386,7 +390,7 @@ test('/images will not serve anything outside the images directory', async () =>
         await rm(join(parent, name), { force: true });
       }
     },
-    { files: { 'center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) } }
+    { files: { 'shared/center.png': fixture.png(8, 8), '001.jpg': fixture.jpeg(8, 8) } }
   );
 });
 
@@ -564,7 +568,7 @@ test('GET /catalog lists real room links and titles, alphabetically, with correc
     },
     {
       files: {
-        'center.png': fixture.png(1024, 1024),
+        'shared/center.png': fixture.png(1024, 1024),
         '001.jpg': fixture.jpeg(512, 512),
         '002.jpg': fixture.jpeg(512, 512),
         '003.jpg': fixture.jpeg(512, 512),
@@ -596,7 +600,7 @@ test('GET /catalog/:slug is addressed by title, carries that room\'s content, an
     },
     {
       files: {
-        'center.png': fixture.png(1024, 1024),
+        'shared/center.png': fixture.png(1024, 1024),
         '001.jpg': fixture.jpeg(512, 512),
         '002.jpg': fixture.jpeg(512, 512),
         'metadata.json': JSON.stringify({
@@ -633,7 +637,7 @@ test('GET /map/:slug serves the same room content, opens map mode, and no-JS-red
     },
     {
       files: {
-        'center.png': fixture.png(1024, 1024),
+        'shared/center.png': fixture.png(1024, 1024),
         '001.jpg': fixture.jpeg(512, 512),
         '002.jpg': fixture.jpeg(512, 512),
         'metadata.json': JSON.stringify({
@@ -654,7 +658,7 @@ test('a titled room\'s stem and a stale slug redirect and stay on the /map prefi
     },
     {
       files: {
-        'center.png': fixture.png(1024, 1024),
+        'shared/center.png': fixture.png(1024, 1024),
         '001.jpg': fixture.jpeg(512, 512),
         'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
       },
@@ -680,7 +684,7 @@ test('a titled room\'s filename stem still resolves, redirecting to the title ur
     },
     {
       files: {
-        'center.png': fixture.png(1024, 1024),
+        'shared/center.png': fixture.png(1024, 1024),
         '001.jpg': fixture.jpeg(512, 512),
         'metadata.json': JSON.stringify({ '001.jpg': { title: 'Reading Room', keywords: [], story: null } }),
       },
