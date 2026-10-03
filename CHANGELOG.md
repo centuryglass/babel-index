@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.11.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.10.0...babel-index-v1.11.0) (2026-10-03)
+
+
+### Features
+
+* **curation:** add collection memory with a backfill and pattern report ([#451](https://github.com/centuryglass/babel-index/issues/451)) ([738ff98](https://github.com/centuryglass/babel-index/commit/738ff9855b697e3b6572689f79f3fd4e044188ae))
+
+
+### Bug Fixes
+
+* announce favorite status on the map and bind f to toggle it ([#450](https://github.com/centuryglass/babel-index/issues/450)) ([9d19cf6](https://github.com/centuryglass/babel-index/commit/9d19cf6185f71afd5f263d664f850621b69c4694)), closes [#436](https://github.com/centuryglass/babel-index/issues/436)
+* **deploy:** install dependencies before moving the checkout ([#449](https://github.com/centuryglass/babel-index/issues/449)) ([c234973](https://github.com/centuryglass/babel-index/commit/c234973aafab0a12177f0bf8683700e6ca2cc013)), closes [#329](https://github.com/centuryglass/babel-index/issues/329)
+
 ## [1.10.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.9.0...babel-index-v1.10.0) (2026-10-02)
 
 
