@@ -59,3 +59,10 @@ you" routes here, and its conventions still apply.
     tap handler (`main.tsx`) and hover path (`useMapRenderer.ts`,
     `useMapRendererGL.ts`) check it before hit-testing `favoriteHitRect`,
     which is padded to `MIN_FAVORITE_HIT_TOUCH` on a coarse pointer.
+- **The badge's keyboard path is `f` on the canvas, and it has no zoom
+  gate.** `useMapCursor.ts`'s `onMapKeyDown` toggles the room under the
+  cursor through `main.tsx`'s `favoriteFor`, the same call the badge tap
+  and the card's toggle make, so a favorites sort still animates. The
+  cursor's announcement carries the status, which is why the badge tooltip
+  is `aria-hidden`. A new favorite control on the map routes through
+  `favoriteFor` too, or the resort under a favorites sort is skipped.

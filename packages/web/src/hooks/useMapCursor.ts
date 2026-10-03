@@ -8,7 +8,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cellDistance, type MapLayout } from '../../../map/ordering.ts';
-import { describeCell, describeRoom, describeArrangement } from '../../../map/describe.ts';
+import {
+  describeCell, describeRoom, describeArrangement, describeFavoriteToggle, withFavoriteStatus,
+} from '../../../map/describe.ts';
 import { nextRoom, type Cell } from '../../../map/nextRoom.ts';
 import {
   CELL_ASPECT,
@@ -56,6 +58,13 @@ interface UseMapCursorOpts {
   onOpenCard: (args: OpenCardArgs) => void;
   /** `/` reaches the live search field */
   goToSearch: () => void;
+  /**
+   * whether a room is one of the reader's favorites; null with no favorite
+   * store, which leaves the status unsaid and the `f` key unbound
+   */
+  isFavorite: ((id: number) => boolean) | null;
+  /** `f` over a room toggles its favorite, as the badge and the card's toggle do */
+  toggleFavorite: (id: number) => void;
 }
 
 export function useMapCursor({
@@ -73,6 +82,8 @@ export function useMapCursor({
   requestDraw,
   onOpenCard,
   goToSearch,
+  isFavorite,
+  toggleFavorite,
 }: UseMapCursorOpts) {
   // --- the keyboard cursor ---------------------------------------------------
   //
@@ -101,6 +112,20 @@ export function useMapCursor({
   useEffect(() => {
     requestDraw();
   }, [cursor, requestDraw]);
+
+  /**
+   * A cell's per-cell name, with the favorite status of a room that is one.
+   * The arrival announcement, the canvas's label and `?` all read it, so a
+   * reader hears the status without opening the card.
+   */
+  const nameCell = useCallback(
+    (cell: Cell) => {
+      const name = describeCell(cell.x, cell.y, { layout, order, metadata }).name;
+      const at = layout.roomAt(cell.x, cell.y, order);
+      return withFavoriteStatus(name, !at.center && !at.generic && Boolean(isFavorite?.(at.id)));
+    },
+    [layout, order, metadata, isFavorite]
+  );
 
   // Carries the announcement's granularity across cursor moves, so a zoom held
   // near the threshold does not flicker between naming a cell and naming a
@@ -145,7 +170,7 @@ export function useMapCursor({
       const base =
         granularityRef.current === 'region'
           ? `the far field near (${cell.x}, ${cell.y}) - too far out to name a single room`
-          : describeCell(cell.x, cell.y, { layout, order, metadata }).name;
+          : nameCell(cell);
 
       const beyond = cellDistance(cell.x, cell.y, CELL_ASPECT) > layout.boundaryRadius;
       const crossed = beyond !== wasBeyondBoundary.current;
@@ -166,7 +191,7 @@ export function useMapCursor({
       lastAnnounced.current = { cell, text, padded };
       setStatus(padded ? `${text}\u00a0` : text);
     },
-    [cam, canvasRef, layout, order, metadata, setStatus, camera]
+    [cam, canvasRef, layout, nameCell, setStatus, camera]
   );
 
   /**
@@ -195,8 +220,8 @@ export function useMapCursor({
 
   /** `?` - the screen-reader equivalent of peripheral vision; see `describeSurroundings`. */
   const announceSurroundings = useCallback(() => {
-    setStatus(describeSurroundings(layout, order, metadata, cursor));
-  }, [layout, order, metadata, cursor, setStatus]);
+    setStatus(describeSurroundings(layout, order, metadata, cursor, nameCell(cursor)));
+  }, [layout, order, metadata, cursor, setStatus, nameCell]);
 
   // The cursor's own story and keyword chips, nested inside the canvas as real
   // fallback content - touch users get this through the DOM while a
@@ -218,10 +243,7 @@ export function useMapCursor({
   // anything into the live region. Always the plain per-cell name, independent
   // of the region/cell granularity split that only matters once movement is
   // in progress.
-  const cursorLabel = useMemo(
-    () => describeCell(cursor.x, cursor.y, { layout, order, metadata }).name,
-    [cursor, layout, order, metadata]
-  );
+  const cursorLabel = useMemo(() => nameCell(cursor), [cursor, nameCell]);
 
   const onMapKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLCanvasElement>) => {
@@ -363,12 +385,29 @@ export function useMapCursor({
       if (e.key === '?') {
         e.preventDefault();
         announceSurroundings();
+        return;
+      }
+
+      // `f` toggles the favorite under the cursor, the keyboard path to the
+      // badge. Modified presses pass through: `Ctrl/Cmd+F` is the browser's
+      // find. Unbound with no favorite store.
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey && isFavorite) {
+        e.preventDefault();
+        const here = cursorNow();
+        const at = layout.roomAt(here.x, here.y, order);
+        if (at.center || at.generic) {
+          setStatus('only a room can be a favorite');
+          return;
+        }
+        const on = !isFavorite(at.id);
+        toggleFavorite(at.id);
+        setStatus(describeFavoriteToggle(roomTitle(metadata?.[at.id] ?? null, at.id), on));
       }
     },
     [
       layout, order, flyTo, nudgeBy, flightTarget, cursorNow, camera, canvasRef,
       announceCursorMove, announceSurroundings, cam, onOpenCard, goToSearch,
-      setStatus, refuseHeldCamera,
+      setStatus, refuseHeldCamera, isFavorite, toggleFavorite, metadata,
     ]
   );
   // The room under the cursor, or null on the center cell and on wallpaper -
@@ -379,7 +418,7 @@ export function useMapCursor({
 }
 
 /**
- * `?`'s sentence: where the cursor is, the nearest ranked room in each
+ * `?`'s sentence: where the cursor is (`here`, the cursor's name), the nearest ranked room in each
  * cardinal direction (straight-line walks with `nextRoom`), and how far the
  * edge is. Spoken on request, not on every move, so the live region stays
  * quiet.
@@ -388,10 +427,9 @@ function describeSurroundings(
   layout: MapLayout,
   order: number[],
   metadata: (RoomMeta | null)[] | null,
-  cursor: Cell
+  cursor: Cell,
+  here: string
 ): string {
-  const here = describeCell(cursor.x, cursor.y, { layout, order, metadata }).name;
-
   const nearby = (
     [
       ['east', { dx: 1, dy: 0 }],
