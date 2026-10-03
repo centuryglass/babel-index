@@ -48,6 +48,8 @@ export interface WriteMipsResult {
   /** Levels whose embedded hash matched the source, so nothing was resized. */
   cached: number;
   source: Size;
+  /** The source's `contentHash`, for `writeSheets` to key its sheets on. */
+  hash: string;
 }
 
 /** A hash of the source file's bytes, embedded in every level scaled from it. */
@@ -84,6 +86,8 @@ async function embeddedHash(file: string): Promise<string | null> {
  * @param opts.outDir      root the <width>/ directories go under
  * @param opts.inPlace     outDir is the source's own directory
  * @param opts.quality     JPEG/WebP quality for the generated levels
+ * @param opts.levels      the ladder to write; `index.ts` passes only the
+ *                         per-file levels, below `SHEETS.fromLevel`
  */
 export async function writeMips({
   file,
@@ -135,7 +139,7 @@ export async function writeMips({
     written++;
   }
 
-  return { plan, written, skipped, cached, source: { w: meta.width, h: meta.height } };
+  return { plan, written, skipped, cached, source: { w: meta.width, h: meta.height }, hash };
 }
 
 /**

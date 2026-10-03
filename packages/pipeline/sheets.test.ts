@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { sheetPlan, sheetPosition, sheetDirName, sheetFileName, writeSheets } from './sheets.ts';
+import { contentHash } from './mips.ts';
 
 async function makeImage(path: string, w: number, h: number, background = { r: 40, g: 34, b: 28 }) {
   const buf = await sharp({ create: { width: w, height: h, channels: 3, background } })
@@ -64,14 +65,22 @@ test('directory and file naming', () => {
 
 // --- writing -------------------------------------------------------------
 
+const TILE = { w: 64, h: 48 };
+
+/** Sources at twice the tile size under `<dir>/src`, and the level dir the sheets are named for. */
+async function makeCollection(dir: string, count: number) {
+  const sourceDir = join(dir, 'src');
+  await mkdir(sourceDir, { recursive: true });
+  const files = Array.from({ length: count }, (_, i) => `${String(i).padStart(3, '0')}.jpg`);
+  for (const f of files) await makeImage(join(sourceDir, f), TILE.w * 2, TILE.h * 2);
+  return { sourceDir, levelDir: join(dir, String(TILE.w)), files };
+}
+
 test('writes one sheet per roomsPerSheet rooms, at the packed grid size', async () => {
   await withTempDir(async (dir) => {
-    const levelDir = join(dir, '64');
-    await mkdir(levelDir, { recursive: true });
-    const files = ['000.jpg', '001.jpg', '002.jpg', '003.jpg', '004.jpg'];
-    for (const f of files) await makeImage(join(levelDir, f), 64, 48);
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 5);
 
-    const result = await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    const result = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
     assert.equal(result.sheetCount, 2);
     assert.equal(result.written, 2);
     assert.equal(result.cached, 0);
@@ -83,15 +92,37 @@ test('writes one sheet per roomsPerSheet rooms, at the packed grid size', async 
   });
 });
 
-test('a second run against unchanged tiles recomposites nothing', async () => {
+test('no per-file tile is written for a sheet-packed level', async () => {
   await withTempDir(async (dir) => {
-    const levelDir = join(dir, '64');
-    await mkdir(levelDir, { recursive: true });
-    const files = ['000.jpg', '001.jpg', '002.jpg', '003.jpg'];
-    for (const f of files) await makeImage(join(levelDir, f), 64, 48);
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 4);
+    await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
 
-    const first = await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
-    const second = await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    assert.deepEqual((await readdir(dir)).sort(), ['64-sheets', 'src']);
+  });
+});
+
+test('each room lands resized in its own cell', async () => {
+  await withTempDir(async (dir) => {
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 2);
+    await makeImage(join(sourceDir, files[1]), TILE.w * 2, TILE.h * 2, { r: 220, g: 20, b: 20 });
+    await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
+
+    // Sample the middle of cells 0 and 1, away from JPEG bleed at the seam.
+    const { data, info } = await sharp(join(levelDir + '-sheets', 'sheet-0000.jpg'))
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const red = (x: number, y: number) => data[(y * info.width + x) * info.channels];
+    assert.ok(red(TILE.w / 2, TILE.h / 2) < 80, 'cell 0 holds the dark room');
+    assert.ok(red(TILE.w + TILE.w / 2, TILE.h / 2) > 180, 'cell 1 holds the red room');
+  });
+});
+
+test('a second run against unchanged sources recomposites nothing', async () => {
+  await withTempDir(async (dir) => {
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 4);
+
+    const first = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
+    const second = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
 
     assert.equal(first.written, 1);
     assert.equal(second.written, 0);
@@ -99,30 +130,46 @@ test('a second run against unchanged tiles recomposites nothing', async () => {
   });
 });
 
-test('changing one member tile invalidates only the sheet it belongs to', async () => {
+test('changing one source invalidates only the sheet it belongs to', async () => {
   await withTempDir(async (dir) => {
-    const levelDir = join(dir, '64');
-    await mkdir(levelDir, { recursive: true });
-    const files = ['000.jpg', '001.jpg', '002.jpg', '003.jpg', '004.jpg', '005.jpg'];
-    for (const f of files) await makeImage(join(levelDir, f), 64, 48);
-    await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 6);
+    await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
 
     // Only member 004.jpg (sheet 1) changes.
-    await makeImage(join(levelDir, '004.jpg'), 64, 48, { r: 200, g: 10, b: 10 });
-    const second = await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    await makeImage(join(sourceDir, '004.jpg'), TILE.w * 2, TILE.h * 2, { r: 200, g: 10, b: 10 });
+    const second = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
 
-    assert.equal(second.written, 1, 'only the sheet containing the changed tile is rebuilt');
+    assert.equal(second.written, 1, 'only the sheet containing the changed room is rebuilt');
     assert.equal(second.cached, 1, 'the untouched sheet is left alone');
+  });
+});
+
+test('a new quality rebuilds every sheet', async () => {
+  await withTempDir(async (dir) => {
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 4);
+    await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG, quality: 82 });
+    const second = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG, quality: 60 });
+
+    assert.equal(second.written, 1);
+    assert.equal(second.cached, 0);
+  });
+});
+
+test('passed source hashes stand in for hashing the sources', async () => {
+  await withTempDir(async (dir) => {
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 4);
+    const sourceHashes = await Promise.all(files.map((f) => contentHash(join(sourceDir, f))));
+    await writeSheets({ sourceDir, levelDir, files, sourceHashes, tileSize: TILE, plan: CONFIG });
+    const second = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
+
+    assert.equal(second.cached, 1, 'a hashed run and a passed-hashes run key a sheet the same way');
   });
 });
 
 test('the hashes sidecar records one combined hash per sheet', async () => {
   await withTempDir(async (dir) => {
-    const levelDir = join(dir, '64');
-    await mkdir(levelDir, { recursive: true });
-    const files = ['000.jpg', '001.jpg', '002.jpg', '003.jpg'];
-    for (const f of files) await makeImage(join(levelDir, f), 64, 48);
-    await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 4);
+    await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
 
     const hashes = JSON.parse(await readFile(join(levelDir + '-sheets', 'hashes.json'), 'utf8'));
     assert.deepEqual(Object.keys(hashes), ['0']);
@@ -132,12 +179,9 @@ test('the hashes sidecar records one combined hash per sheet', async () => {
 
 test('a partial final sheet is still written, holding fewer rooms', async () => {
   await withTempDir(async (dir) => {
-    const levelDir = join(dir, '64');
-    await mkdir(levelDir, { recursive: true });
-    const files = ['000.jpg', '001.jpg', '002.jpg'];
-    for (const f of files) await makeImage(join(levelDir, f), 64, 48);
+    const { sourceDir, levelDir, files } = await makeCollection(dir, 3);
 
-    const result = await writeSheets({ levelDir, files, tileSize: { w: 64, h: 48 }, plan: CONFIG });
+    const result = await writeSheets({ sourceDir, levelDir, files, tileSize: TILE, plan: CONFIG });
     assert.equal(result.sheetCount, 1);
     assert.equal(result.written, 1);
   });

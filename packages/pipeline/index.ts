@@ -12,7 +12,8 @@
  * on a collection directory changes nothing that was already there. Reruns skip
  * work that is still current - see `mips.ts`.
  *
- * The coarse levels are then repacked into shared sheets (`sheets.ts`).
+ * The coarse levels, from `SHEETS.fromLevel` on, are resized straight into
+ * shared sheets (`sheets.ts`) and never written per-file.
  *
  * --shared-dir additionally pyramids the center render and every `generic/`
  * and `generic_distill/` tile found there, in place - see `shared-mips.ts`.
@@ -25,11 +26,10 @@
  */
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
 import sharp from 'sharp';
 import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
 import { mipPlan, writeMips, sourceImages, checkSizes, type SourceSize } from './mips.ts';
-import { writeSheets } from './sheets.ts';
+import { writeSheets, sheetDirName } from './sheets.ts';
 import { writeSharedMips } from './shared-mips.ts';
 
 const argv = parseArgs(process.argv.slice(2));
@@ -68,7 +68,12 @@ if (outliers.length) {
   process.exit(1);
 }
 
+// Levels from `SHEETS.fromLevel` on are packed into shared sheets, resized
+// straight from the sources by `writeSheets`; only the levels below it are
+// written per-file.
 const plan = mipPlan(sizes[0], LEVELS);
+const perFileLevels = LEVELS.filter((step) => step.level < SHEETS.fromLevel);
+const isPacked = (step: { level: number }) => step.level >= SHEETS.fromLevel;
 console.log(`\n  ${files.length} rooms in ${imagesDir}`);
 console.log(`  source ${sizes[0].w}x${sizes[0].h}`);
 if (plan.length < LEVELS.length)
@@ -76,15 +81,19 @@ if (plan.length < LEVELS.length)
 for (const step of plan)
   console.log(
     `    level ${step.level}  ${step.w}x${step.h}` +
-      (step.level === 0 && inPlace ? '  (already on disk)' : `  -> ${step.dir}/`)
+      (step.level === 0 && inPlace
+        ? '  (already on disk)'
+        : `  -> ${isPacked(step) ? sheetDirName(step.w) : step.dir}/`)
   );
 console.log(inPlace ? '\n  writing in place ...\n' : `\n  writing to ${outDir} ...\n`);
 
 let written = 0;
 let cached = 0;
 let done = 0;
+const sourceHashes: string[] = [];
 for (const file of files) {
-  const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality });
+  const result = await writeMips({ file: join(imagesDir, file), outDir, inPlace, quality, levels: perFileLevels });
+  sourceHashes.push(result.hash);
   written += result.written;
   cached += result.cached;
   done++;
@@ -92,27 +101,23 @@ for (const file of files) {
     process.stdout.write(`  ${done}/${files.length} rooms, ${written} files written, ${cached} unchanged\r`);
 }
 
-console.log(`\n\n  done: ${written} files written, ${cached} unchanged, across ${plan.length} levels\n`);
+console.log(`\n\n  done: ${written} files written, ${cached} unchanged\n`);
 
-// The coarse levels are packed into shared sheets - see `SHEETS` and
-// `writeSheets`. Every level is written per-file first, and a sheet is
-// composited from those files rather than from the source, so once a packed
-// level's sheets are current its per-file directory is scratch and is removed:
-// `discoverLevels` reads that level from the sheets.
-//
-// A later rerun resizes into the directory again before repacking. That costs
-// no sheet work, because the resize is deterministic and a sheet's
-// `hashes.json` entry still matches unless one of its rooms changed.
-const sheetSteps = plan.filter((step) => step.level >= SHEETS.fromLevel);
+const sheetSteps = plan.filter(isPacked);
 if (sheetSteps.length) {
   console.log(`  packing ${sheetSteps.length} level(s) into ${SHEETS.roomsPerSheet}-room sheets ...\n`);
   for (const step of sheetSteps) {
-    const levelDir = join(outDir, step.dir ?? '');
-    const result = await writeSheets({ levelDir, files, tileSize: { w: step.w, h: step.h }, quality });
+    const result = await writeSheets({
+      sourceDir: imagesDir,
+      levelDir: join(outDir, step.dir ?? ''),
+      files,
+      sourceHashes,
+      tileSize: { w: step.w, h: step.h },
+      quality,
+    });
     console.log(
       `    level ${step.level}  ${result.sheetCount} sheet(s), ${result.written} written, ${result.cached} unchanged`
     );
-    await rm(levelDir, { recursive: true, force: true });
   }
   console.log('');
 }

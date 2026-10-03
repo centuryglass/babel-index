@@ -18,11 +18,13 @@
  *
  * A sheet has no single source file to stamp with an EXIF hash the way
  * `mips.ts` stamps a per-file level, so each sheet directory carries a
- * `hashes.json` sidecar instead: sheet index -> a hash of its member tiles'
- * content hashes, in order. A rebuild recomposites only the sheets whose
- * combined hash moved, so one touched room costs O(sheet size) rather than
- * O(collection size). See `diffAgainstManifest` in tools/upload/lib.ts for the
- * re-upload unit that follows once a sheet is synced to R2.
+ * `hashes.json` sidecar instead: sheet index -> a hash of the tile size, the
+ * quality and its members' source content hashes, in order. Only a sheet whose
+ * combined hash moved is rebuilt, and only its members are resized, so an
+ * unchanged collection costs no image work and one touched room costs O(sheet
+ * size) rather than O(collection size). See `diffAgainstManifest` in
+ * tools/upload/lib.ts for the re-upload unit that follows once a sheet is
+ * synced to R2.
  */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -38,22 +40,31 @@ export type { SheetConfig, SheetPlan, SheetPosition } from './layout.ts';
 const HASHES_FILE = 'hashes.json';
 
 /**
- * Composite one level's already-written per-file tiles into fixed-grid sheets
- * under `<levelDir>-sheets/`.
+ * Resize one level's rooms straight from their sources into fixed-grid sheets
+ * under `<levelDir>-sheets/`. `levelDir` only names the sheets; no per-file
+ * tile is written for a sheet-packed level.
  *
  * `files` must be in the order `mips.ts`'s `sourceImages` returns, which is the
  * order room ids are assigned in: sheet addressing is positional, so a
  * reordering here silently mislabels every sheet after the change.
+ *
+ * @param opts.sourceDir     directory holding `files`, the level-0 sources
+ * @param opts.sourceHashes  `contentHash` of each file, aligned with `files`;
+ *                           hashed here when omitted
  */
 export async function writeSheets({
+  sourceDir,
   levelDir,
   files,
+  sourceHashes,
   tileSize,
   quality = 82,
   plan,
 }: {
+  sourceDir: string;
   levelDir: string;
   files: string[];
+  sourceHashes?: string[];
   tileSize: Size;
   quality?: number;
   plan?: SheetConfig;
@@ -70,7 +81,10 @@ export async function writeSheets({
     // no sidecar yet, or unreadable - rebuild every sheet
   }
 
-  const tileHashes = await Promise.all(files.map((f) => contentHash(join(levelDir, f))));
+  const hashes = sourceHashes ?? (await Promise.all(files.map((f) => contentHash(join(sourceDir, f)))));
+  // The encoding settings are part of the key, so a new tile size or quality
+  // rebuilds every sheet even though no source changed.
+  const settings = `${tileSize.w}x${tileSize.h}:q${quality}:`;
 
   let written = 0;
   let cached = 0;
@@ -79,8 +93,10 @@ export async function writeSheets({
   for (let sheetIndex = 0; sheetIndex < layout.sheetCount; sheetIndex++) {
     const start = sheetIndex * layout.roomsPerSheet;
     const members = files.slice(start, start + layout.roomsPerSheet);
-    const memberHashes = tileHashes.slice(start, start + layout.roomsPerSheet);
-    const combined = createHash('sha256').update(memberHashes.join('')).digest('hex');
+    const memberHashes = hashes.slice(start, start + layout.roomsPerSheet);
+    const combined = createHash('sha256')
+      .update(settings + memberHashes.join(''))
+      .digest('hex');
     nextHashes[sheetIndex] = combined;
 
     if (previousHashes[String(sheetIndex)] === combined) {
@@ -88,13 +104,23 @@ export async function writeSheets({
       continue;
     }
 
+    // Resized to raw pixels, so the sheet's JPEG encode is the only lossy step.
+    // `lanczos3` matches `writeMips`, for the moire reason stated there.
     // Row-major, the same order `sheetPosition` reports, so a client asking for
     // room i lands on the cell this pasted it into.
-    const composite = members.map((file, i) => ({
-      input: join(levelDir, file),
-      left: (i % layout.cols) * tileSize.w,
-      top: Math.floor(i / layout.cols) * tileSize.h,
-    }));
+    const composite = await Promise.all(
+      members.map(async (file, i) => ({
+        input: await sharp(join(sourceDir, file))
+          .resize(tileSize.w, tileSize.h, { kernel: 'lanczos3' })
+          .removeAlpha()
+          .toColourspace('srgb')
+          .raw()
+          .toBuffer(),
+        raw: { width: tileSize.w, height: tileSize.h, channels: 3 as const },
+        left: (i % layout.cols) * tileSize.w,
+        top: Math.floor(i / layout.cols) * tileSize.h,
+      }))
+    );
 
     // A part-filled final sheet keeps the whole grid, black where it has no
     // room: every sheet of a level is one size, as `sheetPosition` assumes.
