@@ -4,14 +4,16 @@ The HTTP surface `packages/server/app.ts` exposes under `/api/` (plus the
 admin log viewer's HTML pages). It is an internal contract between the
 bundled client (`packages/web`) and its own server, not a public
 integration surface: there is no versioning, no auth beyond the favorites
-client id and the admin log viewer, and no stability guarantee to anything
+client id and the admin routes, and no stability guarantee to anything
 but this repo's client.
 
 **Keep this in sync.** A route added, removed, or reshaped in `app.ts` is
 not done until this file says so; `app.ts`'s header says the same.
 
 All responses are JSON unless noted, and every error body is
-`{ error: string }`. The full manifest shape is the `ManifestResponse` type
+`{ error: string }`. A route that throws answers `500` with
+`{ error: "internal server error" }`; the error and its stack go to the
+server log, never to the browser. The full manifest shape is the `ManifestResponse` type
 in `packages/map/manifest.ts`; the other routes build their responses
 inline in `app.ts`, and this page gives those shapes.
 
@@ -23,6 +25,8 @@ inline in `app.ts`, and this page gives those shapes.
 | `POST /api/favorites/:file`      | `--favorites`                             | favorite a room                          |
 | `DELETE /api/favorites/:file`    | `--favorites`                             | un-favorite a room                       |
 | `GET /api/health`                | always                                    | running commit and room count            |
+| `POST /api/client-errors`        | always                                    | the browser's error beacon               |
+| `GET /api/metrics`               | `ADMIN_PASSWORD_HASH`                     | request, search and client error counters |
 | `GET /api/logs`                  | `LOG_FILE` and `ADMIN_PASSWORD_HASH`      | recent log entries, JSON                 |
 | `GET /admin/logs`                | `LOG_FILE` and `ADMIN_PASSWORD_HASH`      | the same, as an HTML page                |
 | `GET /admin/logs/fragment`       | `LOG_FILE` and `ADMIN_PASSWORD_HASH`      | the page's entry list, for its polling   |
@@ -114,6 +118,51 @@ VPS"). The client does not call it.
     healthy empty library.
 - `Cache-Control: no-store`.
 
+## `POST /api/client-errors`
+
+The browser's error beacon (`packages/web/src/lib/errorReport.ts`). The
+client sends one report per distinct failure per page load, up to
+`MAX_REPORTS`, for an uncaught error, an unhandled rejection, a crash caught
+by the error boundary around the app, or a lost WebGL context.
+
+- **Body**: JSON, read whatever the `Content-Type` (the client sends
+  `text/plain` through `navigator.sendBeacon`), at most 16 KB:
+  `{ kind, message, stack?, url?, renderer? }`.
+  - `kind`: `error`, `unhandledrejection`, `render` or `webglcontextlost`;
+    any other value is stored as `other`.
+  - `message`: required, non-empty.
+  - `url`: the page, stored without its query string or fragment.
+  - `renderer`: `gl` or `canvas2d`.
+  - Unknown fields are dropped, and each string is truncated
+    (`packages/server/client-errors.ts`).
+- **Response**: `204`, no body.
+- The report is logged at `warn` as `client error`, with `client: true` and
+  the request's `User-Agent`, and counted in `/api/metrics`.
+- **Errors**: `400` malformed JSON or no usable `message`, `413` body over
+  the cap, `429` past a per-address rate limit (a burst of 10, then one
+  every 6 seconds).
+
+## `GET /api/metrics`
+
+In-process counters for the operator (`packages/server/request-stats.ts`).
+Everything resets when the process restarts.
+
+- **Auth**: the same HTTP Basic check and rate limit as `/api/logs`. Mounted
+  whenever `ADMIN_PASSWORD_HASH` is set; it needs no `LOG_FILE`.
+- **Response**:
+  - `uptimeSeconds: number`
+  - `requests: { total, serverErrors, byRoute }`. `byRoute` maps a route
+    pattern (`/api/favorites/:file`) to `{ count, serverErrors }`. Static
+    files count under `/images/*`, `/shared/*` or `(static)`, and a request
+    nothing answered under `(unmatched)`.
+  - `search: { samples, p50Ms, p95Ms, p99Ms }`: `/api/search` response
+    times over its most recent requests, or `null` percentiles before the
+    first search.
+  - `searchQueue: { saturations, peakQueued }`: how often a CLIP inference
+    waited for a free slot, and the deepest the queue has been.
+  - `clientErrors: number`: reports `/api/client-errors` accepted.
+- `Cache-Control: no-store`.
+
 ## `GET /api/logs`
 
 Recent entries from the server's log file, for the admin log viewer at
@@ -135,16 +184,17 @@ without an ssh session.
 - `Cache-Control: no-store`.
 - Mounted only when both `LOG_FILE` and `ADMIN_PASSWORD_HASH` are set (env
   vars, not flags, since the second is a secret). With only one set, the
-  server logs a startup warning and mounts none of the three admin routes,
+  server logs a startup warning and mounts none of the three log routes,
   so logs are never served unauthenticated.
 - **Errors**:
   - `401` with a `WWW-Authenticate` challenge on missing or wrong
     credentials.
   - `429` past `admin-auth.ts`'s per-address rate limit. Every request
     spends a token before the password is checked, right or wrong.
-- Every request to the three admin routes is itself logged (`ip`, path,
-  outcome): success at `info`, a wrong password or a rate-limited request
-  at `warn`. The attempted password is never logged.
+- Every request to an admin route (these three and `/api/metrics`) is
+  itself logged (`ip`, path, outcome): success at `info`, a wrong password
+  or a rate-limited request at `warn`. The attempted password is never
+  logged.
 
 ## `GET /admin/logs`
 
@@ -158,6 +208,13 @@ and mounting condition as `/api/logs`.
 The `<ul id="entries">` markup `/admin/logs` embeds, returned as HTML for
 that page's polling script. Same query params, auth and mounting condition
 as `/api/logs`.
+
+## Request log
+
+Every response is logged once, after it finishes, with `method`, `route`,
+`path`, `status` and `ms`. The address and the query string are never
+logged. A 5xx logs at `warn`, `/images`, `/shared` and the page's own
+static files at `debug`, and everything else at `info`.
 
 ## Usage metrics
 

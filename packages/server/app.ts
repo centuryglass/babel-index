@@ -33,6 +33,8 @@ import type { Config } from '../config/config.ts';
 import type { FavoriteStore } from './favorites.ts';
 import { withClipCache } from './clip-cache.ts';
 import type { UsageMetrics } from './metrics.ts';
+import { createRequestStats, requestLog } from './request-stats.ts';
+import { parseClientError } from './client-errors.ts';
 
 /** A resolved config as `loadConfig()` (packages/config/load.ts) returns it -
  *  `Config` plus where it came from, if anywhere. */
@@ -142,8 +144,9 @@ export interface CreateAppOptions {
    *  so logs are never served unauthenticated. This is the rule's one home;
    *  index.ts warns at startup when only one of the two env vars is set. */
   logFile?: string | null;
-  /** admin-auth.ts's hashPassword() output, gating the log routes. Needs
-   *  `logFile` too - see that option. */
+  /** admin-auth.ts's hashPassword() output, gating the admin routes:
+   *  `/api/metrics` on its own, the log routes only with `logFile` too (see
+   *  that option). */
   adminPasswordHash?: string | null;
   /** where hourly usage counts are recorded (see metrics.ts). Absent,
    *  visits, searches and favorite writes are not counted. */
@@ -178,6 +181,14 @@ export function createApp({
   // client pick its own address - which here means picking its own rate
   // budget, one per request, without limit.
   if (trustProxy !== false) app.set('trust proxy', trustProxy);
+
+  // First, so every response below - static files and the error handler's
+  // 500s included - is logged and counted (request-stats.ts).
+  const requestStats = createRequestStats();
+  app.use(requestLog(requestStats));
+
+  // One instance for every admin route (see requireAdminAuth).
+  const adminAuth = adminPasswordHash ? requireAdminAuth(adminPasswordHash) : null;
 
   // Config rides on the manifest: the client already blocks on this fetch
   // before it can render, so it never sees a map that doesn't yet know its
@@ -241,8 +252,8 @@ export function createApp({
    * log-reader.ts). No caching: the point of this view is what's true right
    * now.
    */
-  if (logFile && adminPasswordHash) {
-    const auth = requireAdminAuth(adminPasswordHash);
+  if (logFile && adminAuth) {
+    const auth = adminAuth;
     const parseLogQuery = (req: Request) => {
       const minLevel = Number(req.query.minLevel);
       const limit = Number(req.query.limit);
@@ -272,6 +283,46 @@ export function createApp({
       res.type('html').send(renderEntryList(entries));
     });
   }
+
+  /**
+   * In-process counters for the operator, behind the admin password:
+   * request and 5xx counts by route, `/api/search` latency percentiles and
+   * queueing, and client error reports. Reset on restart. Shapes are in
+   * request-stats.ts and docs/api.md.
+   */
+  if (adminAuth)
+    app.get('/api/metrics', adminAuth, (_req, res) => {
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        uptimeSeconds: Math.round(process.uptime()),
+        ...requestStats.snapshot(),
+        searchQueue: { ...searchQueue },
+      });
+    });
+
+  /**
+   * The browser's error beacon (packages/web/src/lib/errorReport.ts): an
+   * uncaught error, an unhandled rejection, a render crash or a lost WebGL
+   * context, logged at `warn` with `client: true` so the log viewer can tell
+   * it from a server error. Always mounted, since a broken page is worth
+   * knowing about whether or not anything else is configured.
+   *
+   * `navigator.sendBeacon` cannot set a JSON content type without a
+   * preflight, so the parser accepts any type. The body cap, the field
+   * checks in client-errors.ts and a per-address rate bucket bound what one
+   * page can write to the log. A logged report gets a 204 with no body.
+   */
+  const clientErrorBuckets = createRateBuckets({ burst: CLIENT_ERROR_BURST, refillMs: CLIENT_ERROR_REFILL_MS });
+  app.post('/api/client-errors', express.json({ limit: CLIENT_ERROR_MAX_BODY, type: () => true }), (req, res) => {
+    const report = parseClientError(req.body);
+    if (!report) return res.status(400).json({ error: 'expected { message: string, ... }' });
+    // req.ip is undefined only for a socket that has already gone away.
+    if (!clientErrorBuckets.take(req.ip ?? ''))
+      return res.status(429).json({ error: 'too many error reports - try again in a moment' });
+    requestStats.recordClientError();
+    logger.warn({ client: true, ...report, userAgent: req.get('User-Agent')?.slice(0, 300) }, 'client error');
+    res.status(204).end();
+  });
 
   // Which room files exist, for the favorite routes to validate against. Fixed
   // for the process's lifetime, like the manifest it reads: the collection is
@@ -717,8 +768,36 @@ export function createApp({
     };
   }
 
+  /**
+   * The error handler, last so every route's `next(err)` and every throw
+   * reaches it. A 4xx an error carries (a malformed or oversized JSON body
+   * from `express.json`) keeps its status and logs at `warn`. Anything else
+   * is a 500 logged at `error` with its stack, which the browser never sees.
+   * A response already partly sent cannot change status, so that case goes
+   * to Express's own handler to close the connection.
+   */
+  type RouteError = { status?: number; statusCode?: number; expose?: boolean; message?: string };
+  app.use((err: RouteError, req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
+    const status = err?.status ?? err?.statusCode;
+    const path = req.originalUrl.split('?')[0];
+    if (status && status >= 400 && status < 500) {
+      logger.warn({ method: req.method, path, status, message: err.message }, 'request rejected');
+      // `expose` is http-errors' flag for a message safe to show a client.
+      return res.status(status).json({ error: err.expose && err.message ? err.message : 'bad request' });
+    }
+    logger.error({ err, method: req.method, path }, 'unhandled route error');
+    res.status(500).json({ error: 'internal server error' });
+  });
+
   return app;
 }
+
+/** `/api/client-errors`' body cap, in `express.json`'s size notation. */
+const CLIENT_ERROR_MAX_BODY = '16kb';
+/** `/api/client-errors`' per-address budget: a burst, then one report per refill. */
+const CLIENT_ERROR_BURST = 10;
+const CLIENT_ERROR_REFILL_MS = 6_000;
 
 /**
  * Whether the CLIP text tower can be loaded at all.
@@ -762,8 +841,12 @@ const embedCache = createLruCache(EMBED_CACHE_SIZE);
 // spike leaves a trace in the journal.
 const SATURATION_LOG_INTERVAL_MS = 5_000;
 let lastSaturationLog = 0;
+/** How often a search has queued, and the deepest queue seen, since startup - for `/api/metrics`. */
+const searchQueue = { saturations: 0, peakQueued: 0 };
 const embedLimiter = createLimiter(Math.max(1, availableParallelism()), {
   onSaturated: ({ active, queued }) => {
+    searchQueue.saturations++;
+    searchQueue.peakQueued = Math.max(searchQueue.peakQueued, queued);
     const now = Date.now();
     if (now - lastSaturationLog < SATURATION_LOG_INTERVAL_MS) return;
     lastSaturationLog = now;

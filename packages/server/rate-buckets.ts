@@ -1,8 +1,8 @@
 /**
  * Token buckets, one per key, for throttling how fast one caller can hit an
  * endpoint. Shared by `app.ts`'s favorite writes (keyed on `req.ip`, per
- * docs/agents/favorites.md's "Favorites") and `admin-auth.ts`'s login attempts
- * (also `req.ip` - the one thing an attacker can't mint a fresh one of for
+ * docs/agents/favorites.md's "Favorites"), its client error reports, and
+ * `admin-auth.ts`'s login attempts (also `req.ip` - the one thing an attacker can't mint a fresh one of for
  * free, unlike a header). In memory and never persisted: a restart forgets
  * everyone, and no record of who asked for what is kept.
  */

@@ -43,6 +43,7 @@ import { createGLSlideRenderer, type GLSlideDrawResult } from '../lib/glSlideRen
 import type { RunningAnim } from './useMapRenderer.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
+import { errorReporter } from '../lib/errorReport.ts';
 import { DEFAULTS } from '../../../config/config.ts';
 
 /** Coarse-pointer hit padding, same check and reason as `useMapRenderer.ts`'s `COARSE_POINTER`. */
@@ -455,10 +456,12 @@ export function useMapRendererGL({
     // `preventDefault()` is required or the browser never attempts recovery.
     // On restore, `setup()` builds a fresh context, renderers and texture
     // caches; the old handles are dropped, not reused - none of them is still
-    // valid.
+    // valid. A loss is reported (`errorReport.ts`) even when a restore
+    // follows, since it says the device is under GPU pressure.
     const onContextLost = (e: Event) => {
       e.preventDefault();
       runtime = null;
+      errorReporter.report('webglcontextlost', 'WebGL context lost');
     };
     const onContextRestored = () => {
       setup();

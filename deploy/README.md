@@ -219,8 +219,9 @@ ADMIN_PASSWORD_HASH=<paste from hash-admin-password>
 
 Then restart the service.
 
-- Either variable alone logs a startup warning and mounts nothing
-  (`packages/server/index.ts`).
+- Either variable alone logs a startup warning and mounts no log route
+  (`packages/server/index.ts`). `ADMIN_PASSWORD_HASH` alone still mounts
+  `/api/metrics`, the request and error counters.
 - To rotate the password, run `hash-admin-password` again and paste the new
   hash.
 - The log file is untracked, so deploys leave it alone, and it rotates past
@@ -231,6 +232,14 @@ Then restart the service.
 `workflow_run` and `workflow_dispatch` fire only for a workflow file on the
 default branch. Until `deploy.yml` is on main, nothing deploys and no
 *Run workflow* button appears.
+
+### 5. An uptime monitor (optional)
+
+Nothing on the box notices when the whole site is down. Point an external
+monitor (UptimeRobot, Better Stack, or a cron `curl` on another machine) at
+the public `/api/health` url and alert on anything but a 200 with
+`"ok":true`. "Up but broken" is covered by the server itself: see
+`docs/architecture.md`'s "Observability".
 
 ## Things that will bite you
 

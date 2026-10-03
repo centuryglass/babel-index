@@ -42,7 +42,9 @@
  *
  * Hourly usage counts (unique visitors, searches, favorite adds/removes) are
  * always logged, with no flag to turn them off - see metrics.ts for what they
- * keep.
+ * keep. So is one line per request, and every error report the browser sends
+ * (request-stats.ts, client-errors.ts); `ADMIN_PASSWORD_HASH` alone mounts
+ * their counters at /api/metrics.
  *
  * The routes live in app.ts; this file is the CLI around them, and the place
  * the tuning config is read (packages/config) and reported. Ranking happens on
@@ -304,6 +306,22 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {
     void (favorites?.flush() ?? Promise.resolve()).finally(() => process.exit(0));
   });
+
+// Without these, an exception that escapes every handler kills the process
+// with a stack on stderr only, outside LOG_FILE and /admin/logs. Logged at
+// `fatal` and then exited, so systemd's restart still happens: carrying on
+// after an uncaught exception leaves the process in an unknown state.
+// pino flushes stdout on exit and log-file.ts writes synchronously, so the
+// line lands before the process ends (the dev-only pino-pretty transport may
+// drop it).
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught exception - exiting');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'unhandled promise rejection - exiting');
+  process.exit(1);
+});
 
 /** Non-internal IPv4 addresses, for testing the map on a device that is not this one. */
 function lanAddresses() {

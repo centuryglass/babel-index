@@ -27,7 +27,8 @@ Browser  <-- HTML/JS/CSS, /api/* -->  Express (packages/server)
 - **Client**: `packages/web` - a React app drawing the map on a canvas,
   plus the "catalog", a conventional list view of the same collection.
 - **Server**: `packages/server` - Express routes for the manifest, search,
-  favorites, health, the admin log viewer, and server-rendered catalog,
+  favorites, health, the admin log viewer and metrics, the client error
+  beacon, and server-rendered catalog,
   room, help and about pages for crawlers and no-JS readers.
 - **Shared logic**: `packages/map` (placement, ranking, scoring; no DOM)
   and `packages/config` (tunable numbers) are imported by both client and
@@ -129,6 +130,38 @@ rules. It is applied by hand, since it is independent of releases.
   browser is relative.
 
 `deploy/README.md` has the one-time VPS setup and the rollback steps.
+
+## Observability
+
+One structured log (`pino`, through `packages/server/logger.ts`) carries
+everything. With `LOG_FILE` set it is also written to a rotating file that
+the password-protected `/admin/logs` viewer reads, so the operator can read
+it from a phone without ssh.
+
+| Signal | Where it is recorded | Level |
+| --- | --- | --- |
+| Every request: method, route, path, status, duration | `request-stats.ts`'s `requestLog` | `info`; `warn` for a 5xx; `debug` for static files |
+| A route that throws | `app.ts`'s error handler, with the stack; the browser gets a bare 500 | `error` |
+| An uncaught exception or unhandled rejection | `index.ts`, then the process exits and systemd restarts it | `fatal` |
+| A browser error, render crash or lost WebGL context | `POST /api/client-errors`, tagged `client: true` | `warn` |
+| Hourly visitors, searches and favorites | `metrics.ts` | `info` |
+
+`GET /api/metrics`, behind the same admin password, sums the request log
+in memory: counts and 5xx by route, `/api/search` latency percentiles,
+search queueing, and client error reports. It resets on restart.
+
+How a failure gets noticed:
+
+- **Down**: `/api/health` reports the running commit and room count. The
+  deploy checks it, and an external uptime monitor polls it
+  (`deploy/README.md`).
+- **Up but broken**: the 5xx and client error counts in `/api/metrics`,
+  and the log viewer filtered to `warn` and above.
+
+Nothing here leaves the box: there is no hosted error tracker and no
+third-party script on the page. The beacon endpoint could forward to one
+later without a client change. No log line carries a visitor's address or
+search terms, apart from admin login attempts.
 
 ## Rendering
 

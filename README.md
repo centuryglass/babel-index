@@ -200,7 +200,8 @@ address and one rate limit. `--base-path` works only behind such a proxy;
 a direct visit to the port serves a page whose requests 404
 ([`deploy/README.md`](deploy/README.md)). Setting both `LOG_FILE` and
 `ADMIN_PASSWORD_HASH` in the environment turns on a password-protected log
-viewer at `/admin/logs` ([`docs/api.md`](docs/api.md)).
+viewer at `/admin/logs`, and `ADMIN_PASSWORD_HASH` alone turns on the
+request and error counters at `/api/metrics` ([`docs/api.md`](docs/api.md)).
 
 `npm run start:watch` rebuilds on every edit and reloads the page; under
 plain `npm start`, a client edit needs a restart.

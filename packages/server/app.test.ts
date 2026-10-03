@@ -1040,3 +1040,98 @@ test('/api/logs?minLevel filters, and /admin/logs renders the same entries as HT
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// --- observability ------------------------------------------------------------
+
+/** POST a body to /api/client-errors the way `navigator.sendBeacon` does: text/plain. */
+const beacon = (base: string, body: unknown) =>
+  fetch(`${base}/api/client-errors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+
+test('/api/metrics is mounted by ADMIN_PASSWORD_HASH alone, and requires it', async () => {
+  await serving(async ({ base }) => assert.equal((await fetch(`${base}/api/metrics`)).status, 404));
+  await serving(
+    async ({ base }) => {
+      assert.equal((await fetch(`${base}/api/metrics`)).status, 401);
+      assert.equal((await fetch(`${base}/api/metrics`, asAdmin('wrong'))).status, 401);
+      const res = await fetch(`${base}/api/metrics`, asAdmin('sesame'));
+      assert.equal(res.status, 200);
+      assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+    },
+    { adminPasswordHash: hashPassword('sesame') }
+  );
+});
+
+test('/api/metrics counts requests by route pattern, 5xx, search latency and client errors', async () => {
+  await serving(
+    async ({ base, get }) => {
+      await get('/api/manifest');
+      await get('/api/search?q=sea');
+      await get('/api/search?q=sky');
+      await get('/images/001.jpg');
+      await get('/no/such/page');
+      await get('/'); // readIndexHtml throws: a 500
+      await beacon(base, { kind: 'error', message: 'boom' });
+
+      const body = await (await fetch(`${base}/api/metrics`, asAdmin('sesame'))).json();
+      const { byRoute } = body.requests;
+      assert.deepEqual(byRoute['/api/manifest'], { count: 1, serverErrors: 0 });
+      assert.deepEqual(byRoute['/api/search'], { count: 2, serverErrors: 0 });
+      assert.deepEqual(byRoute['/images/*'], { count: 1, serverErrors: 0 });
+      assert.deepEqual(byRoute['(unmatched)'], { count: 1, serverErrors: 0 });
+      assert.deepEqual(byRoute['/'], { count: 1, serverErrors: 1 });
+      assert.equal(body.requests.serverErrors, 1);
+      assert.equal(body.search.samples, 2);
+      assert.equal(typeof body.search.p95Ms, 'number');
+      assert.equal(body.clientErrors, 1);
+      assert.deepEqual(Object.keys(body.searchQueue).sort(), ['peakQueued', 'saturations']);
+      assert.equal(typeof body.uptimeSeconds, 'number');
+    },
+    {
+      adminPasswordHash: hashPassword('sesame'),
+      readIndexHtml: () => Promise.reject(new Error('index.html is gone')),
+    }
+  );
+});
+
+test('a route that throws gets a plain JSON 500, without the error reaching the browser', async () => {
+  await serving(
+    async ({ get }) => {
+      const res = await get('/');
+      assert.equal(res.status, 500);
+      const text = await res.text();
+      assert.deepEqual(JSON.parse(text), { error: 'internal server error' });
+      assert.ok(!text.includes('/secret/path'));
+    },
+    { readIndexHtml: () => Promise.reject(new Error('ENOENT: /secret/path/index.html')) }
+  );
+});
+
+test('/api/client-errors takes a beacon of any content type and answers 204', async () => {
+  await serving(async ({ base }) => {
+    const res = await beacon(base, { kind: 'webglcontextlost', message: 'WebGL context lost', renderer: 'gl' });
+    assert.equal(res.status, 204);
+  });
+});
+
+test('/api/client-errors rejects a malformed, unusable or oversized body', async () => {
+  await serving(async ({ base }) => {
+    const malformed = await beacon(base, '{not json');
+    assert.equal(malformed.status, 400);
+    assert.ok((await malformed.json()).error);
+    assert.equal((await beacon(base, { stack: 'no message' })).status, 400);
+    assert.equal((await beacon(base, { message: 'x'.repeat(64 * 1024) })).status, 413);
+  });
+});
+
+test('/api/client-errors is rate-limited per address', async () => {
+  await serving(async ({ base }) => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 15; i++) statuses.push((await beacon(base, { message: `report ${i}` })).status);
+    assert.ok(statuses.slice(0, 10).every((s) => s === 204));
+    assert.equal(statuses.at(-1), 429);
+  });
+});
