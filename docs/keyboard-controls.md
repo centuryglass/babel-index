@@ -69,9 +69,15 @@ browser's UI as it would on any page.
 | `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching right-click/long-press |
 | `/` | Focus search (fly home first if search is off-screen) |
 | `?` | Announce nearest ranked room in each direction + distance to boundary |
+| `f` / `F` | Toggle the favorite for the room under the cursor and announce the result; on the center or a generic cell, announce that only a room can be a favorite. Unbound without a favorite store, and with `Ctrl`/`Cmd`/`Alt` held (`Ctrl/Cmd+F` stays the browser's find) |
 | `Tab` | Leave the canvas forward, to the first visible stop after it (see "Focus states and tab order") |
 
 Plain `End` (no modifier) is unbound: unlike `Home`, it names no obvious cell.
+
+**A favorited room's name says so.** With a favorite store, the arrival
+announcement, the canvas's `aria-label` and `?` add "one of your favorites"
+to a room the reader has favorited, and say nothing for one they have not
+(`describe.ts`'s `withFavoriteStatus`).
 
 **The cursor ring is the only visible sign the canvas has focus**, and it
 shows as soon as focus arrives, before any arrow press. `useMapRenderer.ts`

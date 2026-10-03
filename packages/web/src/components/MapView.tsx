@@ -264,7 +264,8 @@ export function MapView({
         whole map, since badges are canvas-painted and have no DOM element
         to hold one. The render loop's `pointermove` listener positions and
         shows it imperatively, like `searchArrowRef`. `aria-hidden`: the
-        card states a room's favorite status without a mouse.
+        cursor's announcement states a room's favorite status, and `f`
+        toggles it (`useMapCursor.ts`'s `onMapKeyDown`).
       */}
       <div ref={favTooltipRef} className="favorite-tooltip" aria-hidden="true" />
       {/*

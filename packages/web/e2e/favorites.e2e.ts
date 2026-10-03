@@ -1,6 +1,7 @@
 /**
- * The browser smoke test for favorites: the star toggle, the global count, and
- * the sliding-tile resort that follows one while sorted by favorites.
+ * The browser smoke test for favorites: the star toggle, the global count, the
+ * sliding-tile resort that follows one while sorted by favorites, and the
+ * map keyboard's `f` key and spoken status.
  *
  * Boots with `openLibrary({ favorites: true })`, which the rest of the suite
  * omits (see `openLibrary`). See `map-gestures.e2e.ts` for the shared header
@@ -180,6 +181,53 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
       }
     );
   }
+
+  test('f on the map toggles the favorite under the cursor, and arriving on a favorite says so', async () => {
+    const { page, flightMs } = session;
+    const canvas = page.locator('canvas');
+    const live = page.locator('[role=status]');
+    const card = page.locator('.overlay');
+    const liveText = async () => (await live.textContent()) ?? '';
+
+    // Ctrl+Home lands on a real room, so the key has something to favorite.
+    await canvas.focus();
+    await page.keyboard.press('Control+Home');
+    await page.waitForTimeout(flightMs + 200);
+    await waitFor(async () => /, rank 1 of/.test(await liveText()), 5000, 'ctrl+Home never reached rank 1');
+    // An earlier test may have favorited this room; the toggle below goes
+    // whichever way flips it.
+    const wasFavorite = /one of your favorites$/.test(await liveText());
+
+    const pressAndExpect = async (on: boolean) => {
+      await page.keyboard.press('f');
+      await waitFor(
+        async () => new RegExp(`${on ? 'added to' : 'removed from'} your favorites$`).test(await liveText()),
+        5000,
+        `f must announce the room as ${on ? 'added to' : 'removed from'} your favorites`
+      );
+      // The arrival announcement carries the new status on the next arrival.
+      await page.keyboard.press('Control+Home');
+      await page.waitForTimeout(flightMs + 200);
+      await waitFor(
+        async () => /, rank 1 of/.test(await liveText()) && /one of your favorites$/.test(await liveText()) === on,
+        5000,
+        `arriving on the room must ${on ? '' : 'not '}say it is one of your favorites`
+      );
+      // The card's toggle agrees with what the key did.
+      await page.keyboard.press('Enter');
+      await card.waitFor({ timeout: 5000 });
+      assert.equal(await card.locator('button.favorite-toggle').getAttribute('aria-pressed'), String(on));
+      await page.keyboard.press('Escape');
+      await card.waitFor({ state: 'detached', timeout: 5000 });
+    };
+
+    try {
+      await pressAndExpect(!wasFavorite);
+      await pressAndExpect(wasFavorite);
+    } finally {
+      await settled(page);
+    }
+  });
 
   test('nothing logged to the console', () => {
     assert.deepEqual(session.consoleErrors, []);

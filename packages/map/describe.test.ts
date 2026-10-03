@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeCell, describeRoom, describeArrangement, describeCatalog } from './describe.ts';
+import { describeCell, describeRoom, describeArrangement, describeCatalog, withFavoriteStatus, describeFavoriteToggle } from './describe.ts';
 import { createLayout } from './ordering.ts';
 
 // `createLayout` requires a real cell shape; any non-square aspect will do.
@@ -185,4 +185,14 @@ test('the catalog says what it is ordered by, and folds in the signals note', ()
 
   // No note is not an empty clause.
   assert.ok(!describeCatalog({ total: 3, query: 'oak' }).endsWith('. '));
+});
+
+test('favorite status is said only for a favorite', () => {
+  assert.equal(withFavoriteStatus('room 3, rank 1 of 9', false), 'room 3, rank 1 of 9');
+  assert.equal(withFavoriteStatus('room 3, rank 1 of 9', true), 'room 3, rank 1 of 9; one of your favorites');
+});
+
+test('a favorite toggle names the room and its new state', () => {
+  assert.equal(describeFavoriteToggle('room 3', true), 'room 3 added to your favorites');
+  assert.equal(describeFavoriteToggle('room 3', false), 'room 3 removed from your favorites');
 });

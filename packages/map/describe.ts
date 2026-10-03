@@ -9,6 +9,8 @@
  * - `describeCell` names a cell, and `describeRoom` a room the caller holds.
  * - `describeArrangement`, `describeCatalog` and `describeSort` build the
  *   announcements, and `CAMERA_HELD` covers the rearrangement in between.
+ * - `withFavoriteStatus` and `describeFavoriteToggle` are the map cursor's
+ *   favorite wording.
  *
  * A `Description` carries three fields:
  *
@@ -129,6 +131,24 @@ export function describeArrangement(layout: Pick<MapLayout, 'roomCount' | 'grade
   return layout.gradedCount
     ? `rearranged - ${rooms}, ${layout.gradedCount} clustered near the center`
     : `rearranged - ${rooms}, spread evenly`;
+}
+
+/**
+ * A cursor name with the room's favorite status: the note is added only for a
+ * favorite, so the common case stays short.
+ */
+export function withFavoriteStatus(name: string, favorite: boolean): string {
+  return favorite ? `${name}; one of your favorites` : name;
+}
+
+/**
+ * What the map's favorite key says after toggling a room.
+ *
+ * @param title the room's title, as `roomTitle` returns
+ * @param on the room's favorite state after the toggle
+ */
+export function describeFavoriteToggle(title: string, on: boolean): string {
+  return on ? `${title} added to your favorites` : `${title} removed from your favorites`;
 }
 
 /**

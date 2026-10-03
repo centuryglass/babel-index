@@ -73,6 +73,8 @@ export function HelpBody() {
           <dd>jump to the lowest-ranked search result</dd>
           <dt>Enter / Space</dt>
           <dd>open the current room</dd>
+          <dt>F</dt>
+          <dd>add the current room to your favorites, or remove it, where this library keeps favorites</dd>
           <dt>/</dt>
           <dd>jump to the search box</dd>
           <dt>?</dt>

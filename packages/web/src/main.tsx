@@ -723,6 +723,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [focusCanvas]
   );
 
+  // `f` on the canvas toggles through `favoriteFor`, which needs `mode` and
+  // `requestAnimation` - neither exists yet at this line. Same ref
+  // indirection as `tapRef`.
+  const toggleFavoriteRef = useRef((_id: number) => {});
+  const toggleFavorite = useCallback((id: number) => toggleFavoriteRef.current(id), []);
+
   // --- the keyboard cursor ---------------------------------------------------
   //
   // Everything about it - the cell, what gets said, and every key - is
@@ -744,6 +750,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       requestDraw,
       onOpenCard: useCallback((pick: RoomPick) => dispatch({ type: 'openCard', card: pick }), []),
       goToSearch,
+      isFavorite: favorites.enabled ? favorites.isFavorite : null,
+      toggleFavorite,
     });
 
   // --- switching between the two readings ----------------------------------
@@ -921,6 +929,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         : null,
     [favorites.enabled, favorites.isFavorite, favorites.countOf, favorites.toggle, mode, sortMode, requestAnimation]
   );
+  toggleFavoriteRef.current = (id: number) => favoriteFor(id)?.toggle();
 
   // A chip on a card or overlay is a live search, and closes both first
   // (`reduce`'s `keywordSearch`).
@@ -1079,7 +1088,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     // has no other tap behaviour. `roomAtPoint` already excludes the center
     // cell (null) and generic cells, which have no badge. Below
     // `config.favorites.minInteractiveTileWidth`, the badge is too small to
-    // fairly hit (issue #257) and the whole check is skipped.
+    // fairly hit and the whole check is skipped.
     if (favorites.enabled) {
       const cellPx = pxPerCell(camera);
       const hit = cellPx.x > config.favorites.minInteractiveTileWidth

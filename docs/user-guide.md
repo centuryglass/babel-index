@@ -98,5 +98,5 @@ offered to everyone.
 Every key the map view handles, state by state, is specified in
 [`keyboard-controls.md`](keyboard-controls.md). The short version: Tab moves
 between controls, the arrow keys pan the map (or move between books once the
-center shelf has focus), Enter opens the focused room, and Escape closes
-whatever is open.
+center shelf has focus), Enter opens the focused room, F favorites the room
+under the map's cursor, and Escape closes whatever is open.
