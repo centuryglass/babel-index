@@ -196,10 +196,10 @@ still apply.
   dimensions, the ladder, cache budgets, the prefetch ring. `tiles.ts` and
   the render loop read it rather than restating it.
 - **A level is per-file or sheet-packed, never both on disk.** The pipeline
-  writes every level per-file, composites levels at or above
-  `SHEETS.fromLevel` into `<width>-sheets/`, then deletes those per-file
-  directories. `scan.ts`'s `discoverLevels` prefers a complete sheets
-  directory and falls back to per-file.
+  writes levels below `SHEETS.fromLevel` per-file and resizes the rest
+  straight from the sources into `<width>-sheets/`. `scan.ts`'s
+  `discoverLevels` prefers a complete sheets directory and falls back to
+  per-file.
 - **Tile eviction is frame-aware.** The renderer walks cells row by row, so
   a plain LRU would evict the top of the screen for its own bottom.
   `tiles.ts` won't evict anything stamped in the current or previous frame,
