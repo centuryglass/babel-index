@@ -31,7 +31,7 @@ test('pyramids the center render, every generic tile, and every distill alternat
     await mkdir(join(dir, 'generic_distill'), { recursive: true });
     await makeImage(join(dir, 'generic_distill', 'g1.jpg'), 256, 256);
 
-    const result = await writeSharedMips({ sharedDir: dir });
+    const result = await writeSharedMips({ tilesDir: dir });
 
     assert.equal(result.center?.file, 'center_tile.png');
     assert.ok(result.center!.written > 0, 'the center gets levels below 0');
@@ -58,7 +58,7 @@ test('other shared-directory art is never mistaken for the center tile', async (
     await makeImage(join(dir, 'fav_on.png'), 32, 32);
     await makeImage(join(dir, 'distill_off.png'), 32, 32);
 
-    const result = await writeSharedMips({ sharedDir: dir });
+    const result = await writeSharedMips({ tilesDir: dir });
     assert.equal(result.center?.file, 'center.jpg');
 
     // The badges never got a pyramid of their own.
@@ -77,7 +77,7 @@ test('no center file found is a null result, not an error', async () => {
     await mkdir(join(dir, 'generic'), { recursive: true });
     await makeImage(join(dir, 'generic', 'g1.jpg'), 256, 256);
 
-    const result = await writeSharedMips({ sharedDir: dir });
+    const result = await writeSharedMips({ tilesDir: dir });
     assert.equal(result.center, null);
     assert.equal(result.generic.length, 1);
   });
@@ -86,7 +86,7 @@ test('no center file found is a null result, not an error', async () => {
 test('an absent generic directory yields no generic results, not a throw', async () => {
   await withTempDir(async (dir) => {
     await makeImage(join(dir, 'center.jpg'), 128, 128);
-    const result = await writeSharedMips({ sharedDir: dir });
+    const result = await writeSharedMips({ tilesDir: dir });
     assert.deepEqual(result.generic, []);
   });
 });
@@ -96,7 +96,7 @@ test('an absent generic_distill directory yields no distill results, not a throw
     await makeImage(join(dir, 'center.jpg'), 128, 128);
     await mkdir(join(dir, 'generic'), { recursive: true });
     await makeImage(join(dir, 'generic', 'g1.jpg'), 128, 128);
-    const result = await writeSharedMips({ sharedDir: dir });
+    const result = await writeSharedMips({ tilesDir: dir });
     assert.deepEqual(result.genericDistill, []);
   });
 });
@@ -107,8 +107,8 @@ test('a second run against unchanged tiles rewrites nothing', async () => {
     await mkdir(join(dir, 'generic'), { recursive: true });
     await makeImage(join(dir, 'generic', 'g1.jpg'), 128, 128);
 
-    const first = await writeSharedMips({ sharedDir: dir });
-    const second = await writeSharedMips({ sharedDir: dir });
+    const first = await writeSharedMips({ tilesDir: dir });
+    const second = await writeSharedMips({ tilesDir: dir });
 
     assert.ok(first.center!.written > 0);
     assert.equal(second.center!.written, 0);
@@ -119,7 +119,7 @@ test('a second run against unchanged tiles rewrites nothing', async () => {
 test('--center names the file explicitly, same as scan.ts', async () => {
   await withTempDir(async (dir) => {
     await makeImage(join(dir, 'render_002.png'), 128, 128);
-    const result = await writeSharedMips({ sharedDir: dir, center: 'render_002.png' });
+    const result = await writeSharedMips({ tilesDir: dir, center: 'render_002.png' });
     assert.equal(result.center?.file, 'render_002.png');
   });
 });

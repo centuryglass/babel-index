@@ -12,7 +12,7 @@
  * 404. A flat directory of images that never went through the pipeline
  * therefore resolves only level 0, and every lookup falls back to it.
  *
- * Shared art (`manifest.shared`, served from `--shared-dir`) has its own
+ * Shared art (`manifest.shared`, from the collection's `shared/`) has its own
  * pyramids, one manifest array per group (docs/agents/map.md, "Shared art has
  * its own pyramids"):
  * - the center and every generic tile resolve off `shared.levels`;
@@ -97,11 +97,10 @@ export function createTileLocator(manifest: Manifest): LocateTile {
   // third map, never intersected with the other two (see manifest.ts's doc).
   const favoriteLevels = new Map((shared.favoriteLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
   const favoriteSharedIds = new Set<number | string>([FAV_ON, FAV_OFF]);
-  // The badge's level-0 urls: fixed app art, not part of a scanned collection, so
-  // not listed in `manifest.shared.center`/`generic` - but they live in the
-  // same `--shared-dir` and are served from its base like the center tile's
-  // level 0. Only their per-level widths are discovered, in
-  // `SharedAssets.favoriteLevels`.
+  // The badge's level-0 urls: fixed app art in `--shared-dir`, not part of a
+  // scanned collection, so not listed in `manifest.shared.center`/`generic`;
+  // they resolve off `sharedBase`. Only their per-level widths are
+  // discovered, in `SharedAssets.favoriteLevels`.
   sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
   sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
   pyramidSharedIds.add(FAV_ON);

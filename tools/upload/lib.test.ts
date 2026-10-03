@@ -38,9 +38,9 @@ function manifest(): Manifest {
     tagLinks: { url: '/images/tagLinks.json', count: 3 },
     embeddings: { url: '/images/embeddings.bin', dim: 512, count: 2, model: 'x', scale: 127 },
     shared: {
-      center: { file: 'center_tile.png', url: '/shared/center_tile.png' },
-      generic: [{ file: 'a.jpg', url: '/shared/generic/a.jpg' }],
-      genericDistill: [{ file: 'a.jpg', url: '/shared/generic_distill/a.jpg' }],
+      center: { file: 'center_tile.png', url: 'images/shared/center_tile.png' },
+      generic: [{ file: 'a.jpg', url: 'images/shared/generic/a.jpg' }],
+      genericDistill: [{ file: 'a.jpg', url: 'images/shared/generic_distill/a.jpg' }],
       levels: [{ level: 0, dir: null }],
       distillLevels: [{ level: 0, dir: null }],
       favoriteLevels: [{ level: 0, dir: null }],
@@ -59,8 +59,10 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'sample/embeddings.bin',
     'sample/embeddings.json',
     'sample/metadata.json',
+    'sample/shared/center_tile.png',
+    'sample/shared/generic/a.jpg',
+    'sample/shared/generic_distill/a.jpg',
     'sample/tagLinks.json',
-    'shared/center_tile.png',
     'shared/clear_history_book.png',
     'shared/distill_off.png',
     'shared/distill_on.png',
@@ -69,8 +71,6 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
     'shared/fav_mine_on.png',
     'shared/fav_off.png',
     'shared/fav_on.png',
-    'shared/generic/a.jpg',
-    'shared/generic_distill/a.jpg',
     'shared/leather_texture_tile.png',
   ]);
 
@@ -78,6 +78,8 @@ test('buildUploadList covers rooms at every non-zero level, sidecars, and shared
   assert.equal(level0.local, 'tile-collection/001.jpg');
   const level1 = uploads.find((u) => u.key === 'sample/512/001.jpg');
   assert.equal(level1.local, 'tile-collection/512/001.jpg');
+  const center = uploads.find((u) => u.key === 'sample/shared/center_tile.png');
+  assert.equal(center.local, 'tile-collection/shared/center_tile.png');
 });
 
 test('buildUploadList covers the shared tiles at every non-zero level too, mirroring the collection loop', () => {
@@ -85,13 +87,13 @@ test('buildUploadList covers the shared tiles at every non-zero level too, mirro
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
-  assert.ok(keys.includes('shared/512/center_tile.png'));
-  assert.ok(keys.includes('shared/generic/512/a.jpg'));
+  assert.ok(keys.includes('sample/shared/512/center_tile.png'));
+  assert.ok(keys.includes('sample/shared/generic/512/a.jpg'));
 
-  const centerLevel = uploads.find((u) => u.key === 'shared/512/center_tile.png');
-  assert.equal(centerLevel.local, 'assets/512/center_tile.png');
-  const genericLevel = uploads.find((u) => u.key === 'shared/generic/512/a.jpg');
-  assert.equal(genericLevel.local, 'assets/generic/512/a.jpg');
+  const centerLevel = uploads.find((u) => u.key === 'sample/shared/512/center_tile.png');
+  assert.equal(centerLevel.local, 'tile-collection/shared/512/center_tile.png');
+  const genericLevel = uploads.find((u) => u.key === 'sample/shared/generic/512/a.jpg');
+  assert.equal(genericLevel.local, 'tile-collection/shared/generic/512/a.jpg');
 });
 
 test('buildUploadList covers the distill tiles at every non-zero level too, off shared.distillLevels independently of shared.levels', () => {
@@ -100,11 +102,11 @@ test('buildUploadList covers the distill tiles at every non-zero level too, off 
   m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const uploads = buildUploadList(m, { imagesDir: 'tile-collection', sharedDir: 'assets', prefix: 'sample' }, join);
   const keys = uploads.map((u) => u.key).sort();
-  assert.ok(keys.includes('shared/generic_distill/512/a.jpg'));
-  assert.ok(!keys.includes('shared/512/center_tile.png'), 'shared.levels stayed flat');
+  assert.ok(keys.includes('sample/shared/generic_distill/512/a.jpg'));
+  assert.ok(!keys.includes('sample/shared/512/center_tile.png'), 'shared.levels stayed flat');
 
-  const distillLevel = uploads.find((u) => u.key === 'shared/generic_distill/512/a.jpg');
-  assert.equal(distillLevel.local, 'assets/generic_distill/512/a.jpg');
+  const distillLevel = uploads.find((u) => u.key === 'sample/shared/generic_distill/512/a.jpg');
+  assert.equal(distillLevel.local, 'tile-collection/shared/generic_distill/512/a.jpg');
 });
 
 test('buildUploadList uploads one entry per sheet file for a sheet-packed level, not per room', () => {

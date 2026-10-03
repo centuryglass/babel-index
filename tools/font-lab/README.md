@@ -68,7 +68,7 @@ even the 2×-native panel inside its third of the sheet.
 Top row: that region at three zoom levels: **600** (below native, the hardest
 legible state the map still draws), **1024** (the opening on a typical display,
 1× native) and **2048** (the app's 2× manual zoom cap), over the real
-`assets/center_tile.png` with the actual book geometry. Bottom row: a **4×
+`assets/tile-collection-sample/shared/center_tile.png` with the actual book geometry. Bottom row: a **4×
 nearest-neighbour magnifier** of the top-left spines at each size, so the glyph
 rasterisation is visible in the sheet itself. The header names the variant;
 captions give the zoom, spine width and font size.

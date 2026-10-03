@@ -24,7 +24,7 @@
  *   npm start -- --remote https://assets.example.com --prefix tile-collection-sample
  *
  * `--remote`/`--prefix` replace `--images`/`--shared-dir` entirely - the collection
- * and shared tiles both come from the remote host (see remote.ts), and the
+ * and the fixed app art both come from the remote host (see remote.ts), and the
  * manifest's urls point the browser there directly; this server serves
  * nothing under `/images`/`/shared`.
  *
@@ -55,7 +55,7 @@ import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { context } from 'esbuild';
-import { scanDirectory } from './scan.ts';
+import { scanDirectory, SHARED_TILES_DIR } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
 import { loadRoomContent } from './roomContent.ts';
@@ -94,9 +94,9 @@ if (!remoteBase && !existsSync(imagesDir)) {
   logger.error({ imagesDir }, 'no such directory');
   process.exit(1);
 }
-// The shared tiles (center + generic tiles) live outside the collection, in the
-// repo's assets by default, so the center render can be shared across collections
-// and changed without touching --images. See scan.ts.
+// Fixed app art (the favorite badge, the toggles, the loading animation),
+// served at /shared. The center and generic tiles are collection content,
+// under `<images>/shared/` - see scan.ts's `SHARED_TILES_DIR`.
 const sharedDir = remoteBase ? null : resolve(process.cwd(), (argv['shared-dir'] as string | undefined) ?? 'assets');
 // Optional debugging convenience, off by default. `npm run start:watch` runs
 // this under `node --watch` (restarts the whole process on a server-side
@@ -174,11 +174,14 @@ logger.info(
   },
   'tile collection scanned'
 );
-// A shared directory with no center means the map has no blank tile to draw at
+// A collection with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
 // hole rather than an error.
 if (!manifest.shared.center && !remoteBase)
-  logger.warn({ sharedDir }, 'no center tile found - expected center_tile.* (or pass --center)');
+  logger.warn(
+    { tilesDir: join(imagesDir as string, SHARED_TILES_DIR) },
+    'no center tile found - expected center_tile.* (or pass --center)'
+  );
 
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;

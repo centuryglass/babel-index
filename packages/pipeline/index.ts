@@ -4,7 +4,7 @@
  *
  *   npm run generate:mips -- --images assets/tile-collection-sample
  *   npm run generate:mips -- --images <dir> --out <dir> [--quality 82]
- *   npm run generate:mips -- --images <dir> --shared-dir assets [--center center.jpg]
+ *   npm run generate:mips -- --images <dir> [--center center.jpg]
  *
  * Resizes every source image to each level of the ladder and writes the result
  * to the layout `layout.ts` states. With no --out it works in place: the
@@ -14,10 +14,10 @@
  *
  * The coarse levels are then repacked into shared sheets (`sheets.ts`).
  *
- * --shared-dir additionally pyramids the center render and every `generic/`
- * and `generic_distill/` tile found there, in place - see `shared-mips.ts`.
- * Omitted, the shared tiles are left exactly as they were (still servable
- * flat at level 0).
+ * The collection's `shared/` subdirectory (`scan.ts`'s `SHARED_TILES_DIR`)
+ * then gets the same per-file ladder for the center render and every
+ * `generic/` and `generic_distill/` tile, in place in the source collection
+ * even with --out - see `shared-mips.ts`.
  *
  * The ladder is `LEVELS` in packages/web/src/lib/pyramid.ts, the same list the
  * client picks levels from, so what this writes and what it asks for cannot
@@ -31,13 +31,14 @@ import { LEVELS, SHEETS } from '../web/src/lib/pyramid.ts';
 import { mipPlan, writeMips, sourceImages, checkSizes, type SourceSize } from './mips.ts';
 import { writeSheets } from './sheets.ts';
 import { writeSharedMips } from './shared-mips.ts';
+import { SHARED_TILES_DIR } from '../server/scan.ts';
 
 const argv = parseArgs(process.argv.slice(2));
 const imagesDir = resolve(process.cwd(), argv.images ?? 'assets/tile-collection-sample');
 const outDir = argv.out ? resolve(process.cwd(), argv.out) : imagesDir;
 const inPlace = outDir === imagesDir;
 const quality = Number(argv.quality ?? 82);
-const sharedDir = argv['shared-dir'] ? resolve(process.cwd(), argv['shared-dir']) : null;
+const tilesDir = join(imagesDir, SHARED_TILES_DIR);
 
 if (!existsSync(imagesDir)) {
   console.error(`no such directory: ${imagesDir}`);
@@ -118,11 +119,11 @@ if (sheetSteps.length) {
 }
 
 // The shared tiles (the center render, every generic/ tile and every
-// generic_distill/ tile) get the same per-file ladder, rooted at
-// --shared-dir. See shared-mips.ts.
-if (sharedDir) {
-  console.log(`  shared tiles in ${sharedDir} ...\n`);
-  const shared = await writeSharedMips({ sharedDir, center: argv.center, quality });
+// generic_distill/ tile) get the same per-file ladder, rooted at the
+// collection's shared/ directory. See shared-mips.ts.
+if (existsSync(tilesDir)) {
+  console.log(`  shared tiles in ${tilesDir} ...\n`);
+  const shared = await writeSharedMips({ tilesDir, center: argv.center, quality });
   console.log(
     shared.center
       ? `    center: ${shared.center.file}  ${shared.center.written} written, ${shared.center.cached} unchanged`

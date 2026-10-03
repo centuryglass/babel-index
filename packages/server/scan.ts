@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, extname, basename, resolve } from 'node:path';
+import { join, extname, basename } from 'node:path';
 import { mipPlan, sheetPlan, sheetDirName, sheetFileName } from '../pipeline/layout.ts';
 import { SHEETS } from '../web/src/lib/pyramid.ts';
 import { metadataCoverage } from '../map/metadata.ts';
@@ -36,17 +36,26 @@ export const METADATA_FILE = 'metadata.json';
 export const TAG_LINKS_FILE = 'tagLinks.json';
 
 /**
- * The subdirectory of the shared directory that holds the generic tiles. It is
- * a folder rather than a `generic*` glob so the center tile can sit in the
- * repo's `assets/` root without every stray image beside it (masks, canny
- * maps) being mistaken for a generic tile.
+ * The subdirectory of a collection that holds its shared tiles: the center
+ * render at its root, plus `GENERIC_DIR` and `GENERIC_DISTILL_DIR`. It sits
+ * under `--images`, so its urls are rooted at `IMAGES_BASE` and an upload
+ * puts it under the collection's prefix. Fixed app art (the favorite badge,
+ * the toggles, the loading animation) stays in `--shared-dir`, served at
+ * `SHARED_BASE`.
+ */
+export const SHARED_TILES_DIR = 'shared';
+
+/**
+ * The subdirectory of `SHARED_TILES_DIR` that holds the generic tiles. It is
+ * a folder rather than a `generic*` glob so a stray image beside the center
+ * render (a mask, a canny map) is never mistaken for a generic tile.
  */
 export const GENERIC_DIR = 'generic';
 
 /**
  * The subdirectory holding distill mode's paired alternates for the
- * `GENERIC_DIR` tiles - `docs/file_map.md`'s `assets/generic_distill` entry says what
- * they are for. Matched to generic tiles by filename stem (extension may
+ * `GENERIC_DIR` tiles - `docs/file_map.md`'s `assets/tile-collection-sample` entry says
+ * what they are for. Matched to generic tiles by filename stem (extension may
  * differ, e.g. `generic1.webp` <-> `generic1.jpg`), never by directory sort
  * order: the two folders need not use the same image format, nor agree on
  * how their files sort.
@@ -192,10 +201,9 @@ export async function discoverLevels(dir: string, source: ImageSize | null, room
 
 /**
  * Which of the favorite badge's pyramid levels are generated -
- * `fav_on.png`/`fav_off.png` scaled into the same per-level `<width>/`
- * directories `discoverLevels` walks for the center tile, off the same
- * reference size (a storage convenience, not a shared discovery - see
- * `SharedAssets.favoriteLevels`'s doc). A level counts only when both faces
+ * `fav_on.png`/`fav_off.png` scaled into per-level `<width>/` directories
+ * under `--shared-dir`, the shape `discoverLevels` walks for the center tile,
+ * off the same reference size. A level counts only when both faces
  * are present; the badge is never sheet-packed, so this only ever checks the
  * per-file shape `discoverLevels` does for a level below `SHEETS.fromLevel`.
  *
@@ -229,10 +237,11 @@ async function listImages(dir: string): Promise<string[]> {
   return entries.filter((f) => IMAGE_EXT.has(extname(f).toLowerCase())).sort();
 }
 
-/** One shared asset: its file, a `/shared/`-rooted url, and its size if readable. */
-async function describeShared(sharedDir: string, sub: string, file: string): Promise<SharedAsset> {
-  const size = await imageSize(join(sharedDir, sub, file)).catch(() => null);
-  return { file, url: `${SHARED_BASE}/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`, ...(size ?? {}) };
+/** One shared tile: its file, an `images/shared/`-rooted url, and its size if readable. */
+async function describeShared(tilesDir: string, sub: string, file: string): Promise<SharedAsset> {
+  const size = await imageSize(join(tilesDir, sub, file)).catch(() => null);
+  const url = `${IMAGES_BASE}/${SHARED_TILES_DIR}/${sub ? `${sub}/` : ''}${encodeURIComponent(file)}`;
+  return { file, url, ...(size ?? {}) };
 }
 
 /**
@@ -251,13 +260,11 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
 }
 
 /**
- * Discover the shared tiles: the blank center and the generic tiles.
+ * Discover the shared tiles in a collection's `SHARED_TILES_DIR`: the blank
+ * center and the generic tiles.
  *
  * The center is served at cell (0, 0) and reserved for the search box and
  * controls, so it is always the plain center render - see `resolveCenterFile`.
- * `allowFirst` covers the case where the shared assets live in the collection
- * directory itself: with nothing named center present, the first image
- * stands in.
  *
  * The generic tiles are every image in the `generic/` subdirectory, sorted.
  * There may be none (an empty or absent folder), which is the "only the
@@ -272,27 +279,27 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
  * on the collection's reference size - see that function's own comment.
  */
 async function scanShared(
-  sharedDir: string,
-  { center, allowFirst = false }: { center?: string; allowFirst?: boolean } = {}
+  tilesDir: string,
+  { center }: { center?: string } = {}
 ): Promise<Omit<SharedAssets, 'levels' | 'distillLevels' | 'favoriteLevels'>> {
-  const files = await listImages(sharedDir).catch(() => []);
-  const centerFile = resolveCenterFile(files, center) ?? (allowFirst ? files[0] : null);
+  const files = await listImages(tilesDir).catch(() => []);
+  const centerFile = resolveCenterFile(files, center);
 
-  const centerAsset = centerFile ? await describeShared(sharedDir, '', centerFile) : null;
+  const centerAsset = centerFile ? await describeShared(tilesDir, '', centerFile) : null;
 
-  const genericFiles = await listImages(join(sharedDir, GENERIC_DIR)).catch(() => []);
+  const genericFiles = await listImages(join(tilesDir, GENERIC_DIR)).catch(() => []);
   const generic = await Promise.all(
-    genericFiles.map((f) => describeShared(sharedDir, GENERIC_DIR, f))
+    genericFiles.map((f) => describeShared(tilesDir, GENERIC_DIR, f))
   );
 
-  const distillFiles = await listImages(join(sharedDir, GENERIC_DISTILL_DIR)).catch(() => []);
+  const distillFiles = await listImages(join(tilesDir, GENERIC_DISTILL_DIR)).catch(() => []);
   const distillByStem = new Map<string, string>(
     distillFiles.map((f): [string, string] => [basename(f, extname(f)), f])
   );
   const genericDistill = await Promise.all(
     genericFiles.map(async (f) => {
       const match = distillByStem.get(basename(f, extname(f)));
-      return match ? await describeShared(sharedDir, GENERIC_DISTILL_DIR, match) : null;
+      return match ? await describeShared(tilesDir, GENERIC_DISTILL_DIR, match) : null;
     })
   );
 
@@ -306,36 +313,27 @@ async function scanShared(
  * restarts, which is what the map's slot assignment keys on, and they
  * renumber when the collection changes (docs/agents/favorites.md, "Favorites").
  *
- * The shared tiles - the blank center and the generic tiles - live in
- * `sharedDir`, which defaults to the collection directory itself: there, a
- * `center.*` in the images folder doubles as the generic wallpaper. Usually
- * it points at the repo's `assets/`, so the center render is shared across
- * collections and reached from outside `--images`.
+ * The shared tiles - the blank center and the generic tiles - live in the
+ * collection's own `SHARED_TILES_DIR`. A collection without one has no center
+ * and no generic tiles, which the renderers tolerate.
  *
- * @param opts.center names the center tile; opts.sharedDir is where the
- *   shared tiles live (default: the collection directory)
+ * @param opts.center names the center tile within `SHARED_TILES_DIR`
+ * @param opts.sharedDir the fixed app art (`--shared-dir`), read only for the
+ *   favorite badge's pyramid; omitted, the badge has level 0 only
  */
 export async function scanDirectory(
   dir: string,
-  { center, sharedDir = dir }: { center?: string; sharedDir?: string } = {}
+  { center, sharedDir }: { center?: string; sharedDir?: string } = {}
 ): Promise<Manifest> {
   const files = await listImages(dir);
 
   if (!files.length) throw new Error(`no images found in ${dir}`);
 
-  // When the shared tiles are the collection directory itself, the center may be
-  // one of these files and the first image can stand in for a missing center.
-  const sameDir = resolve(sharedDir) === resolve(dir);
-  const sharedAssets = await scanShared(sharedDir, { center, allowFirst: sameDir });
-
-  // A center living in the tile collection directory is not also a ranked room: being
-  // wallpaper and a search result at once would put it everywhere and in the
-  // ranking too. A center living elsewhere excludes nothing.
-  const excluded = sameDir && sharedAssets.center ? sharedAssets.center.file : null;
-  const roomFiles = files.filter((f) => f !== excluded);
+  const tilesDir = join(dir, SHARED_TILES_DIR);
+  const sharedAssets = await scanShared(tilesDir, { center });
 
   const rooms: Room[] = await Promise.all(
-    roomFiles.map(async (file, id) => {
+    files.map(async (file, id) => {
       const path = join(dir, file);
       const [size, st] = await Promise.all([imageSize(path).catch(() => null), stat(path)]);
       return { id, file, url: `${IMAGES_BASE}/${encodeURIComponent(file)}`, bytes: st.size, ...(size ?? {}) };
@@ -357,7 +355,7 @@ export async function scanDirectory(
 
   // The shared tiles' pyramid, off the same reference size: `packages/pipeline/
   // shared-mips.ts` writes it the same per-file way `mips.ts` writes a room's,
-  // once rooted at `sharedDir` (the center) and once at `sharedDir/generic`
+  // once rooted at `tilesDir` (the center) and once at `tilesDir/generic`
   // (every generic tile) - two separate trees, so a level only counts as
   // shared.levels if both actually have it. `generic_distill/` gets the same
   // treatment but its own field (`distillLevels`, see manifest.ts) rather than
@@ -371,10 +369,10 @@ export async function scanDirectory(
   // all and is not part of this discovery.
   const sharedSize = source && source.w && source.h ? { w: source.w, h: source.h } : null;
   const [centerLevels, genericLevels, distillLevels, favoriteLevels] = await Promise.all([
-    discoverLevels(sharedDir, sharedSize),
-    discoverLevels(join(sharedDir, GENERIC_DIR), sharedSize),
-    discoverLevels(join(sharedDir, GENERIC_DISTILL_DIR), sharedSize),
-    discoverFavoriteLevels(sharedDir, sharedSize),
+    discoverLevels(tilesDir, sharedSize),
+    discoverLevels(join(tilesDir, GENERIC_DIR), sharedSize),
+    discoverLevels(join(tilesDir, GENERIC_DISTILL_DIR), sharedSize),
+    sharedDir ? discoverFavoriteLevels(sharedDir, sharedSize) : [{ level: 0, w: null, h: null, dir: null }],
   ]);
   // Only intersect against a tree that actually has something to pyramid -
   // a collection with generic tiles but no separate center (or vice versa) must
@@ -448,8 +446,8 @@ export async function scanDirectory(
     sharedBase: SHARED_BASE,
     /**
      * The shared tiles: the blank `center` (or null if none was found) and the
-     * `generic` array the generic tiles are drawn from. Served from `/shared/`,
-     * which the demo points at `--shared-dir`.
+     * `generic` array the generic tiles are drawn from. Served from
+     * `images/shared/`, inside the collection.
      */
     shared: { ...sharedAssets, levels: sharedLevels, distillLevels, favoriteLevels },
     rooms,

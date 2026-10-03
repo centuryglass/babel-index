@@ -84,8 +84,9 @@ rebuilds the bundle on a client edit, and reloads the open page either way.
 The server reads the collection in one of two modes, chosen by flag:
 
 - **Local** (`--images <dir>`): `scan.ts` walks the directory and the server
-  serves it under `/images`, with the shared art (center tile, generic
-  tiles) under `/shared`. `npm start` defaults to
+  serves it under `/images`, including its `shared/` center and generic
+  tiles. The fixed app art (`--shared-dir`) is served under `/shared`.
+  `npm start` defaults to
   `assets/tile-collection-sample/`, so a clone runs with no external services.
 - **Remote** (`--remote <url> --prefix <name>`): `remote.ts` fetches the
   manifest that `tools/upload/upload-r2.ts` wrote when it synced the collection

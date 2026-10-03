@@ -47,10 +47,11 @@ export type JoinPath = (...parts: string[]) => string;
  *
  * Keys mirror the local layout (`<prefix>/<file>`, `<prefix>/<level-dir>/<file>`)
  * so `packages/server/remote.ts` can resolve a room's url the same way
- * `packages/web/src/lib/rooms.ts` does locally. Shared assets (the center tile
- * and the generics) live outside any one collection's prefix, at `shared/...`,
- * matching the demo server's `/shared/` mount, so multiple collections point at
- * the same tiles.
+ * `packages/web/src/lib/rooms.ts` does locally. The collection's shared tiles
+ * (the center and the generics) are under the prefix too, at
+ * `<prefix>/shared/...`. Fixed app art lives outside any one collection's
+ * prefix, at `shared/...`, matching the demo server's `/shared/` mount, so
+ * every collection points at the same files.
  *
  * `join` is path.join, injected so this stays free of node:path and testable
  * with plain strings.
@@ -94,11 +95,17 @@ export function buildUploadList(
     uploads.push({ local: join(imagesDir, 'embeddings.json'), key: `${prefix}/embeddings.json` });
   }
 
+  // The collection's shared tiles (`scan.ts`'s `SHARED_TILES_DIR`) are
+  // collection content, so they mirror their local layout under the prefix
+  // like everything above.
+  const tilesDir = join(imagesDir, 'shared');
+  const tilesKey = `${prefix}/shared`;
+
   if (manifest.shared?.center)
-    uploads.push({ local: join(sharedDir, manifest.shared.center.file), key: `shared/${manifest.shared.center.file}` });
+    uploads.push({ local: join(tilesDir, manifest.shared.center.file), key: `${tilesKey}/${manifest.shared.center.file}` });
 
   for (const generic of manifest.shared?.generic ?? [])
-    uploads.push({ local: join(sharedDir, 'generic', generic.file), key: `shared/generic/${generic.file}` });
+    uploads.push({ local: join(tilesDir, 'generic', generic.file), key: `${tilesKey}/generic/${generic.file}` });
 
   // The shared tiles' own pyramid (packages/pipeline/shared-mips.ts), mirroring
   // the manifest.levels loop above: one object per level per file, center and
@@ -110,21 +117,21 @@ export function buildUploadList(
     if (level.level === 0 || !level.dir) continue;
     if (manifest.shared.center)
       uploads.push({
-        local: join(sharedDir, level.dir, manifest.shared.center.file),
-        key: `shared/${level.dir}/${manifest.shared.center.file}`,
+        local: join(tilesDir, level.dir, manifest.shared.center.file),
+        key: `${tilesKey}/${level.dir}/${manifest.shared.center.file}`,
       });
     for (const generic of manifest.shared.generic)
       uploads.push({
-        local: join(sharedDir, 'generic', level.dir, generic.file),
-        key: `shared/generic/${level.dir}/${generic.file}`,
+        local: join(tilesDir, 'generic', level.dir, generic.file),
+        key: `${tilesKey}/generic/${level.dir}/${generic.file}`,
       });
   }
 
   for (const distill of manifest.shared?.genericDistill ?? [])
     if (distill)
       uploads.push({
-        local: join(sharedDir, 'generic_distill', distill.file),
-        key: `shared/generic_distill/${distill.file}`,
+        local: join(tilesDir, 'generic_distill', distill.file),
+        key: `${tilesKey}/generic_distill/${distill.file}`,
       });
 
   // `generic_distill/`'s own pyramid, mirroring the loop above - a separate
@@ -136,8 +143,8 @@ export function buildUploadList(
     for (const distill of manifest.shared?.genericDistill ?? [])
       if (distill)
         uploads.push({
-          local: join(sharedDir, 'generic_distill', level.dir, distill.file),
-          key: `shared/generic_distill/${level.dir}/${distill.file}`,
+          local: join(tilesDir, 'generic_distill', level.dir, distill.file),
+          key: `${tilesKey}/generic_distill/${level.dir}/${distill.file}`,
         });
   }
 
@@ -167,7 +174,7 @@ export function buildUploadList(
 
   // The animation files (see animationKeys), mapped from the
   // `shared/animation/...` key to a path under sharedDir, like the
-  // center/generic entries.
+  // fixed app art entries.
   for (const key of animationKeys(animation))
     uploads.push({ local: join(sharedDir, key.slice('shared/'.length)), key });
 
