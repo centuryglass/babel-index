@@ -67,11 +67,15 @@ Every tracked file in the repo, with a line or two on what it is for.
   * `log-reader.ts`: Reads entries back out of `log-file.ts`'s files for the
     admin log viewer.
   * `admin-auth.ts`: HTTP Basic Auth (`ADMIN_PASSWORD_HASH`) for the admin
-    log routes, rate-limited via `rate-buckets.ts`.
-  * `rate-buckets.ts`: Per-key token buckets for favorite writes and admin
-    login attempts.
+    routes, rate-limited via `rate-buckets.ts`.
+  * `rate-buckets.ts`: Per-key token buckets for favorite writes, client
+    error reports and admin login attempts.
   * `metrics.ts`: Hourly, privacy-preserving usage counts logged through
     `logger.ts`; nothing persisted.
+  * `request-stats.ts`: The per-request log line and the in-process
+    counters `/api/metrics` reports.
+  * `client-errors.ts`: Validates the browser's `/api/client-errors`
+    reports before they are logged.
   * `logViewerPage.ts`: The `/admin/logs` HTML page and its
     `/admin/logs/fragment` polling partial.
   * `search-cache.ts`: LRU cache and concurrency limiter for `/api/search`'s
@@ -138,6 +142,8 @@ Every tracked file in the repo, with a line or two on what it is for.
       content-blocking panel around `HelpBody`.
     * `HelpBody.tsx`: The help text, pure so `staticPages.tsx` can render it
       for `/help`.
+    * `ErrorBoundary.tsx`: The boundary around `Library` - reports a render
+      crash and shows a reload prompt.
     * `BookOverlay.tsx`: The open-book dialog shell both reading dialogs use;
       two pages side by side when wide, one when narrow.
     * `ArtistStatementOverlay.tsx`: The artist's statement, opened from the
@@ -222,6 +228,9 @@ Every tracked file in the repo, with a line or two on what it is for.
       settings, blocked tags, the reader's favorites and client id.
     * `touchDebug.ts`: On-screen pointer stream behind `?touchdebug`.
     * `debug.ts`: Gates the dev panel and HUD behind `?debug`.
+    * `errorReport.ts`: The client error beacon - deduplicated reports of
+      uncaught errors, render crashes and lost WebGL contexts to
+      `/api/client-errors`.
     * `debugActions.ts`: A seeded, repeatable random-usage session for
       perf/memory profiling; also driven by `tools/perf-capture`.
     * `contentZoomCamera.ts`: Pure zoom/pan-bounds math for

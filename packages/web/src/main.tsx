@@ -68,6 +68,8 @@ import { applyCssVars } from './lib/cssVars.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
+import { installErrorReporting } from './lib/errorReport.ts';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { loadLoadingAnimation, type LoadingAnimation } from './lib/loadingAnimation.ts';
 import { useMapCamera } from './hooks/useMapCamera.ts';
 import { useMapRenderer, type RunningAnim } from './hooks/useMapRenderer.ts';
@@ -97,7 +99,11 @@ function App() {
 
   if (error) return <div className="panel">Could not load the collection: {error}</div>;
   if (!manifest) return <div className="panel">Opening the library…</div>;
-  return <Library manifest={manifest} />;
+  return (
+    <ErrorBoundary>
+      <Library manifest={manifest} />
+    </ErrorBoundary>
+  );
 }
 
 function Library({ manifest }: { manifest: ManifestResponse }) {
@@ -1454,6 +1460,7 @@ const URL_BLOCKED_TAGS: string[] =
     .filter(Boolean) ?? [];
 
 applyCssVars();
+installErrorReporting(WEBGL ? 'gl' : 'canvas2d');
 
 const rootEl = document.getElementById('root');
 if (rootEl) createRoot(rootEl).render(<App />);

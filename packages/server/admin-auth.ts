@@ -1,6 +1,6 @@
 /**
- * HTTP Basic Auth for the one operator, guarding the admin routes (currently
- * only `/api/logs`/`/admin/logs`). `ADMIN_PASSWORD_HASH` holds `salt:hash`
+ * HTTP Basic Auth for the one operator, guarding the admin routes
+ * (`/api/metrics`, `/api/logs`, `/admin/logs`). `ADMIN_PASSWORD_HASH` holds `salt:hash`
  * (both hex, from `scryptSync`) - `hashPassword` below is what
  * `tools/hash-admin-password` calls to produce it; the plaintext password is
  * never written anywhere, including this env var. There is one
@@ -70,7 +70,7 @@ function passwordFromHeader(header: string | undefined): string | null {
  * `rate-buckets.ts`'s per-address burst (this module's own header comment).
  * One bucket store per call, matching `app.ts`'s `favoriteBuckets` - the
  * caller (`app.ts`) builds this once and reuses it for every admin route,
- * so the three log-viewer routes share one budget rather than one each.
+ * so every admin route spends from one budget.
  *
  * `buckets` is injectable so a test can exhaust a burst without waiting on
  * a burst's worth of real `scrypt` calls, which can outlast one refill
