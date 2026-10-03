@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import {
   MIN_FAVORITE_HIT_TOUCH,
-  favoriteIconScreenRect,
   favoriteHitRect,
   pointInRect,
   FAVORITE_TOGGLE_PATH,
@@ -12,28 +11,6 @@ import {
 import { BASE_TILE } from './pyramid.ts';
 
 const GEO = layout({ width: 1, height: 1 });
-// An arbitrary stand-in for the art's decoded pixel size - drawing reads no
-// constant, so these tests supply their own and exercise the scaling math
-// independent of whatever the real asset happens to be.
-const ICON_SIZE = { w: 92, h: 198 };
-
-test('the icon is anchored to the tile\'s upper right corner and scales with cellPx', () => {
-  const cellPx = { x: BASE_TILE.w, y: BASE_TILE.h }; // 1x scale
-  const rect = favoriteIconScreenRect(cellPx, 100, 200, ICON_SIZE);
-  assert.equal(rect.w, ICON_SIZE.w);
-  assert.equal(rect.h, ICON_SIZE.h);
-  // Right edge of the icon meets the right edge of the tile; top edges align.
-  assert.equal(rect.x + rect.w, 100 + cellPx.x);
-  assert.equal(rect.y, 200);
-});
-
-test('halving the scale halves the icon', () => {
-  const full = favoriteIconScreenRect({ x: BASE_TILE.w, y: BASE_TILE.h }, 0, 0, ICON_SIZE);
-  const half = favoriteIconScreenRect({ x: BASE_TILE.w / 2, y: BASE_TILE.h / 2 }, 0, 0, ICON_SIZE);
-  assert.equal(half.w, full.w / 2);
-  assert.equal(half.h, full.h / 2);
-});
-
 test('the mouse hit rect matches the traced bbox scaled per axis, unrelated to icon draw size', () => {
   assert.ok(GEO.favoriteToggle, 'the trace must carry a tile_fav_toggle bbox for this test to mean anything');
   const cellPx = { x: 400, y: 300 };

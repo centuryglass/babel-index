@@ -55,6 +55,7 @@ import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { context } from 'esbuild';
+import { OVERLAYS_FILE } from '../map/overlays.ts';
 import { scanDirectory, SHARED_TILES_DIR } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
@@ -171,9 +172,18 @@ logger.info(
     centerFile,
     genericTiles: manifest.shared.generic.length,
     genericDistillTiles: manifest.shared.genericDistill.filter(Boolean).length,
+    overlays: Object.keys(manifest.overlays).length,
   },
   'tile collection scanned'
 );
+// No overlays means the map's corner controls draw no art, though their
+// traced hit areas still work - on the map that reads as missing buttons.
+if (!Object.keys(manifest.overlays).length)
+  logger.warn(
+    remoteBase
+      ? 'the remote manifest has no overlays - re-run the upload to include them'
+      : `no ${OVERLAYS_FILE} in ${sharedDir} - the corner controls will draw no art`
+  );
 // A collection with no center means the map has no blank tile to draw at
 // the origin or to fall back on - worth saying, since it reads on the map as a
 // hole rather than an error.

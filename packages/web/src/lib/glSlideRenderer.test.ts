@@ -5,12 +5,16 @@ import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { createSlideshow } from './slide.ts';
 import { DEFAULTS } from '../../../config/config.ts';
-import { createTileCache, CENTER as CENTER_TILE, type LoadableImage } from './tiles.ts';
+import {
+  createTileCache, CENTER as CENTER_TILE, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, DISTILL_ON, CLEAR_HISTORY_BOOK,
+  type LoadableImage,
+} from './tiles.ts';
 import { CELL_ASPECT } from './camera.ts';
 import { createGLSlideRenderer, type GLSlideDrawOpts } from './glSlideRenderer.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import type { GLTextureCache } from './gl/textureCache.ts';
 import type { GlowTextureCache } from './gl/glowTexture.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 
 const TIMING = DEFAULTS.slide;
 const VIEW = { x0: -4, y0: -3, x1: 5, y1: 4 };
@@ -107,7 +111,7 @@ function world() {
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createGLSlideRenderer({ cache, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
+  const renderer = createGLSlideRenderer({ cache, overlays: TEST_OVERLAYS, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
   return { built, board, show, renderer, cache, settle, cam };
 }
@@ -201,8 +205,8 @@ test('the favorites-sort switch rides along with the center room during a rearra
     const { motions } = w.show.advanceTo(t);
     const gl = fakeGLContext();
     frame(w, motions, gl, { favorites: { isFavorite }, sortMode: 'mine' });
-    assert.ok(hasSwitchPiece(gl, 'fav-center-switch-base'), `no switch base drawn at t=${t}`);
-    assert.ok(hasSwitchPiece(gl, 'fav-mine-on'), `no "mine" face drawn for sortMode: 'mine' at t=${t}`);
+    assert.ok(hasSwitchPiece(gl, FAV_CENTER_SWITCH_BASE), `no switch base drawn at t=${t}`);
+    assert.ok(hasSwitchPiece(gl, FAV_MINE_ON), `no "mine" face drawn for sortMode: 'mine' at t=${t}`);
   }
 });
 
@@ -211,7 +215,7 @@ test('the distill toggle rides along with the center room during a rearrangement
   frame(w, [], fakeGLContext(), { distillMode: true });
   w.settle();
 
-  const hasDistillOn = (gl: FakeGL) => gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes('distill-on'));
+  const hasDistillOn = (gl: FakeGL) => gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes(DISTILL_ON));
 
   for (let t = 0; t <= w.show.totalMs; t += 41) {
     const { motions } = w.show.advanceTo(t);
@@ -238,7 +242,7 @@ test('the clear-history book overlay rides along with the center room during a r
   w.settle();
 
   const hasOverlay = (gl: FakeGL) =>
-    gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes('clear-history-book'));
+    gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes(CLEAR_HISTORY_BOOK));
 
   for (let t = 0; t <= w.show.totalMs; t += 41) {
     const { motions } = w.show.advanceTo(t);
@@ -255,6 +259,6 @@ test('clearHistoryAvailable omitted on the GL slide renderer means no overlay at
 
   const gl = fakeGLContext();
   frame(w, [], gl);
-  const hasOverlay = gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes('clear-history-book'));
+  const hasOverlay = gl.textured.some((d) => String((d.img as { src?: string }).src ?? '').includes(CLEAR_HISTORY_BOOK));
   assert.ok(!hasOverlay, 'unexpected clear-history book draw with clearHistoryAvailable omitted');
 });

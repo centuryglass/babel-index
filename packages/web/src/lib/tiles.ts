@@ -69,6 +69,7 @@
 import { PYRAMID, PREFETCH, SHEETS, type Pyramid } from './pyramid.ts';
 import type { Rect, LocateTile } from './rooms.ts';
 import { perfRecordSheetStart, perfRecordSheetLoaded } from './perfProbe.ts';
+import { overlayFaceId } from '../../../map/overlays.ts';
 
 /**
  * The shared-tile ids. Strings, so they can never collide with a numeric room id.
@@ -108,22 +109,32 @@ export const genericDistillId = (i: number): number | string => {
   return id;
 };
 
+/**
+ * The corner overlays the app draws, by their id in `overlays.json`
+ * (`packages/map/overlays.ts`). The planners look each one up in
+ * `manifest.overlays` by this id; an id missing there draws nothing.
+ */
+export const FAVORITE_BADGE = 'favorite-badge';
+export const FAVORITE_SWITCH = 'favorite-switch';
+export const DISTILL_TOGGLE = 'distill-toggle';
+export const CLEAR_HISTORY = 'clear-history-book';
+
 /** The favorite badge's two faces - see `favoriteBadge.ts`. Shared ids, like `CENTER`. */
-export const FAV_ON = 'fav-on';
-export const FAV_OFF = 'fav-off';
+export const FAV_ON = overlayFaceId(FAVORITE_BADGE, 'on');
+export const FAV_OFF = overlayFaceId(FAVORITE_BADGE, 'off');
 
 /**
  * The center tile's favorites-sort switch art - the base plate, always drawn
  * over the center cell whenever favorites are enabled, and the two "on" faces
  * layered over it for whichever sort is active. Shared ids, like `CENTER`.
  */
-export const FAV_CENTER_SWITCH_BASE = 'fav-center-switch-base';
-export const FAV_MINE_ON = 'fav-mine-on';
-export const FAV_COUNT_ON = 'fav-count-on';
+export const FAV_CENTER_SWITCH_BASE = overlayFaceId(FAVORITE_SWITCH, 'base');
+export const FAV_MINE_ON = overlayFaceId(FAVORITE_SWITCH, 'mine');
+export const FAV_COUNT_ON = overlayFaceId(FAVORITE_SWITCH, 'count');
 
 /** The distill-mode toggle's two faces, on the center tile - see `distillToggle.ts`. Shared ids, like `CENTER`. */
-export const DISTILL_OFF = 'distill-off';
-export const DISTILL_ON = 'distill-on';
+export const DISTILL_OFF = overlayFaceId(DISTILL_TOGGLE, 'off');
+export const DISTILL_ON = overlayFaceId(DISTILL_TOGGLE, 'on');
 
 /**
  * The "forget searches" book's black spine art, overlaid on the shelf's
@@ -132,7 +143,7 @@ export const DISTILL_ON = 'distill-on';
  * that book brown, like every other closed book, so the override is only
  * visually distinct while it is actually present. Shared id, like `CENTER`.
  */
-export const CLEAR_HISTORY_BOOK = 'clear-history-book';
+export const CLEAR_HISTORY_BOOK = overlayFaceId(CLEAR_HISTORY, 'black');
 
 /** How many prefetches may be waiting at once. See `prefetch()` for why. */
 const QUEUE_LIMIT = 256;

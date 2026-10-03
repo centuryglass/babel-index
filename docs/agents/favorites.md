@@ -43,18 +43,17 @@ you" routes here, and its conventions still apply.
   - A catalog row is a fixed height, so its favorite control sits beside
     "show on the map", not inside `RoomDetails` as on the card and overlay.
     In the text column it would cost two story lines on every row.
-- **The on-map badge is the third favorite control, and it is fixed art,
-  not a scanned collection asset.** `assets/fav_on.png`/`fav_off.png`
-  (`tiles.ts`'s `FAV_ON`/`FAV_OFF`) resolve off `manifest.sharedBase`
-  directly; `scan.ts` discovers only their scaled pyramid
-  (`shared.favoriteLevels`). The renderers draw it on every non-center,
-  non-generic cell; `favoriteBadge.ts` is the pure geometry and hit-test
-  half. Two separate zoom gates:
+- **The on-map badge is the third favorite control, and its art is the
+  `favorite-badge` overlay.** `assets/overlays.json` names its faces
+  (`tiles.ts`'s `FAV_ON`/`FAV_OFF`) and its `pyramid` scale; `scan.ts`
+  discovers the scaled rungs into that overlay's `levels`. The renderers
+  draw it on every non-center, non-generic cell; `favoriteBadge.ts` is the
+  hit-test half. Two separate zoom gates:
   - **Drawing needs an exact pyramid level.** The scaled art is hand-tuned
-    and stops at tile width 128. `framePlan.ts`'s `planFavoriteBadge`
-    skips the cache's coarser-or-finer substitution: the badge's screen size
-    tracks the tile regardless of which rung backs it, so a substitute
-    would only be blurrier.
+    and stops at tile width 128. `framePlan.ts`'s `planOverlay` skips the
+    cache's coarser-or-finer substitution for a `pyramid` overlay: the
+    badge's screen size tracks the tile regardless of which rung backs it,
+    so a substitute would only be blurrier.
   - **Interaction needs `config.favorites.minInteractiveTileWidth`.** The
     tap handler (`main.tsx`) and hover path (`useMapRenderer.ts`,
     `useMapRendererGL.ts`) check it before hit-testing `favoriteHitRect`,

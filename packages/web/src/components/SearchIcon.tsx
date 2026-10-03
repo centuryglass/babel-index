@@ -8,7 +8,10 @@
  * The badge and its arrow are imported as raw markup (esbuild's `.svg`
  * text loader, `packages/server/index.ts`), so
  * `assets/search_button.svg`/`search_arrow.svg` stay the one copy of that
- * path data; a copy traced into JSX here would drift from them.
+ * path data; a copy traced into JSX here would drift from them. They are
+ * engine chrome, compiled into the bundle, not art a `--shared-dir` swaps:
+ * `overlays.json` (`packages/map/overlays.ts`) describes only art painted
+ * onto tiles.
  *
  * The two files share one coordinate system: the arrow was drawn to sit
  * flush against the top of the button's circle, so rotating it around the

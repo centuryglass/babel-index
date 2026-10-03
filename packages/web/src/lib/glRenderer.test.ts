@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { createGLRenderer, type GLDrawOpts, type GLDrawResult } from './glRenderer.ts';
 import {
-  createTileCache, CENTER, DISTILL_ON,
+  createTileCache, CENTER, DISTILL_ON, FAV_ON, FAV_OFF, CLEAR_HISTORY_BOOK,
   type LoadableImage, type RoomId,
 } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
@@ -12,6 +12,7 @@ import { BOOK_COUNT, type Slot } from './center.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import type { GLTextureCache } from './gl/textureCache.ts';
 import type { GlowTextureCache } from './gl/glowTexture.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 
 /**
  * Records instead of drawing - the GL counterpart of `render.test.ts`'s
@@ -125,7 +126,7 @@ function world({ concurrency = 4 }: { concurrency?: number } = {}) {
     cache,
     layout,
     order: shuffledOrder(ROOMS, 1),
-    renderer: createGLRenderer({ cache, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() }),
+    renderer: createGLRenderer({ cache, overlays: TEST_OVERLAYS, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() }),
   };
 }
 
@@ -203,7 +204,7 @@ test('a resident tile whose texture has not uploaded draws the blank fill and co
   w.images.settleAll();
 
   const noUploads: GLTextureCache = { beginFrame: () => {}, get: () => null, dispose: () => {} };
-  const renderer = createGLRenderer({ cache: w.cache, textures: noUploads, glowTextures: fakeGlowTextureCache() });
+  const renderer = createGLRenderer({ cache: w.cache, overlays: TEST_OVERLAYS, textures: noUploads, glowTextures: fakeGlowTextureCache() });
   const gl = fakeGLContext();
   const stats = renderer.draw({
     gl, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order,
@@ -236,10 +237,9 @@ test('the favorite badge draws on every room cell, and only room cells', () => {
     }
   assert.ok(rooms > 0, 'expected at least one room cell in view');
 
-  // The badge draws at the tile's level, like every other cell - not
-  // hardcoded to level 0, now that it has its own pyramid (issue #257).
+  // The badge is a `pyramid` overlay, so it draws at the tile's level.
   const badgeDraws = gl.textured.filter((d) =>
-    new RegExp(`^/l${stats.level}/fav-(on|off)\\.jpg$`).test((d.img as { src?: string }).src ?? '')
+    [`/l${stats.level}/${FAV_ON}.jpg`, `/l${stats.level}/${FAV_OFF}.jpg`].includes((d.img as { src?: string }).src ?? '')
   );
   assert.equal(badgeDraws.length, rooms, 'one badge per room cell, none for center/generic');
 });
@@ -252,7 +252,7 @@ test('no favorites option draws no badge and no favorites-sort switch', () => {
   const gl = fakeGLContext();
   frame(w, { zoom: 220, gl });
   for (const d of gl.textured)
-    assert.ok(!String((d.img as { src?: string }).src).includes('fav-'), 'unexpected favorite art with favorites omitted');
+    assert.ok(!String((d.img as { src?: string }).src).includes('overlay:favorite-'), 'unexpected favorite art with favorites omitted');
 });
 
 test('distillMode undefined draws no distill toggle at all', () => {
@@ -287,11 +287,11 @@ test('the clear-history book overlay draws only once the last shelf slot asks to
 
   const gl = fakeGLContext();
   frame(w, { zoom: 220, gl, centreSlots: centreSlotsForget });
-  assert.ok(gl.textured.some((d) => String((d.img as { src?: string }).src).includes('clear-history-book')));
+  assert.ok(gl.textured.some((d) => String((d.img as { src?: string }).src).includes(CLEAR_HISTORY_BOOK)));
 
   const glWithout = fakeGLContext();
   frame(w, { zoom: 220, gl: glWithout, centreSlots: Array(BOOK_COUNT).fill(null) });
-  assert.ok(!glWithout.textured.some((d) => String((d.img as { src?: string }).src).includes('clear-history-book')));
+  assert.ok(!glWithout.textured.some((d) => String((d.img as { src?: string }).src).includes(CLEAR_HISTORY_BOOK)));
 });
 
 // --- the keyboard cursor ring -------------------------------------------------
@@ -356,7 +356,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   };
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.02, seed: 1, aspect: CELL_ASPECT });
   const order = shuffledOrder(ROOMS, 1);
-  const renderer = createGLRenderer({ cache, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
+  const renderer = createGLRenderer({ cache, overlays: TEST_OVERLAYS, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
   const stats = renderer.draw({
     gl: fakeGLContext(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
   } as GLDrawOpts);

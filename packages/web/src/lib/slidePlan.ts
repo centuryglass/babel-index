@@ -19,6 +19,7 @@ import {
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue, Motion, Point } from '../../../map/moves.ts';
 import type { SortMode } from '../../../map/favorites.ts';
+import type { Overlays } from '../../../map/overlays.ts';
 
 /**
  * The cache id for a board value at its home map cell.
@@ -95,6 +96,8 @@ export interface SlideDrawResult {
 
 export interface CreateSlidePlannerOpts {
   cache: TileCache;
+  /** `manifest.overlays` - see `CreateMapPlannerOpts`. */
+  overlays: Overlays;
   pyramid?: Pyramid;
 }
 
@@ -102,7 +105,7 @@ export interface CreateSlidePlannerOpts {
  * One renderer's slide planner. `plan()` fills `list` for a frame and returns
  * its stats; the list is reused, so paint it before the next `plan()`.
  */
-export function createSlidePlanner({ cache, pyramid = PYRAMID }: CreateSlidePlannerOpts) {
+export function createSlidePlanner({ cache, overlays, pyramid = PYRAMID }: CreateSlidePlannerOpts) {
   const list = createDrawList();
 
   function plan({
@@ -154,7 +157,7 @@ export function createSlidePlanner({ cache, pyramid = PYRAMID }: CreateSlidePlan
       // carry one - which is when `value` is a numeric id rather than one of
       // the two shared board values.
       if (favorites && typeof value === 'number')
-        planFavoriteBadge(list, cache, favorites.isFavorite(value), cellPx, sx, sy, level);
+        planFavoriteBadge(list, cache, overlays, favorites.isFavorite(value), cellPx, sx, sy, level);
     };
 
     // The still field. Lines in motion are skipped here and planned after, so
@@ -202,9 +205,10 @@ export function createSlidePlanner({ cache, pyramid = PYRAMID }: CreateSlidePlan
       const sx = (0 - cam.x) * cellPx.x + w / 2;
       const sy = (0 - cam.y) * cellPx.y + h / 2;
       if (favorites && areSpinesLegible({ x: sx, y: sy, w: cellPx.x, h: cellPx.y }))
-        planFavoriteSwitch(list, cache, sortMode, cellPx, sx, sy);
-      if (distillMode !== undefined) planDistillToggle(list, cache, distillMode, hoveredDistill, cellPx, sx, sy);
-      if (clearHistoryAvailable) planClearHistoryBook(list, cache, cellPx, sx, sy);
+        planFavoriteSwitch(list, cache, overlays, sortMode, cellPx, sx, sy, level);
+      if (distillMode !== undefined)
+        planDistillToggle(list, cache, overlays, distillMode, hoveredDistill, cellPx, sx, sy, level);
+      if (clearHistoryAvailable) planClearHistoryBook(list, cache, overlays, cellPx, sx, sy, level);
     }
 
     return { drawn, blank, level, cells };

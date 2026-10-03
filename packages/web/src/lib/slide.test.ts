@@ -5,9 +5,13 @@ import { buildRearrangement, CENTER, GENERIC as BOARD_GENERIC } from '../../../m
 import { planMoves, applyMove } from '../../../map/illusion.ts';
 import { buildTimeline, createSlideshow, createSlideRenderer } from './slide.ts';
 import { DEFAULTS } from '../../../config/config.ts';
-import { createTileCache, CENTER as CENTER_TILE, type LoadableImage } from './tiles.ts';
+import {
+  createTileCache, CENTER as CENTER_TILE, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, DISTILL_ON, CLEAR_HISTORY_BOOK,
+  type LoadableImage,
+} from './tiles.ts';
 import { CELL_ASPECT } from './camera.ts';
 import type { DrawContext } from './render.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
 const TIMING = DEFAULTS.slide;
@@ -247,7 +251,7 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
   const frame = (motions) => {
     const ctx = fakeCtx();
@@ -294,7 +298,7 @@ test('the center room is never drawn anywhere but the center', () => {
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   settle();
 
   const centreIndex = built.origin.y * built.width + built.origin.x;
@@ -358,7 +362,7 @@ test('the favorite badge rides along with a sliding board, room cells only', () 
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
   const isFavorite = () => false;
   const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
@@ -396,7 +400,7 @@ test('the favorites-sort switch rides along with the center room during a rearra
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
   const isFavorite = () => false;
 
@@ -417,8 +421,8 @@ test('the favorites-sort switch rides along with the center room during a rearra
   for (let t = 0; t <= show.totalMs; t += 41) {
     const { motions } = show.advanceTo(t);
     const ctx = frame(motions);
-    assert.ok(hasSwitchPiece(ctx, 'fav-center-switch-base'), `no switch base drawn at t=${t}`);
-    assert.ok(hasSwitchPiece(ctx, 'fav-mine-on'), `no "mine" face drawn for sortMode: 'mine' at t=${t}`);
+    assert.ok(hasSwitchPiece(ctx, FAV_CENTER_SWITCH_BASE), `no switch base drawn at t=${t}`);
+    assert.ok(hasSwitchPiece(ctx, FAV_MINE_ON), `no "mine" face drawn for sortMode: 'mine' at t=${t}`);
   }
 });
 
@@ -426,7 +430,7 @@ test('no favorites option on the slide renderer means no badge at all', () => {
   const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
@@ -443,7 +447,7 @@ test('the distill toggle rides along with the center room during a rearrangement
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
   const frame = (motions) => {
@@ -458,7 +462,7 @@ test('the distill toggle rides along with the center room during a rearrangement
   frame([]);
   settle();
 
-  const hasDistillOn = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('distill-on'));
+  const hasDistillOn = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes(DISTILL_ON));
 
   for (let t = 0; t <= show.totalMs; t += 41) {
     const { motions } = show.advanceTo(t);
@@ -471,7 +475,7 @@ test('distillMode undefined on the slide renderer means no distill toggle at all
   const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
@@ -488,7 +492,7 @@ test('the clear-history book overlay rides along with the center room during a r
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
   const frame = (motions) => {
@@ -503,7 +507,7 @@ test('the clear-history book overlay rides along with the center room during a r
   frame([]);
   settle();
 
-  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes(CLEAR_HISTORY_BOOK));
 
   for (let t = 0; t <= show.totalMs; t += 41) {
     const { motions } = show.advanceTo(t);
@@ -516,7 +520,7 @@ test('clearHistoryAvailable omitted on the slide renderer means no clear-history
   const { built } = rearrangement();
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
-  const renderer = createSlideRenderer({ cache });
+  const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
   const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
@@ -524,6 +528,6 @@ test('clearHistoryAvailable omitted on the slide renderer means no clear-history
 
   const ctx = fakeCtx();
   renderer.draw({ ctx, width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
-  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes('clear-history-book'));
+  const hasClearHistoryBook = (ctx) => ctx.drawn.some((d) => String(d.img.src).includes(CLEAR_HISTORY_BOOK));
   assert.ok(!hasClearHistoryBook(ctx), 'unexpected clear-history book draw with clearHistoryAvailable omitted');
 });

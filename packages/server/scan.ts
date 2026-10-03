@@ -3,6 +3,7 @@ import { join, extname, basename } from 'node:path';
 import { mipPlan, sheetPlan, sheetDirName, sheetFileName } from '../pipeline/layout.ts';
 import { SHEETS } from '../web/src/lib/pyramid.ts';
 import { metadataCoverage } from '../map/metadata.ts';
+import { OVERLAYS_FILE, parseOverlays, type Overlays } from '../map/overlays.ts';
 import type { ImageSize, Manifest, Room, SharedAsset, SharedAssets, LevelInfo } from '../map/manifest.ts';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -61,16 +62,6 @@ export const GENERIC_DIR = 'generic';
  * how their files sort.
  */
 export const GENERIC_DISTILL_DIR = 'generic_distill';
-
-/**
- * The favorite badge's two faces - fixed app art, not scanned collection content,
- * but `discoverFavoriteLevels` checks for these two exact names to find the
- * badge's pyramid. Mirrors the literal filenames `rooms.ts` resolves the
- * badge's level-0 urls from; kept as a separate copy because the two modules
- * run in different packages and the fact is a name, not behaviour.
- */
-const FAV_ON_FILE = 'fav_on.png';
-const FAV_OFF_FILE = 'fav_off.png';
 
 /**
  * Read pixel dimensions from a file header, without decoding the image.
@@ -200,35 +191,60 @@ export async function discoverLevels(dir: string, source: ImageSize | null, room
 }
 
 /**
- * Which of the favorite badge's pyramid levels are generated -
- * `fav_on.png`/`fav_off.png` scaled into per-level `<width>/` directories
- * under `--shared-dir`, the shape `discoverLevels` walks for the center tile,
- * off the same reference size. A level counts only when both faces
- * are present; the badge is never sheet-packed, so this only ever checks the
- * per-file shape `discoverLevels` does for a level below `SHEETS.fromLevel`.
+ * Which pyramid levels an overlay's art has: every face scaled into a
+ * per-level `<width>/` directory under `--shared-dir`, the shape
+ * `discoverLevels` walks for the center tile, off the same reference size.
+ * A level counts only when every face is present. Overlay art is never
+ * sheet-packed, so this checks only the per-file shape.
  *
  * @param source the collection's reference tile size, same as `discoverLevels` gets
  */
-async function discoverFavoriteLevels(sharedDir: string, source: ImageSize | null): Promise<LevelInfo[]> {
-  if (!source?.w || !source?.h) return [{ level: 0, w: null, h: null, dir: null }];
+async function discoverOverlayLevels(sharedDir: string, files: string[], source: ImageSize | null): Promise<LevelInfo[]> {
+  if (!source?.w || !source?.h) return [{ level: 0, dir: null }];
 
-  const plan = mipPlan(source);
   const found: LevelInfo[] = [];
-  for (const step of plan) {
+  for (const step of mipPlan(source)) {
     if (step.level === 0) {
       found.push({ ...step, dir: null });
       continue;
     }
-    const path = join(sharedDir, step.dir);
-    const has = await readdir(path)
+    const has = await readdir(join(sharedDir, step.dir))
       .then((names) => {
-        const files = new Set(names);
-        return files.has(FAV_ON_FILE) && files.has(FAV_OFF_FILE);
+        const present = new Set(names);
+        return files.every((f) => present.has(f));
       })
       .catch(() => false);
     if (has) found.push(step);
   }
   return found;
+}
+
+/**
+ * The corner overlays `--shared-dir`'s `OVERLAYS_FILE` describes, each with
+ * its levels (`packages/map/overlays.ts`). No file means no overlays. A
+ * malformed file, or a face whose art is missing at level 0, throws: the
+ * server refuses to start rather than serve controls with no art.
+ */
+export async function scanOverlays(sharedDir: string, source: ImageSize | null): Promise<Overlays> {
+  let raw: string;
+  try {
+    raw = await readFile(join(sharedDir, OVERLAYS_FILE), 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
+  }
+  const descriptors = parseOverlays(JSON.parse(raw));
+  const present = new Set(await readdir(sharedDir));
+  const overlays: Overlays = {};
+  for (const [id, descriptor] of Object.entries(descriptors)) {
+    const files = Object.values(descriptor.faces);
+    const missing = files.find((f) => !present.has(f));
+    if (missing) throw new Error(`${OVERLAYS_FILE}: overlay "${id}" names ${missing}, which is not in ${sharedDir}`);
+    const levels =
+      descriptor.scale === 'pyramid' ? await discoverOverlayLevels(sharedDir, files, source) : [{ level: 0, dir: null }];
+    overlays[id] = { ...descriptor, levels };
+  }
+  return overlays;
 }
 
 /** Image filenames in a directory, sorted. Rejects if the directory is missing. */
@@ -281,7 +297,7 @@ export function resolveCenterFile(files: string[], center?: string): string | nu
 async function scanShared(
   tilesDir: string,
   { center }: { center?: string } = {}
-): Promise<Omit<SharedAssets, 'levels' | 'distillLevels' | 'favoriteLevels'>> {
+): Promise<Omit<SharedAssets, 'levels' | 'distillLevels'>> {
   const files = await listImages(tilesDir).catch(() => []);
   const centerFile = resolveCenterFile(files, center);
 
@@ -361,18 +377,14 @@ export async function scanDirectory(
   // treatment but its own field (`distillLevels`, see manifest.ts) rather than
   // being folded into this intersection - not every generic tile has a distill
   // alternate, so gating it on the base trees' rungs would veto levels the
-  // distill tree actually has. The favorite badge's pyramid
-  // (`favoriteLevels`) is discovered the same way, off the same reference
-  // size, but checked directly rather than intersected with any of these -
-  // see `discoverFavoriteLevels`'s doc. The rest of the fixed app art (the
-  // distill toggle, the "forget searches" overlay) never gets a pyramid at
-  // all and is not part of this discovery.
+  // distill tree actually has. A `pyramid` overlay's levels are discovered
+  // off the same reference size, per overlay (`scanOverlays`).
   const sharedSize = source && source.w && source.h ? { w: source.w, h: source.h } : null;
-  const [centerLevels, genericLevels, distillLevels, favoriteLevels] = await Promise.all([
+  const [centerLevels, genericLevels, distillLevels, overlays] = await Promise.all([
     discoverLevels(tilesDir, sharedSize),
     discoverLevels(join(tilesDir, GENERIC_DIR), sharedSize),
     discoverLevels(join(tilesDir, GENERIC_DISTILL_DIR), sharedSize),
-    sharedDir ? discoverFavoriteLevels(sharedDir, sharedSize) : [{ level: 0, w: null, h: null, dir: null }],
+    sharedDir ? scanOverlays(sharedDir, sharedSize) : {},
   ]);
   // Only intersect against a tree that actually has something to pyramid -
   // a collection with generic tiles but no separate center (or vice versa) must
@@ -449,7 +461,9 @@ export async function scanDirectory(
      * `generic` array the generic tiles are drawn from. Served from
      * `images/shared/`, inside the collection.
      */
-    shared: { ...sharedAssets, levels: sharedLevels, distillLevels, favoriteLevels },
+    shared: { ...sharedAssets, levels: sharedLevels, distillLevels },
+    /** The corner overlays from `--shared-dir`, served at `SHARED_BASE`; see `scanOverlays`. */
+    overlays,
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

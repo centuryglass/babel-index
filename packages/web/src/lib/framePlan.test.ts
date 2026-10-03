@@ -1,19 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createMapPlanner, planCell, planGenericFade, planFavoriteBadge, planFavoriteSwitch, planLoadingFrame,
+  createMapPlanner, planCell, planGenericFade, planFavoriteBadge, planFavoriteSwitch, planLoadingFrame, planOverlay,
   smoothingFor, SMOOTHING_MAX_DOWNSCALE,
 } from './framePlan.ts';
 import { createDrawList, BLANK_FILL, FADE_FILL, CURSOR_STROKE, type DrawItem, type DrawList } from './drawList.ts';
 import {
-  FAV_ON, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON,
+  FAV_ON, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, DISTILL_ON, DISTILL_TOGGLE, FAVORITE_BADGE,
   type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import { FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
 import { CELL_ASPECT } from './camera.ts';
-import { PYRAMID } from './pyramid.ts';
+import { BASE_TILE, PYRAMID } from './pyramid.ts';
 import type { LoadingFrame } from './loadingAnimation.ts';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import type { OverlayAnchor } from '../../../map/overlays.ts';
 
 /** A `TileCache` whose `get` is `lookup`, recording every request; the rest is inert. */
 function stubCache(lookup: (id: RoomId, want: number) => TileHit | null) {
@@ -109,7 +111,7 @@ test('the favorite badge never substitutes a different level', () => {
   // asked for.
   const { cache } = stubCache((_id, want) => (want === 3 ? { img: image(), rect: null, level: 3 } : null));
   const list = fresh();
-  planFavoriteBadge(list, cache, true, { x: 100, y: 75 }, 0, 0, 2);
+  planFavoriteBadge(list, cache, TEST_OVERLAYS, true, { x: 100, y: 75 }, 0, 0, 2);
   assert.equal(list.length, 0, 'a non-exact-level hit must not be planned');
 });
 
@@ -117,7 +119,7 @@ test('a hovered badge plans its glow over the whole cell, after the art', () => 
   assert.ok(FAVORITE_TOGGLE_PATH, 'the badge silhouette ships with the geometry');
   const { cache } = stubCache((id, want) => (id === FAV_ON ? { img: image(), rect: null, level: want } : null));
   const list = fresh();
-  planFavoriteBadge(list, cache, true, { x: 200, y: 150 }, 10, 20, 0, true);
+  planFavoriteBadge(list, cache, TEST_OVERLAYS, true, { x: 200, y: 150 }, 10, 20, 0, true);
   const [badge, glow] = itemsOf(list);
   assert.equal(badge.kind, 'image');
   assert.equal(glow.kind, 'glow');
@@ -129,7 +131,7 @@ test('a hovered badge plans its glow over the whole cell, after the art', () => 
 test('a hovered badge with no art plans no glow', () => {
   const { cache } = stubCache(() => null);
   const list = fresh();
-  planFavoriteBadge(list, cache, true, { x: 200, y: 150 }, 0, 0, 0, true);
+  planFavoriteBadge(list, cache, TEST_OVERLAYS, true, { x: 200, y: 150 }, 0, 0, 0, true);
   assert.equal(list.length, 0);
 });
 
@@ -146,13 +148,42 @@ test('the favorites-sort switch sizes each piece off its own decoded pixels, not
     return size ? { img: image(...size), rect: null, level: 0 } : null;
   });
   const list = fresh();
-  planFavoriteSwitch(list, cache, 'mine', { x: 1024, y: 768 }, 0, 0);
+  planFavoriteSwitch(list, cache, TEST_OVERLAYS, 'mine', { x: 1024, y: 768 }, 0, 0, 0);
   const [base, mine] = itemsOf(list) as ImageItem[];
   assert.ok(base && mine, 'both the base plate and the "mine" face must be planned');
   assert.equal(base.dst.x, mine.dst.x);
   assert.equal(base.dst.y, mine.dst.y);
   assert.equal(base.dst.w, 281);
   assert.equal(mine.dst.w, 255);
+});
+
+test('an overlay lands at the corner its descriptor names, and a missing descriptor or face plans nothing', () => {
+  const { cache } = stubCache((_id, want) => ({ img: image(10, 20), rect: null, level: want }));
+  const cell = { x: BASE_TILE.w, y: BASE_TILE.h };
+  const at = (anchor: OverlayAnchor) => {
+    const list = fresh();
+    const overlays = { ...TEST_OVERLAYS, 'distill-toggle': { ...TEST_OVERLAYS['distill-toggle'], anchor } };
+    planOverlay(list, cache, overlays, DISTILL_TOGGLE, 'on', cell, 100, 200, 0);
+    return (itemsOf(list) as ImageItem[])[0].dst;
+  };
+  assert.deepEqual(at('bottom-right'), { x: 100 + cell.x - 10, y: 200 + cell.y - 20, w: 10, h: 20 });
+  assert.deepEqual(at('top-left'), { x: 100, y: 200, w: 10, h: 20 });
+
+  const list = fresh();
+  assert.equal(planOverlay(list, cache, {}, DISTILL_TOGGLE, 'on', cell, 0, 0, 0), null);
+  assert.equal(planOverlay(list, cache, TEST_OVERLAYS, DISTILL_TOGGLE, 'sideways', cell, 0, 0, 0), null);
+  assert.equal(list.length, 0);
+});
+
+test('a tile-scale overlay asks for level 0 whatever the tile\'s level; a pyramid one asks for the tile\'s', () => {
+  const asked: [unknown, number][] = [];
+  const { cache } = stubCache((id, want) => {
+    asked.push([id, want]);
+    return null;
+  });
+  planOverlay(fresh(), cache, TEST_OVERLAYS, DISTILL_TOGGLE, 'on', { x: 100, y: 75 }, 0, 0, 3);
+  planOverlay(fresh(), cache, TEST_OVERLAYS, FAVORITE_BADGE, 'on', { x: 100, y: 75 }, 0, 0, 3);
+  assert.deepEqual(asked, [[DISTILL_ON, 0], [FAV_ON, 3]]);
 });
 
 test('a loading frame lands at its cell-fraction rect, from its sheet sub-rect', () => {
@@ -176,7 +207,7 @@ const ROOMS = 400;
 function planner() {
   const { cache } = stubCache((_id, want) => ({ img: image(), rect: null, level: want }));
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT });
-  return { planner: createMapPlanner({ cache }), layout, order: shuffledOrder(ROOMS, 1) };
+  return { planner: createMapPlanner({ cache, overlays: TEST_OVERLAYS }), layout, order: shuffledOrder(ROOMS, 1) };
 }
 
 test('a frame plans one tile per on-screen cell, with no context at all', () => {

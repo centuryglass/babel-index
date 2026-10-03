@@ -17,24 +17,21 @@
  * its own pyramids"):
  * - the center and every generic tile resolve off `shared.levels`;
  * - generic distill alternates resolve off `shared.distillLevels`;
- * - the favorite badge's faces (`FAV_ON`/`FAV_OFF`) resolve off
- *   `shared.favoriteLevels`.
+ * - each corner overlay's faces (`manifest.overlays`, ids from
+ *   `overlayFaceId`) resolve off `sharedBase` by filename, and off that
+ *   overlay's own `levels`.
  *
  * A shared level resolves by inserting `<width>/` before the asset's
  * filename, the layout `packages/pipeline/shared-mips.ts` writes. A level
- * missing from the group's array resolves to null.
- *
- * Every other shared id (the distill toggle's faces, the "forget searches"
- * overlay) is flat level-0 art, reached through the cache's `servableLevel`
- * for any coarser request. The cache keys on id, not cell, so a screen of
- * thousands of generic cells holds only those few images.
+ * missing from the group's array resolves to null; a `tile` overlay's only
+ * level is 0, reached through the cache's `servableLevel` for any coarser
+ * request. The cache keys on id, not cell, so a screen of thousands of
+ * generic cells holds only those few images.
  */
-import {
-  CENTER, genericId, genericDistillId, FAV_ON, FAV_OFF, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, FAV_COUNT_ON,
-  DISTILL_OFF, DISTILL_ON, CLEAR_HISTORY_BOOK,
-} from './tiles.ts';
+import { CENTER, genericId, genericDistillId } from './tiles.ts';
+import { overlayFaceId } from '../../../map/overlays.ts';
 import { sheetPosition, sheetFileName } from '../../../pipeline/layout.ts';
-import type { Manifest } from '../../../map/manifest.ts';
+import type { LevelInfo, Manifest } from '../../../map/manifest.ts';
 
 /** A source rectangle within a shared sheet image, in that image's own pixels. */
 export type Rect = { sx: number; sy: number; sw: number; sh: number };
@@ -93,34 +90,24 @@ export function createTileLocator(manifest: Manifest): LocateTile {
       distillSharedIds.add(id);
     }
   });
-  // The favorite badge's pyramid, same treatment as `distillLevels` - a
-  // third map, never intersected with the other two (see manifest.ts's doc).
-  const favoriteLevels = new Map((shared.favoriteLevels ?? [{ level: 0, dir: null }]).map((l) => [l.level, l]));
-  const favoriteSharedIds = new Set<number | string>([FAV_ON, FAV_OFF]);
-  // The badge's level-0 urls: fixed app art in `--shared-dir`, not part of a
-  // scanned collection, so not listed in `manifest.shared.center`/`generic`;
-  // they resolve off `sharedBase`. Only their per-level widths are
-  // discovered, in `SharedAssets.favoriteLevels`.
-  sharedUrls.set(FAV_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_on.png')}`);
-  sharedUrls.set(FAV_OFF, `${manifest.sharedBase}/${encodeURIComponent('fav_off.png')}`);
-  pyramidSharedIds.add(FAV_ON);
-  pyramidSharedIds.add(FAV_OFF);
-  // The center tile's favorites-sort switch art - same fixed-app-art treatment.
-  sharedUrls.set(FAV_CENTER_SWITCH_BASE, `${manifest.sharedBase}/${encodeURIComponent('fav_center_switch_base.png')}`);
-  sharedUrls.set(FAV_MINE_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_mine_on.png')}`);
-  sharedUrls.set(FAV_COUNT_ON, `${manifest.sharedBase}/${encodeURIComponent('fav_count_on.png')}`);
-  // The distill-mode toggle's two faces - same fixed-app-art treatment.
-  sharedUrls.set(DISTILL_OFF, `${manifest.sharedBase}/${encodeURIComponent('distill_off.png')}`);
-  sharedUrls.set(DISTILL_ON, `${manifest.sharedBase}/${encodeURIComponent('distill_on.png')}`);
-  // The "forget searches" book's black spine overlay - same fixed-app-art treatment.
-  sharedUrls.set(CLEAR_HISTORY_BOOK, `${manifest.sharedBase}/${encodeURIComponent('clear_history_book.png')}`);
+  // Each overlay's own levels, never intersected with the trees above.
+  const overlayLevels = new Map<number | string, Map<number, LevelInfo>>();
+  for (const [id, overlay] of Object.entries(manifest.overlays ?? {})) {
+    const levelMap = new Map(overlay.levels.map((l) => [l.level, l]));
+    for (const [face, file] of Object.entries(overlay.faces)) {
+      const faceId = overlayFaceId(id, face);
+      sharedUrls.set(faceId, `${manifest.sharedBase}/${encodeURIComponent(file)}`);
+      pyramidSharedIds.add(faceId);
+      overlayLevels.set(faceId, levelMap);
+    }
+  }
 
   const resolve = (id: number | string, level: number): TileLocation | null => {
     if (sharedUrls.has(id)) {
       const url = sharedUrls.get(id)!;
       if (level === 0) return { url, rect: null };
       if (!pyramidSharedIds.has(id)) return null;
-      const levelMap = distillSharedIds.has(id) ? distillLevels : favoriteSharedIds.has(id) ? favoriteLevels : sharedLevels;
+      const levelMap = distillSharedIds.has(id) ? distillLevels : (overlayLevels.get(id) ?? sharedLevels);
       const info = levelMap.get(level);
       // Insert `<width>/` before the filename - the same per-level directory
       // `shared-mips.ts` wrote it into, right beside where level 0 already sits.

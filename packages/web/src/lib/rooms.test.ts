@@ -13,6 +13,16 @@ function manifest(extraLevels: any[] = []): any {
       generic: [{ file: 'g1.png', url: 'shared/generic/g1.png' }, { file: 'g2.png', url: 'shared/generic/g2.png' }],
       genericDistill: [{ file: 'g1.jpg', url: 'shared/generic_distill/g1.jpg' }, null],
     },
+    overlays: {
+      'favorite-badge': {
+        anchor: 'top-right', scale: 'pyramid', faces: { on: 'fav_on.png', off: 'fav off.png' },
+        levels: [{ level: 0, dir: null }],
+      },
+      'distill-toggle': {
+        anchor: 'bottom-right', scale: 'tile', faces: { off: 'distill_off.png' },
+        levels: [{ level: 0, dir: null }],
+      },
+    },
     rooms: [
       { id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: 1 },
       { id: 1, file: '002.jpg', url: 'images/002.jpg', bytes: 1 },
@@ -82,10 +92,8 @@ test('a level shared.levels does not have resolves to null, same as a missing co
 });
 
 test('a shared id with no pyramid of its own never resolves past level 0, even when shared.levels has one', () => {
-  // The distill toggle, the "forget searches" overlay: neither is in
-  // shared.levels' intersection, and neither has an array of its own the way
-  // the favorite badge does, so a coarser request must fail rather than
-  // silently reusing the center/generic ladder.
+  // A `tile` overlay is in no shared tree, so a coarser request must fail
+  // rather than silently reuse the center/generic ladder.
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const locate = createTileLocator(m);
@@ -114,43 +122,35 @@ test('shared.distillLevels is independent of shared.levels - the base ladder hav
   assert.equal(locate(genericDistillId(0), 1), null, 'shared.levels having a rung does not lend it to distill');
 });
 
-test('the favorite badge faces resolve off sharedBase at level 0, even absent from manifest.shared', () => {
-  // Fixed app art, not a scanned collection asset - so unlike the center and the
-  // generic tiles, `manifest.shared.center`/`generic` never describe them.
-  // They still have their own pyramid (`favoriteLevels`), so with no
-  // `m.shared.favoriteLevels` set this falls back to level 0 only, same as
-  // an older manifest with none of the three arrays.
+test('overlay faces resolve off sharedBase by filename at level 0, url-encoded', () => {
   const locate = createTileLocator(manifest());
   assert.deepEqual(locate(FAV_ON, 0), { url: 'shared/fav_on.png', rect: null });
-  assert.deepEqual(locate(FAV_OFF, 0), { url: 'shared/fav_off.png', rect: null });
-  assert.equal(locate(FAV_ON, 1), null, 'no favoriteLevels entry means no coarser level exists');
+  assert.deepEqual(locate(FAV_OFF, 0), { url: 'shared/fav%20off.png', rect: null });
+  assert.equal(locate(FAV_ON, 1), null, 'no level 1 in the overlay\'s own levels');
 });
 
-test('a level in shared.favoriteLevels resolves by inserting <width>/ before the filename', () => {
+test('an overlay\'s level resolves by inserting <width>/ before the filename', () => {
   const m = manifest();
-  m.shared.favoriteLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  m.overlays['favorite-badge'].levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   const locate = createTileLocator(m);
   assert.deepEqual(locate(FAV_ON, 1), { url: 'shared/512/fav_on.png', rect: null });
-  assert.deepEqual(locate(FAV_OFF, 1), { url: 'shared/512/fav_off.png', rect: null });
 });
 
-test('shared.favoriteLevels is independent of shared.levels and shared.distillLevels', () => {
+test('an overlay\'s levels are independent of shared.levels and shared.distillLevels, both ways', () => {
   const m = manifest();
   m.shared.levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
   m.shared.distillLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
-  // No m.shared.favoriteLevels set: falls back to level 0 only, regardless
-  // of what the other two arrays have.
-  const locate = createTileLocator(m);
-  assert.equal(locate(FAV_ON, 1), null, 'shared.levels/distillLevels having a rung does not lend it to the badge');
+  assert.equal(createTileLocator(m)(FAV_ON, 1), null, 'shared.levels/distillLevels having a rung does not lend it to an overlay');
+
+  const n = manifest();
+  n.overlays['favorite-badge'].levels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
+  assert.equal(createTileLocator(n)(CENTER, 1), null, 'nor does an overlay lend one to the center');
 });
 
-test('a favoriteLevels entry does not lend a level to the center/generic tiles or vice versa', () => {
+test('a face the manifest\'s overlays do not name resolves to nothing', () => {
   const m = manifest();
-  m.shared.favoriteLevels = [{ level: 0, dir: null }, { level: 1, dir: '512' }];
-  // No m.shared.levels set: the center/generic ladder stays flat.
-  const locate = createTileLocator(m);
-  assert.equal(locate(CENTER, 1), null);
-  assert.deepEqual(locate(FAV_ON, 1), { url: 'shared/512/fav_on.png', rect: null });
+  m.overlays = {};
+  assert.equal(createTileLocator(m)(FAV_ON, 0), null);
 });
 
 // --- sheet-packed levels -----------------------------------------------------

@@ -455,8 +455,8 @@ export function CatalogView({
   const thumbPx = ultraNarrow ? centreUltraThumbWidth(geom.width, matPad) : thumbWidth(geom.width);
   // The distill toggle's size as a percentage of the thumbnail, anchored
   // bottom-right in css/catalog.css. The map's canvas overlay
-  // (`distillToggle.ts`'s `distillIconScreenRect`) scales the icon by the
-  // tile's pixels per `BASE_TILE` pixel, so its share of the tile is
+  // (`overlay.ts`'s `overlayScreenRect`) scales the icon by the tile's
+  // pixels per `BASE_TILE` pixel, so its share of the tile is
   // `iconSize / BASE_TILE` at any thumbnail size.
   const distillW = distillIconSize.w ? `${(distillIconSize.w / BASE_TILE.w) * 100}%` : '0';
   const distillH = distillIconSize.h ? `${(distillIconSize.h / BASE_TILE.h) * 100}%` : '0';

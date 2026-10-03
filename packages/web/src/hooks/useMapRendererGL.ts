@@ -4,11 +4,11 @@
  *
  * Two effects, not one:
  *
- *   - The canvas-lifetime effect (deps `[canvasRef, cache]` only) creates the
- *     GL context, the two renderers and every listener once per real canvas
- *     mount, or again after a lost context restores. `cache` is a dep because
- *     a new `TileCache` (a reloaded collection) does need a fresh GL
- *     runtime bound to it; `layout`/`order`/`favorites` and the like change
+ *   - The canvas-lifetime effect (deps `[canvasRef, cache, overlays]` only)
+ *     creates the GL context, the two renderers and every listener once per
+ *     real canvas mount, or again after a lost context restores. `cache` and
+ *     `overlays` are deps because a reloaded collection needs a fresh GL
+ *     runtime bound to its new ones; `layout`/`order`/`favorites` and the like change
  *     on almost every search or toggle and must not tear this down.
  *   - Everything that legitimately changes often is read through
  *     `latestRef`, assigned during the render body (not inside an effect) so
@@ -44,6 +44,7 @@ import type { RunningAnim } from './useMapRenderer.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { PERF, PERF_FORCE_DPR1, perfRecordFrame } from '../lib/perfProbe.ts';
 import { DEFAULTS } from '../../../config/config.ts';
+import type { Overlays } from '../../../map/overlays.ts';
 
 /** Coarse-pointer hit padding, same check and reason as `useMapRenderer.ts`'s `COARSE_POINTER`. */
 const COARSE_POINTER = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -70,6 +71,8 @@ interface UseMapRendererGLOpts {
   layout: MapLayout;
   order: number[];
   cache: TileCache;
+  /** `manifest.overlays`, the same object for the manifest's whole life. */
+  overlays: Overlays;
   centreSlots?: (Slot | null)[] | null;
   spineFontLimits?: SpineFontLimits | null;
   centreOverlay: (w: number, h: number) => CentreOverlay;
@@ -114,7 +117,7 @@ interface Latest {
 
 export function useMapRendererGL({
   canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
-  draw, anim, cam, mode, layout, order, cache, centreSlots, spineFontLimits = null,
+  draw, anim, cam, mode, layout, order, cache, overlays, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null,
   minFavoriteInteractiveWidth = DEFAULTS.favorites.minInteractiveTileWidth,
   favTooltipRef, sortMode = 'relevance',
@@ -155,8 +158,10 @@ export function useMapRendererGL({
     const setup = () => {
       const gl = createGLContext(canvas);
       if (!gl) return;
-      const renderer = createGLRenderer({ cache });
-      const slideRenderer = createGLSlideRenderer({ cache, textures: renderer.textures, glowTextures: renderer.glowTextures });
+      const renderer = createGLRenderer({ cache, overlays });
+      const slideRenderer = createGLSlideRenderer({
+        cache, overlays, textures: renderer.textures, glowTextures: renderer.glowTextures,
+      });
       runtime = { gl, renderer, slideRenderer };
     };
 
@@ -502,5 +507,5 @@ export function useMapRendererGL({
     // canvas-lifetime-only. See this file's doc and docs/agents/rendering.md's
     // "The WebGL renderer".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasRef, cache]);
+  }, [canvasRef, cache, overlays]);
 }

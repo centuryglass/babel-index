@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { imageSize, scanDirectory, discoverLevels } from './scan.ts';
 import * as fixture from './image-fixtures.ts';
 
@@ -553,47 +554,78 @@ test('no generic_distill directory at all reports only level 0, not a throw', as
   });
 });
 
-test('favoriteLevels is discovered off fav_on.png/fav_off.png in --shared-dir\'s tile-width directories, independent of shared.levels or distillLevels', async () => {
+// --- corner overlays ---------------------------------------------------------
+
+const BADGE = JSON.stringify({
+  'favorite-badge': { anchor: 'top-right', scale: 'pyramid', faces: { on: 'fav_on.png', off: 'fav_off.png' } },
+  'distill-toggle': { anchor: 'bottom-right', scale: 'tile', faces: { off: 'distill_off.png' } },
+});
+
+test('a pyramid overlay\'s levels are discovered off its faces in --shared-dir\'s tile-width directories, independent of shared.levels', async () => {
   await tileCollection(
     {
       ...pyramid(),
       'shared/generic/v1.webp': fixture.webpVp8(1024, 768),
       // no generic/512/ - the generic tree never got that level, so shared.levels stays at 0
+      'assets/overlays.json': BADGE,
       'assets/fav_on.png': fixture.png(92, 198),
       'assets/fav_off.png': fixture.png(92, 198),
+      'assets/distill_off.png': fixture.png(10, 10),
       'assets/512/fav_on.png': fixture.png(46, 99),
       'assets/512/fav_off.png': fixture.png(46, 99),
+      'assets/512/distill_off.png': fixture.png(5, 5),
     },
     async (dir) => {
-      const { shared } = await scanDirectory(dir, { sharedDir: join(dir, 'assets') });
+      const { shared, overlays } = await scanDirectory(dir, { sharedDir: join(dir, 'assets') });
       assert.deepEqual(shared.levels.map((l) => l.level), [0], 'the generic tree has no 512 level');
-      assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0, 1], 'the badge tree does');
-      assert.equal(shared.favoriteLevels[1].dir, '512');
+      const badge = overlays['favorite-badge'];
+      assert.deepEqual(badge.levels.map((l) => l.level), [0, 1], 'the badge tree does');
+      assert.equal(badge.levels[1].dir, '512');
+      assert.equal(badge.anchor, 'top-right');
+      assert.deepEqual(badge.faces, { on: 'fav_on.png', off: 'fav_off.png' });
+      assert.deepEqual(overlays['distill-toggle'].levels.map((l) => l.level), [0], 'a tile overlay never gets a pyramid');
     }
   );
 });
 
-test('a level directory with only one of the two badge faces is not a favorite level', async () => {
+test('a level directory missing one of a pyramid overlay\'s faces is not one of its levels', async () => {
   await tileCollection(
     {
       ...pyramid(),
+      'assets/overlays.json': BADGE,
       'assets/fav_on.png': fixture.png(92, 198),
       'assets/fav_off.png': fixture.png(92, 198),
+      'assets/distill_off.png': fixture.png(10, 10),
       'assets/512/fav_on.png': fixture.png(46, 99),
       // no assets/512/fav_off.png - an incomplete pair
     },
     async (dir) => {
-      const { shared } = await scanDirectory(dir, { sharedDir: join(dir, 'assets') });
-      assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0]);
+      const { overlays } = await scanDirectory(dir, { sharedDir: join(dir, 'assets') });
+      assert.deepEqual(overlays['favorite-badge'].levels.map((l) => l.level), [0]);
     }
   );
 });
 
-test('no scaled favorite art at all reports only level 0, not a throw', async () => {
+test('no overlays.json, or no --shared-dir, means no overlays rather than a throw', async () => {
   await tileCollection(pyramid(), async (dir) => {
-    assert.deepEqual((await scanDirectory(dir)).shared.favoriteLevels.map((l) => l.level), [0], 'no --shared-dir');
-    const { shared } = await scanDirectory(dir, { sharedDir: join(dir, 'assets') });
-    assert.deepEqual(shared.favoriteLevels.map((l) => l.level), [0], 'a --shared-dir with no badge art');
+    assert.deepEqual((await scanDirectory(dir)).overlays, {}, 'no --shared-dir');
+    assert.deepEqual((await scanDirectory(dir, { sharedDir: join(dir, 'assets') })).overlays, {}, 'no assets/ at all');
+  });
+});
+
+test('a malformed overlays.json, or one naming art that is not there, fails the scan', async () => {
+  await tileCollection({ ...pyramid(), 'assets/overlays.json': '{ "x": { "anchor": "middle" } }' }, async (dir) => {
+    await assert.rejects(scanDirectory(dir, { sharedDir: join(dir, 'assets') }), /anchor/);
+  });
+  await tileCollection({ ...pyramid(), 'assets/overlays.json': BADGE, 'assets/fav_on.png': fixture.png(8, 8) }, async (dir) => {
+    await assert.rejects(scanDirectory(dir, { sharedDir: join(dir, 'assets') }), /fav_off\.png/);
+  });
+});
+
+test('the repo\'s own assets/overlays.json scans cleanly', async () => {
+  await tileCollection(pyramid(), async (dir) => {
+    const { overlays } = await scanDirectory(dir, { sharedDir: fileURLToPath(new URL('../../assets', import.meta.url)) });
+    assert.ok(Object.keys(overlays).length > 0);
   });
 });
 

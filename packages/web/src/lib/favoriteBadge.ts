@@ -1,27 +1,18 @@
 /**
- * The favorite badge painted into a tile's upper right corner.
+ * The favorite badge's hit-test: the control in a room tile's upper right
+ * corner.
  *
- * `assets/fav_on.png`/`fav_off.png` are fixed, checked-in art that
- * integrates with any tile: anchored to the tile's top right corner and
- * scaled by a cell's pixels-per-cell-width over the reference width the
- * loaded art was itself scaled to match - the same factor `framePlan.ts`/
- * `slidePlan.ts` draw the tile itself at, and the one factor covers both axes
- * because both assets share the tile's aspect. The badge has a pyramid
- * (`manifest.shared.favoriteLevels`), so the scale denominator is
- * not a flat `BASE_TILE.w` - `favoriteIconScreenRect` is the one home for that
- * rule and the double-shrink it prevents.
+ * Its art is the `favorite-badge` overlay (`tiles.ts`'s `FAV_ON`/`FAV_OFF`),
+ * placed by `overlay.ts`'s `overlayScreenRect` like every corner overlay.
+ * The hit test works in traced tile fractions
+ * (`FAVORITE_TOGGLE_BBOX`/`FAVORITE_TOGGLE_PATH`) and never reads the art's
+ * size.
  *
- * Hit-testing and drawing read different size sources: the hit test works
- * in traced tile fractions (`FAVORITE_TOGGLE_BBOX`/`FAVORITE_TOGGLE_PATH`)
- * and needs no native pixel size, while the drawn icon is placed from the
- * decoded art's pixels - see `favoriteIconScreenRect`.
- *
- * No DOM - this is the pure geometry/hit-test half, split out the same way
+ * No DOM - this is the pure hit-test half, split out the same way
  * `picking.ts` and `center.ts` are.
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { flattenPath, pointInPolygon, type Point } from './svgPath.ts';
-import { BASE_TILE, sizeOf as pyramidSizeOf } from './pyramid.ts';
 
 export interface Rect {
   x: number;
@@ -71,56 +62,6 @@ export const MIN_FAVORITE_HIT_TOUCH = 20;
  * most of the tile and turn "tap the tile" into "tap the favorite button".
  */
 const TOUCH_HIT_AREA_CAP = 0.1;
-
-/**
- * The badge's full screen rect for a tile whose top left corner is at
- * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's upper
- * right corner and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the decoded art's pixel size, read by `framePlan.ts`'s
- * `planFavoriteBadge` once the tile cache reports it loaded - unrelated to
- * `FAVORITE_TOGGLE_BBOX`, which sizes the tap target instead.
- *
- * `level` is which pyramid rung `iconSize` came from - the badge's
- * pyramid (`manifest.shared.favoriteLevels`), not necessarily the room
- * tile's. The scale factor is `cellPx.x` over that level's reference
- * width (`pyramid.sizeOf(level).w`), never a flat `BASE_TILE.w`: a coarser
- * rung's art is already scaled down on disk to match a tile drawn at that
- * level's width, so dividing it by the full-size level-0 width would shrink
- * it twice. Level 0's reference width is `BASE_TILE.w`, so level 0 is
- * unchanged.
- */
-export function favoriteIconScreenRect(
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  iconSize: { w: number; h: number },
-  level = 0
-): Rect {
-  const scale = cellPx.x / (pyramidSizeOf(level)?.w ?? BASE_TILE.w);
-  const w = iconSize.w * scale;
-  const h = iconSize.h * scale;
-  return { x: sx + cellPx.x - w, y: sy, w, h };
-}
-
-/**
- * The favorites-sort switch's full screen rect on the center tile, anchored
- * to its upper left corner - the mirror of `favoriteIconScreenRect`'s upper
- * right - and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the base plate's own decoded pixel size, read like
- * `favoriteIconScreenRect`'s. The switch's hit regions are traced
- * separately (`center.ts`'s `CENTER_MINE_TOGGLE_RECT`/
- * `CENTER_COUNT_TOGGLE_RECT`/`CENTER_SHUFFLE_RECT`); this is only where the
- * art is drawn.
- */
-export function favoriteSwitchScreenRect(
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  iconSize: { w: number; h: number }
-): Rect {
-  const scale = cellPx.x / BASE_TILE.w;
-  return { x: sx, y: sy, w: iconSize.w * scale, h: iconSize.h * scale };
-}
 
 /**
  * The badge's tap target: `FAVORITE_TOGGLE_BBOX` scaled per axis onto this

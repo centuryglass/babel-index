@@ -7,6 +7,7 @@
  * Types only: every consumer reaches it through `import type`, so it has no
  * runtime presence in the client bundle or under Node.
  */
+import type { Overlays } from './overlays.ts';
 
 export interface ImageSize {
   w: number;
@@ -29,10 +30,9 @@ export interface SharedAsset extends Partial<ImageSize> {
 
 /**
  * The shared tiles from the collection's `shared/` subdirectory (`scan.ts`'s
- * `SHARED_TILES_DIR`), and the pyramid rungs each set has on disk. Read by `rooms.ts` (url resolution), `main.tsx` (warming),
- * and the favorite badge's drawing (`favoriteBadge.ts`, `render.ts`). The rest
- * of the fixed app art (the distill toggle, the "forget searches" overlay) is
- * in none of these and stays flat at level 0 (see `rooms.ts`'s header).
+ * `SHARED_TILES_DIR`), and the pyramid rungs each set has on disk. Read by
+ * `rooms.ts` (url resolution) and `main.tsx` (warming). The corner overlays'
+ * art is fixed app art, described by `Manifest.overlays` instead.
  */
 export interface SharedAssets {
   /** The blank center render, or null when none is deployed. */
@@ -59,14 +59,6 @@ export interface SharedAssets {
    * tree's rungs must not veto a level the distill tree has.
    */
   distillLevels: LevelInfo[];
-  /**
-   * The favorite badge's pyramid: `fav_on.png`/`fav_off.png` scaled to the
-   * tile's per-level widths (`scan.ts`'s `discoverFavoriteLevels`). A level
-   * counts only when both badge faces are present. The badge is fixed app
-   * art under `--shared-dir`, not collection content, and its discovery is
-   * independent of `levels`.
-   */
-  favoriteLevels: LevelInfo[];
 }
 
 /**
@@ -142,6 +134,12 @@ export interface Manifest {
   imagesBase: string;
   sharedBase: string;
   shared: SharedAssets;
+  /**
+   * The corner overlays from `--shared-dir`'s `overlays.json`, with their
+   * levels (`packages/map/overlays.ts`). Empty when the file is absent, or
+   * in a remote manifest uploaded before overlays were described in data.
+   */
+  overlays: Overlays;
   rooms: Room[];
   count: number;
   embeddings: EmbeddingsInfo | null;

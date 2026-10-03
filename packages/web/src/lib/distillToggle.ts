@@ -1,11 +1,10 @@
 /**
- * The distill-mode toggle painted into the center tile's lower right corner.
+ * The distill-mode toggle's hit-test: the control in the center tile's lower
+ * right corner.
  *
- * `assets/distill_on.png`/`distill_off.png` are fixed, checked-in art designed
- * to anchor to the tile's lower right corner - the favorite badge's mirror
- * corner (`favoriteBadge.ts` anchors to the top right) - and scaled by a
- * cell's pixels-per-cell-width over `BASE_TILE.w`, the same factor
- * `framePlan.ts` scales every corner overlay by.
+ * Its art is the `distill-toggle` overlay (`tiles.ts`'s
+ * `DISTILL_OFF`/`DISTILL_ON`), placed by `overlay.ts`'s `overlayScreenRect`
+ * like every corner overlay.
  *
  * `distill_off`/`distill_on` in `shelf_geometry.svg` are each traced as
  * their own outline, one silhouette per state, in whole-tile fractions
@@ -14,14 +13,13 @@
  * on the active state's outline, not on a rectangle loose enough to also
  * catch the tile art around it.
  *
- * No DOM - this is the pure geometry/hit-test half, split out the same way
+ * No DOM - this is the pure hit-test half, split out the same way
  * `favoriteBadge.ts` and `center.ts` are. The keyboard's way in is a DOM
  * button in `MapView.tsx`'s `.center-controls`, over the active state's
  * traced box.
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';
 import { flattenPath, pointInPolygon, type Point } from './svgPath.ts';
-import { BASE_TILE } from './pyramid.ts';
 
 export interface Rect {
   x: number;
@@ -48,26 +46,6 @@ export const DISTILL_ON_RECT: Rect | null = GEOMETRY.distillOn?.bbox ?? null;
 /** `DISTILL_OFF_PATH`/`DISTILL_ON_PATH` flattened once at module load - see `FAVORITE_TOGGLE_POLYGON` for the same tradeoff. */
 const DISTILL_OFF_POLYGON: Point[] | null = DISTILL_OFF_PATH ? flattenPath(DISTILL_OFF_PATH) : null;
 const DISTILL_ON_POLYGON: Point[] | null = DISTILL_ON_PATH ? flattenPath(DISTILL_ON_PATH) : null;
-
-/**
- * The toggle's full screen rect for a tile whose top left corner is at
- * `(sx, sy)` and whose width is `cellPx.x`, anchored to the tile's lower
- * right corner and scaled by the same factor the tile itself is drawn at.
- * `iconSize` is the art's own decoded pixel size (read by `framePlan.ts`'s
- * `planDistillToggle` once the tile cache reports it loaded), so a
- * differently-sized asset needs no change here.
- */
-export function distillIconScreenRect(
-  cellPx: { x: number; y: number },
-  sx: number,
-  sy: number,
-  iconSize: { w: number; h: number }
-): Rect {
-  const scale = cellPx.x / BASE_TILE.w;
-  const w = iconSize.w * scale;
-  const h = iconSize.h * scale;
-  return { x: sx + cellPx.x - w, y: sy + cellPx.y - h, w, h };
-}
 
 /**
  * Whether a screen point lands on the active state's traced silhouette -

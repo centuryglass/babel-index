@@ -5,7 +5,7 @@ import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
 import { createTileCache, CENTER, type Drawable, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
 import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
 import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
-import { favoriteIconScreenRect } from './favoriteBadge.ts';
+import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 
 interface DrawnCall {
   img: LoadableImage;
@@ -117,7 +117,7 @@ function world({ only = null, concurrency = 4 }: { only?: number[] | null; concu
     cache,
     layout,
     order: shuffledOrder(ROOMS, 1),
-    renderer: createRenderer({ cache }),
+    renderer: createRenderer({ cache, overlays: TEST_OVERLAYS }),
   };
 }
 
@@ -208,7 +208,7 @@ test('a sheet-backed hit draws with the 9-arg source-rect form', () => {
   });
   cache.pin(CENTER);
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT });
-  const w = { images, cache, layout, order: shuffledOrder(ROOMS, 1), renderer: createRenderer({ cache }) };
+  const w = { images, cache, layout, order: shuffledOrder(ROOMS, 1), renderer: createRenderer({ cache, overlays: TEST_OVERLAYS }) };
 
   frame(w, { zoom: MIN_ZOOM }); // nothing resident yet: requests the sheet(s)
   w.images.settleAll();
@@ -292,7 +292,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
     roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT,
     genericCount: GENERICS, genericSeed: 3,
   });
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const order = shuffledOrder(ROOMS, 1);
   const drawOnce = (ctx: DrawContext) =>
     renderer.draw({ ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
@@ -322,7 +322,7 @@ test('genericFade crossfades toward each generic tile\'s own distill alternate',
     roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT,
     genericCount: GENERICS, genericSeed: 3,
   });
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const order = shuffledOrder(ROOMS, 1);
   const drawOnce = (ctx: DrawContext, genericFade: number) =>
     renderer.draw({
@@ -371,7 +371,7 @@ test('genericFade falls back to a flat black fill when a generic tile has no dis
   const layout = createLayout({
     roomCount: ROOMS, contentRatio: 0.2, seed: 1, aspect: CELL_ASPECT, genericCount: 1, genericSeed: 3,
   });
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const order = shuffledOrder(ROOMS, 1);
   images.settleAll();
 
@@ -443,7 +443,7 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
   let calls = 0;
   const spiedLayout = { ...layout, rankOf: (x: number, y: number) => { calls++; return layout.rankOf(x, y); } };
 
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const stats = renderer.draw({
     ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout: spiedLayout, order,
   });
@@ -479,7 +479,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   };
   const layout = createLayout({ roomCount: ROOMS, contentRatio: 0.02, seed: 1, aspect: CELL_ASPECT });
   const order = shuffledOrder(ROOMS, 1);
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const stats = renderer.draw({
     ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
   });
@@ -515,7 +515,7 @@ test('the prefetch ring rotates its starting corner across frames', () => {
   };
   const layout = createLayout({ roomCount: 5000, contentRatio: 1, seed: 1, aspect: CELL_ASPECT });
   const order = shuffledOrder(5000, 1);
-  const renderer = createRenderer({ cache });
+  const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
 
   for (let i = 0; i < 4; i++) {
     seenPerFrame.push([]);
@@ -640,7 +640,7 @@ test('no favorites option means no badge at all', () => {
 test('the badge follows the same zoom scale as the tile it sits on, within one pyramid level', () => {
   // 150 and 220 both land on level 2 (idealLevel(150) === idealLevel(220) ===
   // 2, sizeOf(2).w === 256) - picked so both draws resolve the same badge
-  // rung and the test measures the scale factor `favoriteIconScreenRect`
+  // rung and the test measures the scale factor `overlayScreenRect`
   // applies, not a level switch. (The fake harness's `naturalIconSize` is a
   // flat 96x96 regardless of level, unlike the real hand-scaled art, so a
   // cross-level comparison here would not mean what it does for real assets.)
@@ -669,24 +669,6 @@ test('the badge follows the same zoom scale as the tile it sits on, within one p
   assert.ok(
     Math.abs(big.badge.w / small.badge.w - ratio) < 0.05,
     `badge did not scale with zoom: ${small.badge.w} -> ${big.badge.w}, expected ratio ${ratio.toFixed(2)}`
-  );
-});
-
-test('the badge stays proportional to the tile across a level change, once the loaded art is proportionally scaled like the real assets', () => {
-  // naturalIconSize(hit) is per-level art (level 1's fav_on.png is scaled to
-  // half level 0's), so favoriteIconScreenRect must divide by that level's
-  // reference width, not BASE_TILE.w - otherwise a coarser level's
-  // already-shrunk art gets shrunk a second time. Exercised directly against
-  // `favoriteIconScreenRect` since `world()`'s fake loader does not vary its
-  // icon size by level the way real scaled art does.
-  const level0 = favoriteIconScreenRect({ x: 1024, y: 768 }, 0, 0, { w: 92, h: 198 }, 0);
-  // Half the tile's pixels-per-cell, and half the icon's pixels - what a
-  // real level-1 draw looks like (both the tile and the
-  // badge's `512/fav_on.png` are half of level 0's).
-  const level1 = favoriteIconScreenRect({ x: 512, y: 384 }, 0, 0, { w: 46, h: 99 }, 1);
-  assert.ok(
-    Math.abs(level1.w / level0.w - 0.5) < 1e-9,
-    `a half-size tile with a half-size (already-scaled) icon must draw a half-size badge, got ${level0.w} -> ${level1.w}`
   );
 });
 

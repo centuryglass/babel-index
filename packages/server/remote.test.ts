@@ -43,7 +43,12 @@ function sampleManifest(): Manifest {
       genericDistill: [{ file: 'g1.jpg', url: '/images/shared/generic_distill/g1.jpg' }, null],
       levels: [{ level: 0, dir: null }],
       distillLevels: [{ level: 0, dir: null }],
-      favoriteLevels: [{ level: 0, dir: null }],
+    },
+    overlays: {
+      'favorite-badge': {
+        anchor: 'top-right', scale: 'pyramid', faces: { on: 'fav_on.png' },
+        levels: [{ level: 0, dir: null }, { level: 1, dir: '512' }],
+      },
     },
     rooms: [{ id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: 42, w: 512, h: 512 }],
     count: 1,
@@ -102,6 +107,20 @@ test('scanRemote still resolves shared tiles a manifest roots at sharedBase', as
       const manifest = await scanRemote(base, 'tile-collection-sample');
       assert.equal(manifest.shared.center.url, `${base}/shared/center.png`);
       assert.equal(manifest.shared.generic[0].url, `${base}/shared/generic/g1.png`);
+    }
+  );
+});
+
+test('scanRemote passes overlays through, and reads a manifest from before overlays as having none', async () => {
+  const { overlays: _overlays, ...old } = sampleManifest();
+  await remoteHost(
+    {
+      '/new/manifest.json': { body: JSON.stringify(sampleManifest()), type: 'application/json' },
+      '/old/manifest.json': { body: JSON.stringify(old), type: 'application/json' },
+    },
+    async (base) => {
+      assert.deepEqual((await scanRemote(base, 'new')).overlays, sampleManifest().overlays);
+      assert.deepEqual((await scanRemote(base, 'old')).overlays, {});
     }
   );
 });
