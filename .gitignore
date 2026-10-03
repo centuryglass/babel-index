@@ -1,4 +1,6 @@
 node_modules/
+# deploy/deploy.sh's staged install, present only while a deploy runs.
+.deploy-staging/
 *.log
 *.log.1
 .DS_Store

@@ -31,7 +31,7 @@ the failed release left. Find the failed step:
 | *which commit* | The dispatched sha is not a full 40-character lowercase sha. | untouched |
 | *npm ci*, *Install Chromium*, *npm run test:parity* | The runner could not build, or the revision breaks Canvas2D/WebGL parity. Reproduce with `npm run test:parity`. | untouched |
 | *authorize the runner* | Secrets or the `PUBLIC_URL` variable are missing; the error names them. | untouched |
-| *deploy* | ssh failed (host key mismatch, auth), or `deploy.sh` refused the sha, failed to install, or the unit did not come back healthy on the new sha. The log's last `==>`/`!!!` lines say which. | untouched if refused; checkout on the new sha with the old process serving if the install failed; restarted on the new sha if the health check failed |
+| *deploy* | ssh failed (host key mismatch, auth), or `deploy.sh` refused the sha, failed to install, or the unit did not come back healthy on the new sha. The log's last `==>`/`!!!` lines say which. | untouched if refused or the install failed; restarted on the new sha if the health check failed |
 | *verify it from outside* | The service is healthy on the new revision on the box, but the public url disagrees: nginx, TLS or DNS, not the release. | new revision running |
 
 **To roll back**, dispatch the workflow with the previous sha. The *deploy*
@@ -243,14 +243,15 @@ default branch. Until `deploy.yml` is on main, nothing deploys and no
   (`.clip_model_cache/`) and (if `LOG_FILE` is inside the checkout) the log
   file are untracked and are the only state this deployment owns, so nothing
   here may ever run `git clean`.
-- **A failed install leaves the checkout ahead of the running process.** The
-  reset happens before `npm ci`, and the restart after it. If the install
-  fails, the old process keeps serving, but the next restart or reboot starts
-  the new checkout on a broken `node_modules`. Roll back (or redeploy) before
-  anything restarts the unit.
+- **The install runs before the checkout moves.** When the lockfile changed,
+  `npm ci` installs into `.deploy-staging/` inside the checkout, and only
+  after it succeeds does `git reset --hard` run and the new `node_modules`
+  replace the old one. A failed install leaves the checkout and
+  `node_modules` matching the running process. The box needs disk for two
+  copies of `node_modules` while a deploy runs.
 - **The install carries two flags for this small, CPU-only box:**
   `--maxsockets=1` and `--onnxruntime-node-install-cuda=skip`.
-  `install_dependencies` explains each. A larger host can drop both.
+  `stage_dependencies` explains each. A larger host can drop both.
 - **The reverse proxy must be in front of the server.** The unit's
   `--base-path /babel-index/` rewrites only the urls the page uses, not the
   routes; hit directly on `localhost:5173`, every relative fetch 404s
