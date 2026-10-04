@@ -5,8 +5,11 @@ set -euo pipefail
 # stdout and reads the cache's index file instead.
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
+# `npm ci` installs from package-lock.json without rewriting it: `npm install`
+# leaves the lockfile dirty when the container's npm differs from the
+# maintainer's.
 if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
-  npm install
+  npm ci
 fi
 
 # Refresh the GitHub issue cache and surface it as session context (see
