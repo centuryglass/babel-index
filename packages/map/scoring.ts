@@ -68,29 +68,25 @@ export function lemmatise(word: string): string {
  * no-opinion point (0), `high` is a genuine match's typical confidence (1).
  * Linear between them, 0 below `centre` - see `clipCurveStrength`.
  *
- * Both are measured against a real collection via
- * `tools/embed/cosine-range.ts` (CLIP ViT-B/32), read off
- * `cosine-range-report.json`:
- *   - `centre` is the median of the overall keyword x room distribution
- *     (mostly-unrelated pairs - `overall.p50`), cross-checked by a
- *     `--nonsense` keysmash probe that lands on the same point.
- *   - `high` (`--universal`, `universal.ceiling`) is the median ceiling
- *     across near-universal keywords true of nearly every room (`bookshelf`,
- *     `book`, `library`, ...), preferred over the raw max so one outlier pair
- *     does not define "as sure as it gets".
+ * Both were measured on the full production collection (CLIP ViT-B/32):
+ *   - `centre` is the 95th percentile of known non-match pairs: library words
+ *     (`bookshelf`, `a wall of books`, ...) against synthetic content-free
+ *     images (solid colors, gradients, noise, patterns). Rooms cannot supply
+ *     known non-matches, since the collection's art gives almost any concept a
+ *     few genuine partial matches.
+ *   - `high` is where a clearly depicted subject lands: the median of library
+ *     words against rooms, every one a genuine match. A lower `high` ties a
+ *     concrete depiction with an abstract resemblance CLIP scores just below
+ *     it, flattening a difference CLIP can see.
  *
- * `centre` is a conservative zero. The `--irrelevant` probe
- * (`irrelevant.ceiling`, the median best match of ten strong concepts CLIP
- * recognises but that share no visual structure with library walls: `race
- * car`, `swimming pool`, `sandy beach`, ...) measured `0.171`, below
- * `centre`, so a room at `centre` is noise rather than a weak match. Re-run
- * that probe when recalibrating `centre`.
+ * Narrowing the band amplifies small cosine differences: the int8 blob's
+ * quantisation noise (about 0.003) is a larger share of it.
  *
  * A cosine below `centre` is absence of evidence, not evidence of a
  * mismatch - CLIP's joint space has no meaningful antipode - so it reads as
  * 0, never as a negative claim.
  */
-export const CLIP_STRENGTH: ClipBand = { centre: 0.205, high: 0.279 };
+export const CLIP_STRENGTH: ClipBand = { centre: 0.225, high: 0.279 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.

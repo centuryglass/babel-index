@@ -250,27 +250,23 @@ some room scored highest.** The best cosine of a bad lot must not read as a
 strong match for `cghjj`.
 *Enforcement:* the curve reads the raw cosine against fixed anchors, never
 the cosine's position among this query's results. A query with no real
-signal has every raw cosine near or below `centre`, so its CLIP pulls are
-near zero. How well fixed anchors hold across queries is open issue
-[#397](https://github.com/centuryglass/babel-index/issues/397).
+signal has most raw cosines near or below `centre`, so its CLIP pulls are
+near zero.
 
-**The anchors are measured against a collection's cosine distributions, not
+**The anchors are measured against known matches and known non-matches, not
 guessed.**
-*Enforcement:* `CLIP_STRENGTH` holds the defaults (`centre` 0.205, `high`
+*Enforcement:* `CLIP_STRENGTH` holds the defaults (`centre` 0.225, `high`
 0.279); config can override them as `search.density.clipCentre`
-and `clipHigh`. `tools/embed/cosine-range.ts` measures them:
-- `centre` is the median of the whole keyword x room distribution, the band
-  a query with no real signal lands in. A keysmash probe lands on it.
-- `high` is the median ceiling across keywords true of nearly every room
-  (`bookshelf`, `book`, `library`, ...), a genuine match's typical
-  confidence.
-- A third probe, strong concepts that share nothing with a library wall
-  (`race car`, `swimming pool`, ...), lands below `centre`. The curve does
-  not read it; it shows `centre` is a conservative zero, so a room at
-  `centre` is noise rather than a weak match.
+and `clipHigh`.
+- `centre` is the 95th percentile of known non-matches: library words
+  against synthetic content-free images (solid colors, gradients, noise).
+  Rooms cannot supply known non-matches, since the collection's art gives
+  almost any concept a few genuine partial matches.
+- `high` is where a clearly depicted subject lands: the median of library
+  words against rooms, every one a genuine match. A lower `high` would tie a
+  concrete depiction with an abstract resemblance CLIP scores just below it.
 
-`CLIP_STRENGTH`'s docblock carries the measurement details, and
-`cosine-stats.ts`'s header says what each distribution answers.
+`CLIP_STRENGTH`'s docblock carries the measurement details.
 
 **A cosine below `centre` is absence of evidence, not evidence of a
 mismatch.** CLIP's joint space has no meaningful antipode: a text vector

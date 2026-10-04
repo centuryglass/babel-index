@@ -27,9 +27,10 @@
  * known negative. Either list's own distribution measures what a genuine match
  * or a genuine miss looks like, rather than where a mixed pool thins out.
  *
- * The shipped anchors are `CLIP_STRENGTH`'s `centre` and `high`; its docblock
- * in packages/map/scoring.ts says which of these measurements each one reads.
- * `docs/search_rules.md` "Image-content (CLIP) matching" is where they are used.
+ * None of these measurements sets the shipped anchors. `CLIP_STRENGTH`'s
+ * docblock in packages/map/scoring.ts says what those are read off: room
+ * keywords against rooms cannot supply known non-matches, because the
+ * collection's art gives almost any concept a few genuine partial matches.
  */
 
 /** The percentiles a report prints, at the resolution worth reading by eye. */
@@ -62,8 +63,8 @@ export interface KeywordSummary extends Summary {
 
 /**
  * The two bands `summarizeUniversal` reports for a known-outcome keyword list.
- * The anchors the app ships are ceilings - see `CLIP_STRENGTH`; the floor is
- * reported alongside, as the low end of the same measurement.
+ * The ceiling is the band's typical best cosine; the floor is reported
+ * alongside, as the low end of the same measurement.
  */
 export interface UniversalCalibration {
   floor: number;
@@ -126,11 +127,9 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  * percentile of `overall` as the noise floor, a middling percentile of
  * `keywordMax` as a typical best match.
  *
- * A first read off the shape of the collection, not what the app ships: the anchors
- * in `CLIP_STRENGTH` are read off a known-outcome list instead. The pair's
- * names are not config keys. `search.density` has no `clipLow`, and its
- * `clipHigh` defaults to `CLIP_STRENGTH.high`, which `summarizeUniversal`'s
- * ceiling measures, not this `clipHigh`. Do not promote
+ * A first read off the shape of the collection, not what the app ships (see
+ * `CLIP_STRENGTH`). The pair's names are not config keys: `search.density`
+ * has no `clipLow`, and its `clipHigh` is not this `clipHigh`. Do not promote
  * `clipLow` to a strength floor on its own - a high percentile of `overall`
  * assumes most pairs are unrelated, and a common word that is genuinely true of
  * many rooms (`book`) scores below such a cutoff on correct matches.

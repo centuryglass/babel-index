@@ -12,8 +12,14 @@ so a query goes in the group whose promise it keeps.
 
 - **`universal`**: something nearly every room shows (a bookshelf). CLIP alone
   should cluster most of the collection.
-- **`irrelevant`**: a concept CLIP recognises that no room depicts (a race
-  car). Nothing should pack at the density peak.
+- **`irrelevant`**: a famous person CLIP recognises whom no room resembles
+  and whose name matches no room's text. Nothing should pack at the density
+  peak.
+  - Objects and scenes do not qualify: the collection's art depicts almost
+    anything somewhere (`soccer ball` scores highest on a room with
+    ball-like murals). They belong in `concept`.
+  - Check a new name's top rooms by eye. About a tenth of rooms show a face
+    or figure, and a name resembling one of them is not irrelevant.
 - **`keyword`**: a real keyword, as a reader might type it (case and accents
   may differ). At least one room must carry it.
 - **`title`**: one room's full title.
@@ -24,8 +30,8 @@ so a query goes in the group whose promise it keeps.
 - **`partial`**: a fragment of a title or story too short to count as a
   significant match. Reported, not asserted.
 
-Keysmash queries are left out: whether CLIP means anything on them is the
-open question in #397, so no answer for them is known.
+Keysmash queries are left out: CLIP's reading of nonsense text is undefined,
+so no answer for them is known.
 
 ## Refreshing
 

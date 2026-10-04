@@ -721,6 +721,13 @@ const atCosines = (...cosines) =>
     cosines.flatMap((c) => [Math.round(c * 127), Math.round(Math.sqrt(1 - c * c) * 127)])
   );
 
+/**
+ * `CLIP_STRENGTH.centre` snapped down onto `atCosines`' int8 grid, so a room
+ * planted there reads 0. The rounded anchor itself can land above
+ * the centre, and a narrow band turns that rounding into visible strength.
+ */
+const AT_CENTRE = Math.floor(CLIP_STRENGTH.centre * 127) / 127;
+
 const CLIP_QUERY = Float32Array.from([1, 0]);
 
 const strengthOf = (opts) =>
@@ -814,31 +821,28 @@ test('a strong cosine reaches CLIP\'s full weight on its own [SR-16]', () => {
   // "red", against rooms planted past the high anchor, halfway to it, and at
   // the no-opinion centre: strength falls off gradually with the cosine,
   // which is what makes the density falloff gradual. `atCosines` round-trips
-  // every cosine through int8 quantisation, so these land close to but not
-  // on the anchors - hence the tolerances.
+  // every cosine through int8 quantisation, so the halfway room lands close to
+  // but not on its target - hence its tolerance.
   const { centre, high } = CLIP_STRENGTH;
   const midHigh = centre + (high - centre) / 2;
-  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, centre) });
+  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, AT_CENTRE) });
   assert.ok(Math.abs(strength[0] - SEARCH_WEIGHTS.clip) < 1e-6);
   assert.ok(Math.abs(strength[1] - SEARCH_WEIGHTS.clip / 2) < 0.05, `halfway to the high extreme gave ${strength[1]}`);
-  assert.ok(Math.abs(strength[2]) < 0.05, `near the no-opinion centre gave ${strength[2]}`);
+  assert.equal(strength[2], 0, 'at the no-opinion centre');
 });
 
 test('an exact keyword match is full strength whatever the picture looks like', () => {
   // "lora:yuiop" tagged on a room CLIP genuinely has no opinion about (cosine
   // at the no-opinion centre). The tag is the answer; the cosine has no say in
   // whether it is one.
-  const { centre } = CLIP_STRENGTH;
   const strength = strengthOf({
     query: 'yuiop',
-    embeddings: atCosines(centre, centre, centre),
+    embeddings: atCosines(AT_CENTRE, AT_CENTRE, AT_CENTRE),
     index: indexOf([['yuiop'], null], [['oak'], null], [['pine'], null]),
   });
   assert.equal(strength[0], 1, 'the tagged room');
-  // `centre` round-trips through `atCosines`' int8 quantisation, so it lands
-  // near it but not on it - hence the tolerance rather than `=== 0`.
   assert.ok(
-    strength.slice(1).every((c) => Math.abs(c) < 0.01),
+    strength.slice(1).every((c) => c === 0),
     `expected nothing else to cluster at all, got ${[...strength.slice(1)]}`
   );
 });
