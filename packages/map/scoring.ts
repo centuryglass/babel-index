@@ -254,15 +254,15 @@ export function splitQuoted(parsed: ParsedQuery, minTokenLength = 3): SplitQuery
 }
 
 /**
- * A contiguous run of query words holding two or more eligible ones, read as
- * one candidate against one whole keyword (docs/search_rules.md "Tag
- * matching").
+ * A contiguous run of two or more query words, at least one of them
+ * eligible, read as one candidate against one whole keyword
+ * (docs/search_rules.md "Tag matching").
  *
  * `start`/`end` index the eligible words it covers in `tagTermsOf`'s
  * `terms`, `end` exclusive. `from` is the parsed-query position of its first
  * word. `folded` is its words as typed, joined by single spaces, so a
- * stopword or short word stays in the text (`lady of the lake`, `the
- * inverted ladder`).
+ * stopword or short word stays in the text (`lady of the lake`, `n. c.
+ * wyeth`, `el greco`).
  */
 export interface TagRun {
   folded: string;
@@ -285,8 +285,10 @@ export interface TagRun {
  * floor (docs/search_rules.md "The parsed query"), so a quoted phrase is
  * always eligible regardless of its own length.
  *
- * `runs` are every span of unquoted words holding two or more eligible ones,
- * the whole query included. A quoted phrase ends a run, since its quotes
+ * `runs` are every span of two or more unquoted words holding at least one
+ * eligible word, the whole query included. Counting words, not eligible
+ * words, is what lets a tag with one long word among initials or short words
+ * (`n. c. wyeth`, `de stijl`) match as typed. A quoted phrase ends a run, since its quotes
  * already say what belongs together. Runs are what make a multi-word tag
  * typed plainly an exact match, alone or inside a longer query. They come
  * sorted by `from`, then by length; `matchingRuns` relies on that order.
@@ -326,7 +328,7 @@ export function tagTermsOf(parsed: ParsedQuery, minTokenLength = 3): { terms: Te
           last = idx;
           eligible++;
         }
-        if (eligible >= 2) runs.push({ folded, start: first, end: last + 1, from: stretch[a] });
+        if (b > a && eligible >= 1) runs.push({ folded, start: first, end: last + 1, from: stretch[a] });
       }
     }
   }

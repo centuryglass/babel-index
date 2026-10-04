@@ -562,6 +562,21 @@ test('a run spans the stopwords inside it, but not a quoted phrase [SR-03]', () 
   assert.deepEqual(runs.map((r) => r.folded), ['jungle canopy'], 'the quoted phrase stands alone');
 });
 
+test('a multi-word tag with one eligible word is an exact match as typed [SR-03]', () => {
+  // Initials and two-letter words fall below the vocabulary floor, but a run
+  // keeps them in its text, so the whole tag still reads as one keyword.
+  for (const tag of ['N. C. Wyeth', 'El Greco']) {
+    const index = indexOf([[tag], null], [['oak'], null]);
+    const { breakdown, strength, order } = rankHybrid({ query: tag, count: 2, index });
+    assert.equal(order[0], 0, `${tag} should find the room it names`);
+    assert.equal(breakdown.tagExact[0], 1, `${tag} typed plainly is an exact tag match`);
+    assert.equal(strength[0], 1);
+  }
+
+  const { runs } = tagTermsOf(parseQuery('n. c. wyeth'));
+  assert.ok(!runs.some((r) => r.folded === 'n. c.'), 'a run needs at least one eligible word');
+});
+
 test('a word a run consumed does not count again on its own [SR-03]', () => {
   // `golden hour` exact uses up `golden`; reading `golden` as its own exact
   // match instead finds one exact too, never two.

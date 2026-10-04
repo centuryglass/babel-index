@@ -154,9 +154,10 @@ the query `outsider art`, not only by `"outsider art"`, and a room tagged
 `golden hour` is an exact match for `golden hour jungle`. A keyword chip
 searches its text unquoted, and multi-word keywords are common, so without
 this the commonest search a reader makes could not reach the tag it names.
-*Enforcement:* `tagTermsOf` builds a run for every contiguous span of
-unquoted words holding two or more eligible terms, the whole query included;
-a quoted phrase ends a run. `rankHybrid` reads each room through `readTags`,
+*Enforcement:* `tagTermsOf` builds a run for every contiguous span of two or
+more unquoted words holding at least one eligible term, the whole query
+included, so `n. c. wyeth` and `el greco` match as typed; a quoted phrase
+ends a run. `rankHybrid` reads each room through `readTags`,
 and the best reading wins:
 - A reading splits the terms into exact-matching runs and single terms. Each
   exact run counts as one exact match, never more, and the words it consumed
