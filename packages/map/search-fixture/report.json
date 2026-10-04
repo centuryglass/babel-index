@@ -15,7 +15,7 @@
       "peak": 1,
       "peakAt": 0.85,
       "floor": 0.05,
-      "clipCentre": 0.205,
+      "clipCentre": 0.225,
       "clipHigh": 0.279
     }
   },
@@ -35,8 +35,8 @@
         "max": 0.3463
       },
       "rooms": {
-        "aboveFloor": 2048,
-        "atHalf": 1994,
+        "aboveFloor": 2044,
+        "atHalf": 1958,
         "atPeak": 1741
       },
       "strength": {
@@ -83,9 +83,9 @@
         "max": 0.3197
       },
       "rooms": {
-        "aboveFloor": 2042,
-        "atHalf": 1781,
-        "atPeak": 1070
+        "aboveFloor": 1971,
+        "atHalf": 1646,
+        "atPeak": 1060
       },
       "strength": {
         "p50": 0.85,
@@ -131,12 +131,12 @@
         "max": 0.3103
       },
       "rooms": {
-        "aboveFloor": 2037,
-        "atHalf": 1761,
-        "atPeak": 818
+        "aboveFloor": 1977,
+        "atHalf": 1594,
+        "atPeak": 813
       },
       "strength": {
-        "p50": 0.8024,
+        "p50": 0.7844,
         "p90": 0.85,
         "p99": 0.9025,
         "max": 1
@@ -179,14 +179,14 @@
         "max": 0.3461
       },
       "rooms": {
-        "aboveFloor": 2048,
-        "atHalf": 1987,
-        "atPeak": 1707
+        "aboveFloor": 2040,
+        "atHalf": 1942,
+        "atPeak": 1703
       },
       "strength": {
         "p50": 0.85,
         "p90": 0.9025,
-        "p99": 0.9122,
+        "p99": 0.9112,
         "max": 1
       },
       "top": [
@@ -227,9 +227,9 @@
         "max": 0.3189
       },
       "rooms": {
-        "aboveFloor": 2047,
-        "atHalf": 2016,
-        "atPeak": 1261
+        "aboveFloor": 2042,
+        "atHalf": 1966,
+        "atPeak": 1200
       },
       "strength": {
         "p50": 0.85,
@@ -262,151 +262,7 @@
     },
     {
       "group": "irrelevant",
-      "query": "race car",
-      "signals": {
-        "clip": true,
-        "keyword": true,
-        "title": true,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.185,
-        "p99": 0.2205,
-        "max": 0.2485
-      },
-      "rooms": {
-        "aboveFloor": 225,
-        "atHalf": 0,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0.0637,
-        "p99": 0.2571,
-        "max": 0.4992
-      },
-      "top": [
-        {
-          "file": "00899.webp",
-          "strength": 0.4992
-        },
-        {
-          "file": "01916.webp",
-          "strength": 0.4057
-        },
-        {
-          "file": "00309.webp",
-          "strength": 0.3634
-        },
-        {
-          "file": "00671.webp",
-          "strength": 0.3578
-        },
-        {
-          "file": "01309.webp",
-          "strength": 0.35
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "swimming pool",
-      "signals": {
-        "clip": true,
-        "keyword": false,
-        "title": true,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.1836,
-        "p99": 0.2245,
-        "max": 0.252
-      },
-      "rooms": {
-        "aboveFloor": 153,
-        "atHalf": 3,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0.012,
-        "p99": 0.35,
-        "max": 0.5393
-      },
-      "top": [
-        {
-          "file": "01205.webp",
-          "strength": 0.5393
-        },
-        {
-          "file": "00309.webp",
-          "strength": 0.5352
-        },
-        {
-          "file": "01482.webp",
-          "strength": 0.5231
-        },
-        {
-          "file": "01583.webp",
-          "strength": 0.4297
-        },
-        {
-          "file": "00584.webp",
-          "strength": 0.4198
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "soccer ball",
-      "signals": {
-        "clip": true,
-        "keyword": false,
-        "title": true,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.1817,
-        "p99": 0.2244,
-        "max": 0.2654
-      },
-      "rooms": {
-        "aboveFloor": 117,
-        "atHalf": 3,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0,
-        "p99": 0.2288,
-        "max": 0.6934
-      },
-      "top": [
-        {
-          "file": "00082.webp",
-          "strength": 0.6934
-        },
-        {
-          "file": "00697.webp",
-          "strength": 0.5187
-        },
-        {
-          "file": "01285.webp",
-          "strength": 0.5181
-        },
-        {
-          "file": "00686.webp",
-          "strength": 0.4755
-        },
-        {
-          "file": "01309.webp",
-          "strength": 0.4716
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "smartphone",
+      "query": "Rihanna",
       "signals": {
         "clip": true,
         "keyword": false,
@@ -414,47 +270,47 @@
         "story": false
       },
       "cosine": {
-        "p50": 0.2143,
-        "p99": 0.237,
-        "max": 0.2447
+        "p50": 0.1609,
+        "p99": 0.1937,
+        "max": 0.205
       },
       "rooms": {
-        "aboveFloor": 1382,
+        "aboveFloor": 0,
         "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1067,
-        "p90": 0.2579,
-        "p99": 0.3678,
-        "max": 0.4561
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
       },
       "top": [
         {
-          "file": "00891.webp",
-          "strength": 0.4561
+          "file": "00000.webp",
+          "strength": 0
         },
         {
-          "file": "00895.webp",
-          "strength": 0.4415
+          "file": "00001.webp",
+          "strength": 0
         },
         {
-          "file": "00402.webp",
-          "strength": 0.4366
+          "file": "00002.webp",
+          "strength": 0
         },
         {
-          "file": "00767.webp",
-          "strength": 0.4188
+          "file": "00003.webp",
+          "strength": 0
         },
         {
-          "file": "00765.webp",
-          "strength": 0.4127
+          "file": "00004.webp",
+          "strength": 0
         }
       ]
     },
     {
       "group": "irrelevant",
-      "query": "hamburger",
+      "query": "Jennifer Lopez",
       "signals": {
         "clip": true,
         "keyword": false,
@@ -462,281 +318,425 @@
         "story": false
       },
       "cosine": {
-        "p50": 0.2116,
-        "p99": 0.2468,
-        "max": 0.2545
+        "p50": 0.1617,
+        "p99": 0.197,
+        "max": 0.2166
       },
       "rooms": {
-        "aboveFloor": 1153,
-        "atHalf": 18,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0.0759,
-        "p90": 0.3051,
-        "p99": 0.4806,
-        "max": 0.5686
-      },
-      "top": [
-        {
-          "file": "00097.webp",
-          "strength": 0.5686
-        },
-        {
-          "file": "01909.webp",
-          "strength": 0.5651
-        },
-        {
-          "file": "00899.webp",
-          "strength": 0.5567
-        },
-        {
-          "file": "00374.webp",
-          "strength": 0.5525
-        },
-        {
-          "file": "00444.webp",
-          "strength": 0.5484
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "traffic jam",
-      "signals": {
-        "clip": true,
-        "keyword": true,
-        "title": false,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.1716,
-        "p99": 0.2086,
-        "max": 0.2327
-      },
-      "rooms": {
-        "aboveFloor": 54,
+        "aboveFloor": 0,
         "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
         "p90": 0,
-        "p99": 0.1446,
-        "max": 0.35
+        "p99": 0,
+        "max": 0
       },
       "top": [
         {
-          "file": "00669.webp",
-          "strength": 0.35
+          "file": "00000.webp",
+          "strength": 0
         },
         {
-          "file": "01982.webp",
-          "strength": 0.35
+          "file": "00001.webp",
+          "strength": 0
         },
         {
-          "file": "01950.webp",
-          "strength": 0.35
+          "file": "00002.webp",
+          "strength": 0
         },
         {
-          "file": "01792.webp",
-          "strength": 0.35
+          "file": "00003.webp",
+          "strength": 0
         },
         {
-          "file": "01731.webp",
-          "strength": 0.35
+          "file": "00004.webp",
+          "strength": 0
         }
       ]
     },
     {
       "group": "irrelevant",
-      "query": "tennis racket",
+      "query": "Ariana Grande",
       "signals": {
         "clip": true,
         "keyword": false,
-        "title": false,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.2049,
-        "p99": 0.2409,
-        "max": 0.2672
-      },
-      "rooms": {
-        "aboveFloor": 789,
-        "atHalf": 7,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0.2369,
-        "p99": 0.4128,
-        "max": 0.715
-      },
-      "top": [
-        {
-          "file": "00082.webp",
-          "strength": 0.715
-        },
-        {
-          "file": "00309.webp",
-          "strength": 0.5989
-        },
-        {
-          "file": "01038.webp",
-          "strength": 0.5502
-        },
-        {
-          "file": "00032.webp",
-          "strength": 0.5431
-        },
-        {
-          "file": "00724.webp",
-          "strength": 0.5107
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "basketball court",
-      "signals": {
-        "clip": true,
-        "keyword": false,
-        "title": true,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.1828,
-        "p99": 0.2246,
-        "max": 0.2397
-      },
-      "rooms": {
-        "aboveFloor": 216,
-        "atHalf": 2,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0.0576,
-        "p99": 0.35,
-        "max": 0.5672
-      },
-      "top": [
-        {
-          "file": "00345.webp",
-          "strength": 0.5672
-        },
-        {
-          "file": "00684.webp",
-          "strength": 0.5272
-        },
-        {
-          "file": "01672.webp",
-          "strength": 0.48
-        },
-        {
-          "file": "01840.webp",
-          "strength": 0.4526
-        },
-        {
-          "file": "01597.webp",
-          "strength": 0.4496
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "supermarket checkout",
-      "signals": {
-        "clip": true,
-        "keyword": true,
         "title": false,
         "story": false
       },
       "cosine": {
-        "p50": 0.1998,
-        "p99": 0.2367,
-        "max": 0.254
+        "p50": 0.1698,
+        "p99": 0.2037,
+        "max": 0.2177
       },
       "rooms": {
-        "aboveFloor": 530,
-        "atHalf": 2,
-        "atPeak": 0
-      },
-      "strength": {
-        "p50": 0,
-        "p90": 0.1584,
-        "p99": 0.368,
-        "max": 0.5628
-      },
-      "top": [
-        {
-          "file": "01266.webp",
-          "strength": 0.5628
-        },
-        {
-          "file": "02025.webp",
-          "strength": 0.5063
-        },
-        {
-          "file": "00473.webp",
-          "strength": 0.4613
-        },
-        {
-          "file": "00204.webp",
-          "strength": 0.4396
-        },
-        {
-          "file": "00318.webp",
-          "strength": 0.4208
-        }
-      ]
-    },
-    {
-      "group": "irrelevant",
-      "query": "airport runway",
-      "signals": {
-        "clip": true,
-        "keyword": false,
-        "title": false,
-        "story": true
-      },
-      "cosine": {
-        "p50": 0.1721,
-        "p99": 0.2163,
-        "max": 0.2459
-      },
-      "rooms": {
-        "aboveFloor": 57,
+        "aboveFloor": 0,
         "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
         "p90": 0,
-        "p99": 0.1323,
-        "max": 0.4697
+        "p99": 0,
+        "max": 0
       },
       "top": [
         {
-          "file": "01997.webp",
-          "strength": 0.4697
+          "file": "00000.webp",
+          "strength": 0
         },
         {
-          "file": "00891.webp",
-          "strength": 0.3661
+          "file": "00001.webp",
+          "strength": 0
         },
         {
-          "file": "01334.webp",
-          "strength": 0.35
+          "file": "00002.webp",
+          "strength": 0
         },
         {
-          "file": "00899.webp",
-          "strength": 0.2805
+          "file": "00003.webp",
+          "strength": 0
         },
         {
-          "file": "00494.webp",
-          "strength": 0.2561
+          "file": "00004.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Taylor Swift",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1778,
+        "p99": 0.2069,
+        "max": 0.2197
+      },
+      "rooms": {
+        "aboveFloor": 0,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "top": [
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        },
+        {
+          "file": "00002.webp",
+          "strength": 0
+        },
+        {
+          "file": "00003.webp",
+          "strength": 0
+        },
+        {
+          "file": "00004.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Selena Gomez",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1665,
+        "p99": 0.2023,
+        "max": 0.2219
+      },
+      "rooms": {
+        "aboveFloor": 0,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0
+      },
+      "top": [
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        },
+        {
+          "file": "00002.webp",
+          "strength": 0
+        },
+        {
+          "file": "00003.webp",
+          "strength": 0
+        },
+        {
+          "file": "00004.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Serena Williams",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.181,
+        "p99": 0.213,
+        "max": 0.2257
+      },
+      "rooms": {
+        "aboveFloor": 0,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.0108
+      },
+      "top": [
+        {
+          "file": "00688.webp",
+          "strength": 0.0108
+        },
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        },
+        {
+          "file": "00002.webp",
+          "strength": 0
+        },
+        {
+          "file": "00003.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Shakira",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1671,
+        "p99": 0.2016,
+        "max": 0.2259
+      },
+      "rooms": {
+        "aboveFloor": 0,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.0149
+      },
+      "top": [
+        {
+          "file": "01936.webp",
+          "strength": 0.0149
+        },
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        },
+        {
+          "file": "00002.webp",
+          "strength": 0
+        },
+        {
+          "file": "00003.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Angelina Jolie",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1703,
+        "p99": 0.2047,
+        "max": 0.228
+      },
+      "rooms": {
+        "aboveFloor": 0,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.0473
+      },
+      "top": [
+        {
+          "file": "01936.webp",
+          "strength": 0.0473
+        },
+        {
+          "file": "00688.webp",
+          "strength": 0.0001
+        },
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        },
+        {
+          "file": "00002.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Keanu Reeves",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1803,
+        "p99": 0.2129,
+        "max": 0.2283
+      },
+      "rooms": {
+        "aboveFloor": 1,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.0527
+      },
+      "top": [
+        {
+          "file": "01931.webp",
+          "strength": 0.0527
+        },
+        {
+          "file": "01171.webp",
+          "strength": 0.0391
+        },
+        {
+          "file": "01263.webp",
+          "strength": 0.0361
+        },
+        {
+          "file": "00000.webp",
+          "strength": 0
+        },
+        {
+          "file": "00001.webp",
+          "strength": 0
+        }
+      ]
+    },
+    {
+      "group": "irrelevant",
+      "query": "Justin Bieber",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1886,
+        "p99": 0.2202,
+        "max": 0.232
+      },
+      "rooms": {
+        "aboveFloor": 6,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.1098
+      },
+      "top": [
+        {
+          "file": "00949.webp",
+          "strength": 0.1098
+        },
+        {
+          "file": "00512.webp",
+          "strength": 0.0659
+        },
+        {
+          "file": "01233.webp",
+          "strength": 0.0654
+        },
+        {
+          "file": "00890.webp",
+          "strength": 0.0595
+        },
+        {
+          "file": "00621.webp",
+          "strength": 0.0553
         }
       ]
     },
@@ -755,14 +755,14 @@
         "max": 0.2675
       },
       "rooms": {
-        "aboveFloor": 1818,
-        "atHalf": 99,
+        "aboveFloor": 866,
+        "atHalf": 35,
         "atPeak": 16
       },
       "strength": {
-        "p50": 0.2339,
-        "p90": 0.4355,
-        "p99": 0.6349,
+        "p50": 0.0057,
+        "p90": 0.2819,
+        "p99": 0.5552,
         "max": 1
       },
       "top": [
@@ -803,13 +803,13 @@
         "max": 0.3027
       },
       "rooms": {
-        "aboveFloor": 1830,
-        "atHalf": 300,
-        "atPeak": 27
+        "aboveFloor": 1156,
+        "atHalf": 150,
+        "atPeak": 26
       },
       "strength": {
-        "p50": 0.2854,
-        "p90": 0.5545,
+        "p50": 0.0944,
+        "p90": 0.4453,
         "p99": 0.85,
         "max": 1
       },
@@ -851,14 +851,14 @@
         "max": 0.2683
       },
       "rooms": {
-        "aboveFloor": 1840,
-        "atHalf": 79,
+        "aboveFloor": 892,
+        "atHalf": 40,
         "atPeak": 14
       },
       "strength": {
-        "p50": 0.2424,
-        "p90": 0.4207,
-        "p99": 0.6544,
+        "p50": 0.0173,
+        "p90": 0.2617,
+        "p99": 0.5819,
         "max": 1
       },
       "top": [
@@ -899,14 +899,14 @@
         "max": 0.2723
       },
       "rooms": {
-        "aboveFloor": 750,
-        "atHalf": 52,
+        "aboveFloor": 354,
+        "atHalf": 29,
         "atPeak": 14
       },
       "strength": {
         "p50": 0,
         "p90": 0.35,
-        "p99": 0.6067,
+        "p99": 0.5775,
         "max": 1
       },
       "top": [
@@ -947,14 +947,14 @@
         "max": 0.2537
       },
       "rooms": {
-        "aboveFloor": 872,
+        "aboveFloor": 108,
         "atHalf": 13,
         "atPeak": 13
       },
       "strength": {
-        "p50": 0.0228,
-        "p90": 0.2157,
-        "p99": 0.4392,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.35,
         "max": 1
       },
       "top": [
@@ -995,14 +995,14 @@
         "max": 0.2606
       },
       "rooms": {
-        "aboveFloor": 682,
-        "atHalf": 17,
+        "aboveFloor": 269,
+        "atHalf": 14,
         "atPeak": 13
       },
       "strength": {
         "p50": 0,
         "p90": 0.35,
-        "p99": 0.4773,
+        "p99": 0.4448,
         "max": 1
       },
       "top": [
@@ -1043,14 +1043,14 @@
         "max": 0.2685
       },
       "rooms": {
-        "aboveFloor": 557,
-        "atHalf": 19,
+        "aboveFloor": 94,
+        "atHalf": 16,
         "atPeak": 12
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1772,
-        "p99": 0.483,
+        "p90": 0,
+        "p99": 0.3488,
         "max": 1
       },
       "top": [
@@ -1091,14 +1091,14 @@
         "max": 0.2419
       },
       "rooms": {
-        "aboveFloor": 162,
+        "aboveFloor": 40,
         "atHalf": 11,
         "atPeak": 11
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0213,
-        "p99": 0.3404,
+        "p90": 0,
+        "p99": 0.253,
         "max": 1
       },
       "top": [
@@ -1139,14 +1139,14 @@
         "max": 0.2949
       },
       "rooms": {
-        "aboveFloor": 1920,
-        "atHalf": 463,
+        "aboveFloor": 1445,
+        "atHalf": 228,
         "atPeak": 19
       },
       "strength": {
-        "p50": 0.3638,
-        "p90": 0.6055,
-        "p99": 0.8442,
+        "p50": 0.1877,
+        "p90": 0.5106,
+        "p99": 0.842,
         "max": 1
       },
       "top": [
@@ -1187,14 +1187,14 @@
         "max": 0.3054
       },
       "rooms": {
-        "aboveFloor": 1972,
-        "atHalf": 742,
+        "aboveFloor": 1554,
+        "atHalf": 458,
         "atPeak": 82
       },
       "strength": {
-        "p50": 0.4107,
-        "p90": 0.7307,
-        "p99": 0.862,
+        "p50": 0.2496,
+        "p90": 0.6809,
+        "p99": 0.8614,
         "max": 1
       },
       "top": [
@@ -1235,14 +1235,14 @@
         "max": 0.2514
       },
       "rooms": {
-        "aboveFloor": 1787,
-        "atHalf": 18,
+        "aboveFloor": 549,
+        "atHalf": 11,
         "atPeak": 11
       },
       "strength": {
-        "p50": 0.2001,
-        "p90": 0.3365,
-        "p99": 0.4662,
+        "p50": 0,
+        "p90": 0.1463,
+        "p99": 0.3275,
         "max": 1
       },
       "top": [
@@ -1283,14 +1283,14 @@
         "max": 0.2684
       },
       "rooms": {
-        "aboveFloor": 2007,
-        "atHalf": 237,
+        "aboveFloor": 1455,
+        "atHalf": 69,
         "atPeak": 21
       },
       "strength": {
-        "p50": 0.3423,
-        "p90": 0.5166,
-        "p99": 0.8725,
+        "p50": 0.1542,
+        "p90": 0.3931,
+        "p99": 0.8513,
         "max": 1
       },
       "top": [
@@ -1331,14 +1331,14 @@
         "max": 0.3115
       },
       "rooms": {
-        "aboveFloor": 183,
-        "atHalf": 20,
+        "aboveFloor": 105,
+        "atHalf": 18,
         "atPeak": 14
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0307,
-        "p99": 0.4722,
+        "p90": 0,
+        "p99": 0.4154,
         "max": 1
       },
       "top": [
@@ -1379,14 +1379,14 @@
         "max": 0.2751
       },
       "rooms": {
-        "aboveFloor": 1483,
-        "atHalf": 96,
+        "aboveFloor": 614,
+        "atHalf": 32,
         "atPeak": 9
       },
       "strength": {
-        "p50": 0.165,
-        "p90": 0.4175,
-        "p99": 0.6429,
+        "p50": 0,
+        "p90": 0.2573,
+        "p99": 0.5662,
         "max": 1
       },
       "top": [
@@ -1427,14 +1427,14 @@
         "max": 0.2565
       },
       "rooms": {
-        "aboveFloor": 194,
-        "atHalf": 17,
+        "aboveFloor": 140,
+        "atHalf": 16,
         "atPeak": 12
       },
       "strength": {
         "p50": 0,
-        "p90": 0.035,
-        "p99": 0.428,
+        "p90": 0,
+        "p99": 0.35,
         "max": 1
       },
       "top": [
@@ -1475,14 +1475,14 @@
         "max": 0.2885
       },
       "rooms": {
-        "aboveFloor": 1233,
-        "atHalf": 98,
+        "aboveFloor": 506,
+        "atHalf": 35,
         "atPeak": 12
       },
       "strength": {
-        "p50": 0.1005,
-        "p90": 0.4057,
-        "p99": 0.6467,
+        "p50": 0,
+        "p90": 0.35,
+        "p99": 0.5775,
         "max": 1
       },
       "top": [
@@ -1523,14 +1523,14 @@
         "max": 0.2799
       },
       "rooms": {
-        "aboveFloor": 1117,
-        "atHalf": 55,
+        "aboveFloor": 386,
+        "atHalf": 19,
         "atPeak": 5
       },
       "strength": {
-        "p50": 0.072,
-        "p90": 0.3606,
-        "p99": 0.588,
+        "p50": 0,
+        "p90": 0.1794,
+        "p99": 0.491,
         "max": 1
       },
       "top": [
@@ -1571,14 +1571,14 @@
         "max": 0.296
       },
       "rooms": {
-        "aboveFloor": 138,
-        "atHalf": 8,
+        "aboveFloor": 27,
+        "atHalf": 5,
         "atPeak": 4
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0071,
-        "p99": 0.3085,
+        "p90": 0,
+        "p99": 0.1079,
         "max": 1
       },
       "top": [
@@ -1600,7 +1600,7 @@
         },
         {
           "file": "01808.webp",
-          "strength": 0.7345
+          "strength": 0.6723
         }
       ]
     },
@@ -1619,14 +1619,14 @@
         "max": 0.294
       },
       "rooms": {
-        "aboveFloor": 1044,
-        "atHalf": 31,
+        "aboveFloor": 228,
+        "atHalf": 19,
         "atPeak": 8
       },
       "strength": {
-        "p50": 0.0538,
-        "p90": 0.2777,
-        "p99": 0.5474,
+        "p50": 0,
+        "p90": 0.0658,
+        "p99": 0.4259,
         "max": 1
       },
       "top": [
@@ -1667,14 +1667,14 @@
         "max": 0.2654
       },
       "rooms": {
-        "aboveFloor": 1453,
-        "atHalf": 19,
+        "aboveFloor": 335,
+        "atHalf": 6,
         "atPeak": 4
       },
       "strength": {
-        "p50": 0.1248,
-        "p90": 0.306,
-        "p99": 0.4844,
+        "p50": 0,
+        "p90": 0.1045,
+        "p99": 0.3503,
         "max": 1
       },
       "top": [
@@ -1696,7 +1696,7 @@
         },
         {
           "file": "00099.webp",
-          "strength": 0.6941
+          "strength": 0.6363
         }
       ]
     },
@@ -1715,14 +1715,14 @@
         "max": 0.2698
       },
       "rooms": {
-        "aboveFloor": 1037,
-        "atHalf": 10,
+        "aboveFloor": 194,
+        "atHalf": 6,
         "atPeak": 3
       },
       "strength": {
-        "p50": 0.0529,
-        "p90": 0.2608,
-        "p99": 0.4567,
+        "p50": 0,
+        "p90": 0.0426,
+        "p99": 0.337,
         "max": 1
       },
       "top": [
@@ -1740,11 +1740,11 @@
         },
         {
           "file": "01612.webp",
-          "strength": 0.7448
+          "strength": 0.7058
         },
         {
           "file": "01214.webp",
-          "strength": 0.6954
+          "strength": 0.6382
         }
       ]
     },
@@ -1763,14 +1763,14 @@
         "max": 0.2771
       },
       "rooms": {
-        "aboveFloor": 359,
-        "atHalf": 24,
+        "aboveFloor": 79,
+        "atHalf": 13,
         "atPeak": 5
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1227,
-        "p99": 0.5303,
+        "p90": 0,
+        "p99": 0.409,
         "max": 1
       },
       "top": [
@@ -1811,14 +1811,14 @@
         "max": 0.2765
       },
       "rooms": {
-        "aboveFloor": 1784,
-        "atHalf": 148,
+        "aboveFloor": 944,
+        "atHalf": 57,
         "atPeak": 3
       },
       "strength": {
-        "p50": 0.2456,
-        "p90": 0.4733,
-        "p99": 0.6589,
+        "p50": 0.0217,
+        "p90": 0.3338,
+        "p99": 0.5882,
         "max": 1
       },
       "top": [
@@ -1836,11 +1836,11 @@
         },
         {
           "file": "00054.webp",
-          "strength": 0.8217
+          "strength": 0.8112
         },
         {
           "file": "01266.webp",
-          "strength": 0.7987
+          "strength": 0.7797
         }
       ]
     },
@@ -1859,14 +1859,14 @@
         "max": 0.2484
       },
       "rooms": {
-        "aboveFloor": 633,
-        "atHalf": 7,
+        "aboveFloor": 72,
+        "atHalf": 4,
         "atPeak": 4
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1709,
-        "p99": 0.4095,
+        "p90": 0,
+        "p99": 0.279,
         "max": 1
       },
       "top": [
@@ -1888,7 +1888,7 @@
         },
         {
           "file": "01549.webp",
-          "strength": 0.5668
+          "strength": 0.4405
         }
       ]
     },
@@ -1907,14 +1907,14 @@
         "max": 0.2778
       },
       "rooms": {
-        "aboveFloor": 1675,
-        "atHalf": 56,
+        "aboveFloor": 645,
+        "atHalf": 15,
         "atPeak": 3
       },
       "strength": {
-        "p50": 0.1939,
-        "p90": 0.3865,
-        "p99": 0.5582,
+        "p50": 0,
+        "p90": 0.2148,
+        "p99": 0.4502,
         "max": 1
       },
       "top": [
@@ -1932,11 +1932,11 @@
         },
         {
           "file": "01738.webp",
-          "strength": 0.8358
+          "strength": 0.8305
         },
         {
           "file": "01465.webp",
-          "strength": 0.727
+          "strength": 0.6814
         }
       ]
     },
@@ -1955,14 +1955,14 @@
         "max": 0.2671
       },
       "rooms": {
-        "aboveFloor": 1357,
-        "atHalf": 31,
+        "aboveFloor": 528,
+        "atHalf": 18,
         "atPeak": 14
       },
       "strength": {
-        "p50": 0.1128,
-        "p90": 0.3313,
-        "p99": 0.5869,
+        "p50": 0,
+        "p90": 0.18,
+        "p99": 0.4817,
         "max": 1
       },
       "top": [
@@ -2003,14 +2003,14 @@
         "max": 0.2429
       },
       "rooms": {
-        "aboveFloor": 946,
-        "atHalf": 6,
+        "aboveFloor": 39,
+        "atHalf": 5,
         "atPeak": 5
       },
       "strength": {
-        "p50": 0.0415,
-        "p90": 0.1721,
-        "p99": 0.2998,
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.0961,
         "max": 1
       },
       "top": [
@@ -2051,14 +2051,14 @@
         "max": 0.2364
       },
       "rooms": {
-        "aboveFloor": 24,
+        "aboveFloor": 13,
         "atHalf": 12,
         "atPeak": 12
       },
       "strength": {
         "p50": 0,
         "p90": 0,
-        "p99": 0.0742,
+        "p99": 0,
         "max": 1
       },
       "top": [
@@ -2099,14 +2099,14 @@
         "max": 0.246
       },
       "rooms": {
-        "aboveFloor": 188,
+        "aboveFloor": 33,
         "atHalf": 11,
         "atPeak": 11
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0421,
-        "p99": 0.3123,
+        "p90": 0,
+        "p99": 0.1871,
         "max": 1
       },
       "top": [
@@ -2147,14 +2147,14 @@
         "max": 0.2926
       },
       "rooms": {
-        "aboveFloor": 796,
-        "atHalf": 52,
+        "aboveFloor": 281,
+        "atHalf": 29,
         "atPeak": 11
       },
       "strength": {
         "p50": 0,
-        "p90": 0.318,
-        "p99": 0.6367,
+        "p90": 0.1324,
+        "p99": 0.5577,
         "max": 1
       },
       "top": [
@@ -2195,14 +2195,14 @@
         "max": 0.2839
       },
       "rooms": {
-        "aboveFloor": 661,
-        "atHalf": 20,
+        "aboveFloor": 140,
+        "atHalf": 15,
         "atPeak": 11
       },
       "strength": {
         "p50": 0,
-        "p90": 0.2155,
-        "p99": 0.4929,
+        "p90": 0,
+        "p99": 0.3607,
         "max": 1
       },
       "top": [
@@ -2243,14 +2243,14 @@
         "max": 0.273
       },
       "rooms": {
-        "aboveFloor": 442,
-        "atHalf": 18,
+        "aboveFloor": 114,
+        "atHalf": 15,
         "atPeak": 10
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1829,
-        "p99": 0.4613,
+        "p90": 0,
+        "p99": 0.3258,
         "max": 1
       },
       "top": [
@@ -2291,36 +2291,36 @@
         "max": 0.2267
       },
       "rooms": {
-        "aboveFloor": 41,
+        "aboveFloor": 0,
         "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
         "p90": 0,
-        "p99": 0.0874,
-        "max": 0.249
+        "p99": 0,
+        "max": 0.0264
       },
       "top": [
         {
           "file": "01907.webp",
-          "strength": 0.249
+          "strength": 0.0264
         },
         {
           "file": "00767.webp",
-          "strength": 0.2348
+          "strength": 0.007
         },
         {
-          "file": "02023.webp",
-          "strength": 0.1834
+          "file": "00000.webp",
+          "strength": 0
         },
         {
-          "file": "01324.webp",
-          "strength": 0.1741
+          "file": "00001.webp",
+          "strength": 0
         },
         {
-          "file": "01829.webp",
-          "strength": 0.1488
+          "file": "00002.webp",
+          "strength": 0
         }
       ]
     },
@@ -2339,36 +2339,36 @@
         "max": 0.2775
       },
       "rooms": {
-        "aboveFloor": 726,
-        "atHalf": 25,
+        "aboveFloor": 120,
+        "atHalf": 14,
         "atPeak": 1
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1991,
-        "p99": 0.5312,
-        "max": 0.8913
+        "p90": 0,
+        "p99": 0.41,
+        "max": 0.8871
       },
       "top": [
         {
           "file": "00161.webp",
-          "strength": 0.8913
-        },
-        {
-          "file": "00615.webp",
-          "strength": 0.7956
+          "strength": 0.8871
         },
         {
           "file": "01026.webp",
-          "strength": 0.7831
+          "strength": 0.7583
+        },
+        {
+          "file": "00615.webp",
+          "strength": 0.7559
         },
         {
           "file": "01223.webp",
-          "strength": 0.7525
+          "strength": 0.7164
         },
         {
           "file": "01438.webp",
-          "strength": 0.7291
+          "strength": 0.6844
         }
       ]
     },
@@ -2387,12 +2387,12 @@
         "max": 0.3175
       },
       "rooms": {
-        "aboveFloor": 2032,
-        "atHalf": 1686,
-        "atPeak": 728
+        "aboveFloor": 1942,
+        "atHalf": 1512,
+        "atPeak": 724
       },
       "strength": {
-        "p50": 0.7766,
+        "p50": 0.7492,
         "p90": 0.85,
         "p99": 0.85,
         "max": 0.9401
@@ -2435,14 +2435,14 @@
         "max": 0.2883
       },
       "rooms": {
-        "aboveFloor": 589,
-        "atHalf": 15,
+        "aboveFloor": 60,
+        "atHalf": 8,
         "atPeak": 2
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1824,
-        "p99": 0.3894,
+        "p90": 0,
+        "p99": 0.2933,
         "max": 0.9025
       },
       "top": [
@@ -2456,15 +2456,15 @@
         },
         {
           "file": "01565.webp",
-          "strength": 0.8206
+          "strength": 0.8097
         },
         {
           "file": "01304.webp",
-          "strength": 0.7923
+          "strength": 0.7709
         },
         {
           "file": "00500.webp",
-          "strength": 0.7711
+          "strength": 0.7224
         }
       ]
     },
@@ -2483,36 +2483,36 @@
         "max": 0.2783
       },
       "rooms": {
-        "aboveFloor": 1440,
-        "atHalf": 36,
+        "aboveFloor": 418,
+        "atHalf": 17,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1327,
-        "p90": 0.3322,
-        "p99": 0.5732,
-        "max": 0.8425
+        "p50": 0,
+        "p90": 0.1462,
+        "p99": 0.4513,
+        "max": 0.8397
       },
       "top": [
         {
           "file": "01482.webp",
-          "strength": 0.8425
+          "strength": 0.8397
         },
         {
           "file": "01894.webp",
-          "strength": 0.7909
+          "strength": 0.7691
         },
         {
           "file": "01939.webp",
-          "strength": 0.7808
+          "strength": 0.7552
         },
         {
           "file": "01037.webp",
-          "strength": 0.753
+          "strength": 0.7171
         },
         {
           "file": "01583.webp",
-          "strength": 0.7492
+          "strength": 0.6924
         }
       ]
     },
@@ -2531,14 +2531,14 @@
         "max": 0.2729
       },
       "rooms": {
-        "aboveFloor": 1314,
-        "atHalf": 36,
-        "atPeak": 2
+        "aboveFloor": 329,
+        "atHalf": 15,
+        "atPeak": 1
       },
       "strength": {
-        "p50": 0.1063,
-        "p90": 0.3239,
-        "p99": 0.5563,
+        "p50": 0,
+        "p90": 0.1299,
+        "p99": 0.4442,
         "max": 1
       },
       "top": [
@@ -2548,19 +2548,19 @@
         },
         {
           "file": "01053.webp",
-          "strength": 0.857
+          "strength": 0.8401
         },
         {
           "file": "00287.webp",
-          "strength": 0.7718
+          "strength": 0.7428
         },
         {
           "file": "01400.webp",
-          "strength": 0.731
+          "strength": 0.6675
         },
         {
-          "file": "00027.webp",
-          "strength": 0.712
+          "file": "00779.webp",
+          "strength": 0.6382
         }
       ]
     },
@@ -2579,36 +2579,36 @@
         "max": 0.2748
       },
       "rooms": {
-        "aboveFloor": 172,
-        "atHalf": 5,
+        "aboveFloor": 22,
+        "atHalf": 4,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0379,
-        "p99": 0.2569,
-        "max": 0.8496
+        "p90": 0,
+        "p99": 0.0904,
+        "max": 0.8361
       },
       "top": [
         {
           "file": "00049.webp",
-          "strength": 0.8496
+          "strength": 0.8361
         },
         {
           "file": "00986.webp",
-          "strength": 0.6638
+          "strength": 0.5815
         },
         {
           "file": "01310.webp",
-          "strength": 0.6227
+          "strength": 0.5386
         },
         {
           "file": "01741.webp",
-          "strength": 0.6193
+          "strength": 0.5144
         },
         {
           "file": "00433.webp",
-          "strength": 0.5239
+          "strength": 0.3898
         }
       ]
     },
@@ -2627,14 +2627,14 @@
         "max": 0.2884
       },
       "rooms": {
-        "aboveFloor": 1536,
-        "atHalf": 89,
+        "aboveFloor": 674,
+        "atHalf": 22,
         "atPeak": 2
       },
       "strength": {
-        "p50": 0.1764,
-        "p90": 0.4301,
-        "p99": 0.5994,
+        "p50": 0,
+        "p90": 0.28,
+        "p99": 0.5065,
         "max": 0.85
       },
       "top": [
@@ -2648,15 +2648,15 @@
         },
         {
           "file": "01627.webp",
-          "strength": 0.8451
+          "strength": 0.8433
         },
         {
           "file": "01366.webp",
-          "strength": 0.7814
+          "strength": 0.756
         },
         {
           "file": "00047.webp",
-          "strength": 0.7704
+          "strength": 0.741
         }
       ]
     },
@@ -2675,14 +2675,14 @@
         "max": 0.2911
       },
       "rooms": {
-        "aboveFloor": 1403,
-        "atHalf": 78,
+        "aboveFloor": 543,
+        "atHalf": 40,
         "atPeak": 8
       },
       "strength": {
-        "p50": 0.1425,
-        "p90": 0.3806,
-        "p99": 0.7398,
+        "p50": 0,
+        "p90": 0.2076,
+        "p99": 0.6892,
         "max": 0.9025
       },
       "top": [
@@ -2692,7 +2692,7 @@
         },
         {
           "file": "01717.webp",
-          "strength": 0.8906
+          "strength": 0.8862
         },
         {
           "file": "01693.webp",
@@ -2723,14 +2723,14 @@
         "max": 0.2833
       },
       "rooms": {
-        "aboveFloor": 1833,
-        "atHalf": 110,
+        "aboveFloor": 926,
+        "atHalf": 29,
         "atPeak": 1
       },
       "strength": {
-        "p50": 0.249,
-        "p90": 0.4462,
-        "p99": 0.6111,
+        "p50": 0.0265,
+        "p90": 0.2986,
+        "p99": 0.5226,
         "max": 0.85
       },
       "top": [
@@ -2740,19 +2740,19 @@
         },
         {
           "file": "01552.webp",
-          "strength": 0.8177
+          "strength": 0.7864
         },
         {
           "file": "01542.webp",
-          "strength": 0.7536
+          "strength": 0.7179
         },
         {
           "file": "01790.webp",
-          "strength": 0.7491
+          "strength": 0.7118
         },
         {
           "file": "02012.webp",
-          "strength": 0.731
+          "strength": 0.6869
         }
       ]
     },
@@ -2771,14 +2771,14 @@
         "max": 0.298
       },
       "rooms": {
-        "aboveFloor": 1499,
-        "atHalf": 216,
+        "aboveFloor": 726,
+        "atHalf": 91,
         "atPeak": 6
       },
       "strength": {
-        "p50": 0.1817,
-        "p90": 0.5048,
-        "p99": 0.737,
+        "p50": 0,
+        "p90": 0.3708,
+        "p99": 0.6818,
         "max": 0.9025
       },
       "top": [
@@ -2796,11 +2796,11 @@
         },
         {
           "file": "01212.webp",
-          "strength": 0.8793
+          "strength": 0.8707
         },
         {
           "file": "01191.webp",
-          "strength": 0.8776
+          "strength": 0.8684
         }
       ]
     },
@@ -2819,36 +2819,36 @@
         "max": 0.2635
       },
       "rooms": {
-        "aboveFloor": 1253,
-        "atHalf": 14,
+        "aboveFloor": 293,
+        "atHalf": 4,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.0977,
-        "p90": 0.2983,
-        "p99": 0.4788,
-        "max": 0.6719
+        "p50": 0,
+        "p90": 0.094,
+        "p99": 0.35,
+        "max": 0.6059
       },
       "top": [
         {
           "file": "00916.webp",
-          "strength": 0.6719
+          "strength": 0.6059
         },
         {
           "file": "01520.webp",
-          "strength": 0.6226
-        },
-        {
-          "file": "01178.webp",
-          "strength": 0.6217
+          "strength": 0.5384
         },
         {
           "file": "01984.webp",
-          "strength": 0.6064
+          "strength": 0.5162
         },
         {
-          "file": "01373.webp",
-          "strength": 0.5618
+          "file": "01178.webp",
+          "strength": 0.5095
+        },
+        {
+          "file": "00638.webp",
+          "strength": 0.467
         }
       ]
     },
@@ -2867,14 +2867,14 @@
         "max": 0.2693
       },
       "rooms": {
-        "aboveFloor": 592,
-        "atHalf": 24,
+        "aboveFloor": 273,
+        "atHalf": 11,
         "atPeak": 6
       },
       "strength": {
         "p50": 0,
-        "p90": 0.2305,
-        "p99": 0.5239,
+        "p90": 0.1059,
+        "p99": 0.4112,
         "max": 1
       },
       "top": [
@@ -2915,14 +2915,14 @@
         "max": 0.2529
       },
       "rooms": {
-        "aboveFloor": 306,
-        "atHalf": 32,
+        "aboveFloor": 109,
+        "atHalf": 13,
         "atPeak": 8
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1105,
-        "p99": 0.5626,
+        "p90": 0,
+        "p99": 0.4559,
         "max": 1
       },
       "top": [
@@ -2963,14 +2963,14 @@
         "max": 0.2762
       },
       "rooms": {
-        "aboveFloor": 1552,
-        "atHalf": 59,
+        "aboveFloor": 563,
+        "atHalf": 15,
         "atPeak": 2
       },
       "strength": {
-        "p50": 0.1645,
-        "p90": 0.3994,
-        "p99": 0.5858,
+        "p50": 0,
+        "p90": 0.2384,
+        "p99": 0.4813,
         "max": 1
       },
       "top": [
@@ -2984,15 +2984,15 @@
         },
         {
           "file": "00769.webp",
-          "strength": 0.8176
+          "strength": 0.8056
         },
         {
           "file": "01111.webp",
-          "strength": 0.783
+          "strength": 0.7264
         },
         {
           "file": "00608.webp",
-          "strength": 0.7145
+          "strength": 0.6448
         }
       ]
     },
@@ -3011,36 +3011,36 @@
         "max": 0.2602
       },
       "rooms": {
-        "aboveFloor": 1333,
-        "atHalf": 14,
+        "aboveFloor": 357,
+        "atHalf": 1,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1124,
-        "p90": 0.3201,
-        "p99": 0.4773,
-        "max": 0.6339
+        "p50": 0,
+        "p90": 0.1238,
+        "p99": 0.3445,
+        "max": 0.5539
       },
       "top": [
         {
           "file": "00776.webp",
-          "strength": 0.6339
+          "strength": 0.5539
         },
         {
           "file": "00133.webp",
-          "strength": 0.5723
-        },
-        {
-          "file": "01238.webp",
-          "strength": 0.5613
-        },
-        {
-          "file": "01830.webp",
-          "strength": 0.5544
+          "strength": 0.4695
         },
         {
           "file": "01997.webp",
-          "strength": 0.5483
+          "strength": 0.4365
+        },
+        {
+          "file": "01238.webp",
+          "strength": 0.4349
+        },
+        {
+          "file": "01830.webp",
+          "strength": 0.4254
         }
       ]
     },
@@ -3059,20 +3059,20 @@
         "max": 0.2266
       },
       "rooms": {
-        "aboveFloor": 30,
+        "aboveFloor": 9,
         "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
         "p90": 0,
-        "p99": 0.0786,
-        "max": 0.4833
+        "p99": 0,
+        "max": 0.35
       },
       "top": [
         {
           "file": "01499.webp",
-          "strength": 0.4833
+          "strength": 0.35
         },
         {
           "file": "01871.webp",
@@ -3107,36 +3107,36 @@
         "max": 0.264
       },
       "rooms": {
-        "aboveFloor": 349,
-        "atHalf": 10,
+        "aboveFloor": 64,
+        "atHalf": 4,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1112,
-        "p99": 0.3891,
-        "max": 0.7732
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.7254
       },
       "top": [
         {
           "file": "01223.webp",
-          "strength": 0.7732
+          "strength": 0.7254
         },
         {
           "file": "01896.webp",
-          "strength": 0.6952
+          "strength": 0.6184
         },
         {
           "file": "01619.webp",
-          "strength": 0.6777
+          "strength": 0.6138
         },
         {
           "file": "01639.webp",
-          "strength": 0.6244
+          "strength": 0.5408
         },
         {
           "file": "01438.webp",
-          "strength": 0.5479
+          "strength": 0.436
         }
       ]
     },
@@ -3155,36 +3155,36 @@
         "max": 0.2755
       },
       "rooms": {
-        "aboveFloor": 797,
-        "atHalf": 7,
+        "aboveFloor": 95,
+        "atHalf": 1,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.004,
-        "p90": 0.2076,
-        "p99": 0.3814,
-        "max": 0.8103
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.2217,
+        "max": 0.7956
       },
       "top": [
         {
           "file": "01207.webp",
-          "strength": 0.8103
+          "strength": 0.7956
         },
         {
           "file": "01541.webp",
-          "strength": 0.5631
+          "strength": 0.4569
         },
         {
           "file": "01872.webp",
-          "strength": 0.5452
+          "strength": 0.4322
         },
         {
           "file": "00082.webp",
-          "strength": 0.5296
+          "strength": 0.411
         },
         {
           "file": "01186.webp",
-          "strength": 0.522
+          "strength": 0.4006
         }
       ]
     },
@@ -3203,14 +3203,14 @@
         "max": 0.2953
       },
       "rooms": {
-        "aboveFloor": 2031,
-        "atHalf": 745,
-        "atPeak": 21
+        "aboveFloor": 1763,
+        "atHalf": 364,
+        "atPeak": 20
       },
       "strength": {
-        "p50": 0.4523,
-        "p90": 0.6574,
-        "p99": 0.8484,
+        "p50": 0.3053,
+        "p90": 0.5849,
+        "p99": 0.8446,
         "max": 0.9025
       },
       "top": [
@@ -3223,15 +3223,15 @@
           "strength": 0.9025
         },
         {
-          "file": "00260.webp",
-          "strength": 0.8536
-        },
-        {
           "file": "01153.webp",
           "strength": 0.85
         },
         {
           "file": "00104.webp",
+          "strength": 0.85
+        },
+        {
+          "file": "01997.webp",
           "strength": 0.85
         }
       ]
@@ -3251,36 +3251,36 @@
         "max": 0.271
       },
       "rooms": {
-        "aboveFloor": 784,
-        "atHalf": 20,
+        "aboveFloor": 151,
+        "atHalf": 10,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.2281,
-        "p99": 0.4831,
-        "max": 0.8137
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.7808
       },
       "top": [
         {
           "file": "00277.webp",
-          "strength": 0.8137
+          "strength": 0.7808
         },
         {
           "file": "01924.webp",
-          "strength": 0.7578
+          "strength": 0.7236
         },
         {
           "file": "01997.webp",
-          "strength": 0.7063
+          "strength": 0.653
         },
         {
           "file": "00151.webp",
-          "strength": 0.7019
+          "strength": 0.6276
         },
         {
           "file": "00636.webp",
-          "strength": 0.6917
+          "strength": 0.6136
         }
       ]
     },
@@ -3299,14 +3299,14 @@
         "max": 0.2848
       },
       "rooms": {
-        "aboveFloor": 946,
-        "atHalf": 10,
+        "aboveFloor": 195,
+        "atHalf": 4,
         "atPeak": 2
       },
       "strength": {
-        "p50": 0.0338,
-        "p90": 0.2621,
-        "p99": 0.4501,
+        "p50": 0,
+        "p90": 0.0444,
+        "p99": 0.35,
         "max": 0.9025
       },
       "top": [
@@ -3320,15 +3320,15 @@
         },
         {
           "file": "01997.webp",
-          "strength": 0.6329
+          "strength": 0.5525
         },
         {
           "file": "01665.webp",
-          "strength": 0.6271
+          "strength": 0.5445
         },
         {
           "file": "01874.webp",
-          "strength": 0.5821
+          "strength": 0.4828
         }
       ]
     },
@@ -3347,36 +3347,36 @@
         "max": 0.2542
       },
       "rooms": {
-        "aboveFloor": 865,
-        "atHalf": 5,
+        "aboveFloor": 77,
+        "atHalf": 0,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.0268,
-        "p90": 0.1865,
-        "p99": 0.3742,
-        "max": 0.6002
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.4882
       },
       "top": [
         {
           "file": "00099.webp",
-          "strength": 0.6002
-        },
-        {
-          "file": "01257.webp",
-          "strength": 0.577
+          "strength": 0.4882
         },
         {
           "file": "01773.webp",
-          "strength": 0.5651
+          "strength": 0.4596
         },
         {
-          "file": "01390.webp",
-          "strength": 0.5073
+          "file": "01257.webp",
+          "strength": 0.4564
         },
         {
           "file": "01451.webp",
-          "strength": 0.5024
+          "strength": 0.3737
+        },
+        {
+          "file": "01390.webp",
+          "strength": 0.3609
         }
       ]
     },
@@ -3395,36 +3395,36 @@
         "max": 0.2734
       },
       "rooms": {
-        "aboveFloor": 1747,
-        "atHalf": 53,
+        "aboveFloor": 634,
+        "atHalf": 11,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1932,
-        "p90": 0.3883,
-        "p99": 0.5692,
-        "max": 0.7861
+        "p50": 0,
+        "p90": 0.2181,
+        "p99": 0.4637,
+        "max": 0.7624
       },
       "top": [
         {
           "file": "00132.webp",
-          "strength": 0.7861
+          "strength": 0.7624
         },
         {
           "file": "00095.webp",
-          "strength": 0.7037
+          "strength": 0.6496
         },
         {
           "file": "00446.webp",
-          "strength": 0.7004
+          "strength": 0.645
         },
         {
           "file": "00697.webp",
-          "strength": 0.6943
+          "strength": 0.6172
         },
         {
           "file": "00260.webp",
-          "strength": 0.6741
+          "strength": 0.6089
         }
       ]
     },
@@ -3443,36 +3443,516 @@
         "max": 0.2482
       },
       "rooms": {
-        "aboveFloor": 486,
-        "atHalf": 3,
+        "aboveFloor": 85,
+        "atHalf": 1,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.1508,
-        "p99": 0.3815,
-        "max": 0.5353
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.5125
       },
       "top": [
-        {
-          "file": "01481.webp",
-          "strength": 0.5353
-        },
-        {
-          "file": "01706.webp",
-          "strength": 0.5167
-        },
         {
           "file": "00678.webp",
           "strength": 0.5125
         },
         {
+          "file": "01481.webp",
+          "strength": 0.3993
+        },
+        {
+          "file": "01706.webp",
+          "strength": 0.3738
+        },
+        {
           "file": "01214.webp",
-          "strength": 0.4965
+          "strength": 0.3655
         },
         {
           "file": "01451.webp",
-          "strength": 0.4902
+          "strength": 0.35
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "race car",
+      "signals": {
+        "clip": true,
+        "keyword": true,
+        "title": true,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.185,
+        "p99": 0.2205,
+        "max": 0.2485
+      },
+      "rooms": {
+        "aboveFloor": 102,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.2,
+        "max": 0.4057
+      },
+      "top": [
+        {
+          "file": "01916.webp",
+          "strength": 0.4057
+        },
+        {
+          "file": "00899.webp",
+          "strength": 0.3692
+        },
+        {
+          "file": "00671.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01309.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01346.webp",
+          "strength": 0.35
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "swimming pool",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": true,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.1836,
+        "p99": 0.2245,
+        "max": 0.252
+      },
+      "rooms": {
+        "aboveFloor": 42,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.4243
+      },
+      "top": [
+        {
+          "file": "01205.webp",
+          "strength": 0.4243
+        },
+        {
+          "file": "00309.webp",
+          "strength": 0.4186
+        },
+        {
+          "file": "01482.webp",
+          "strength": 0.402
+        },
+        {
+          "file": "01257.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "00941.webp",
+          "strength": 0.35
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "soccer ball",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": true,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.1817,
+        "p99": 0.2244,
+        "max": 0.2654
+      },
+      "rooms": {
+        "aboveFloor": 28,
+        "atHalf": 1,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.13,
+        "max": 0.6354
+      },
+      "top": [
+        {
+          "file": "00082.webp",
+          "strength": 0.6354
+        },
+        {
+          "file": "00697.webp",
+          "strength": 0.396
+        },
+        {
+          "file": "01285.webp",
+          "strength": 0.3951
+        },
+        {
+          "file": "00790.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "00686.webp",
+          "strength": 0.3369
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "smartphone",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.2143,
+        "p99": 0.237,
+        "max": 0.2447
+      },
+      "rooms": {
+        "aboveFloor": 182,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0.0386,
+        "p99": 0.1893,
+        "max": 0.3102
+      },
+      "top": [
+        {
+          "file": "00891.webp",
+          "strength": 0.3102
+        },
+        {
+          "file": "00895.webp",
+          "strength": 0.2903
+        },
+        {
+          "file": "00402.webp",
+          "strength": 0.2835
+        },
+        {
+          "file": "00767.webp",
+          "strength": 0.2591
+        },
+        {
+          "file": "00765.webp",
+          "strength": 0.2507
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "hamburger",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.2116,
+        "p99": 0.2468,
+        "max": 0.2545
+      },
+      "rooms": {
+        "aboveFloor": 300,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0.1032,
+        "p99": 0.3437,
+        "max": 0.4644
+      },
+      "top": [
+        {
+          "file": "00097.webp",
+          "strength": 0.4644
+        },
+        {
+          "file": "01909.webp",
+          "strength": 0.4596
+        },
+        {
+          "file": "00899.webp",
+          "strength": 0.448
+        },
+        {
+          "file": "00374.webp",
+          "strength": 0.4423
+        },
+        {
+          "file": "00444.webp",
+          "strength": 0.4366
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "traffic jam",
+      "signals": {
+        "clip": true,
+        "keyword": true,
+        "title": false,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.1716,
+        "p99": 0.2086,
+        "max": 0.2327
+      },
+      "rooms": {
+        "aboveFloor": 36,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.1306,
+        "max": 0.35
+      },
+      "top": [
+        {
+          "file": "00669.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01982.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01950.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01792.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01731.webp",
+          "strength": 0.35
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "tennis racket",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.2049,
+        "p99": 0.2409,
+        "max": 0.2672
+      },
+      "rooms": {
+        "aboveFloor": 154,
+        "atHalf": 2,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0.0098,
+        "p99": 0.2508,
+        "max": 0.6649
+      },
+      "top": [
+        {
+          "file": "00082.webp",
+          "strength": 0.6649
+        },
+        {
+          "file": "00309.webp",
+          "strength": 0.5059
+        },
+        {
+          "file": "01038.webp",
+          "strength": 0.4391
+        },
+        {
+          "file": "00032.webp",
+          "strength": 0.4294
+        },
+        {
+          "file": "00724.webp",
+          "strength": 0.385
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "basketball court",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": true,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.1828,
+        "p99": 0.2246,
+        "max": 0.2397
+      },
+      "rooms": {
+        "aboveFloor": 77,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.35,
+        "max": 0.48
+      },
+      "top": [
+        {
+          "file": "01672.webp",
+          "strength": 0.48
+        },
+        {
+          "file": "01840.webp",
+          "strength": 0.4526
+        },
+        {
+          "file": "00345.webp",
+          "strength": 0.4431
+        },
+        {
+          "file": "00684.webp",
+          "strength": 0.3882
+        },
+        {
+          "file": "01597.webp",
+          "strength": 0.35
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "supermarket checkout",
+      "signals": {
+        "clip": true,
+        "keyword": true,
+        "title": false,
+        "story": false
+      },
+      "cosine": {
+        "p50": 0.1998,
+        "p99": 0.2367,
+        "max": 0.254
+      },
+      "rooms": {
+        "aboveFloor": 62,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0.1897,
+        "max": 0.4564
+      },
+      "top": [
+        {
+          "file": "01266.webp",
+          "strength": 0.4564
+        },
+        {
+          "file": "02025.webp",
+          "strength": 0.379
+        },
+        {
+          "file": "01775.webp",
+          "strength": 0.33
+        },
+        {
+          "file": "00473.webp",
+          "strength": 0.3173
+        },
+        {
+          "file": "00204.webp",
+          "strength": 0.2876
+        }
+      ]
+    },
+    {
+      "group": "concept",
+      "query": "airport runway",
+      "signals": {
+        "clip": true,
+        "keyword": false,
+        "title": false,
+        "story": true
+      },
+      "cosine": {
+        "p50": 0.1721,
+        "p99": 0.2163,
+        "max": 0.2459
+      },
+      "rooms": {
+        "aboveFloor": 4,
+        "atHalf": 0,
+        "atPeak": 0
+      },
+      "strength": {
+        "p50": 0,
+        "p90": 0,
+        "p99": 0,
+        "max": 0.35
+      },
+      "top": [
+        {
+          "file": "01334.webp",
+          "strength": 0.35
+        },
+        {
+          "file": "01997.webp",
+          "strength": 0.3288
+        },
+        {
+          "file": "00891.webp",
+          "strength": 0.1869
+        },
+        {
+          "file": "00899.webp",
+          "strength": 0.0696
+        },
+        {
+          "file": "00494.webp",
+          "strength": 0.0362
         }
       ]
     },
@@ -3491,14 +3971,14 @@
         "max": 0.2858
       },
       "rooms": {
-        "aboveFloor": 838,
-        "atHalf": 38,
+        "aboveFloor": 217,
+        "atHalf": 14,
         "atPeak": 2
       },
       "strength": {
-        "p50": 0.0042,
-        "p90": 0.2764,
-        "p99": 0.5596,
+        "p50": 0,
+        "p90": 0.0639,
+        "p99": 0.4421,
         "max": 1
       },
       "top": [
@@ -3512,15 +3992,15 @@
         },
         {
           "file": "00097.webp",
-          "strength": 0.8363
+          "strength": 0.8313
         },
         {
           "file": "00724.webp",
-          "strength": 0.8001
+          "strength": 0.7817
         },
         {
           "file": "01235.webp",
-          "strength": 0.7096
+          "strength": 0.6575
         }
       ]
     },
@@ -3539,14 +4019,14 @@
         "max": 0.2922
       },
       "rooms": {
-        "aboveFloor": 2030,
-        "atHalf": 600,
+        "aboveFloor": 1737,
+        "atHalf": 252,
         "atPeak": 5
       },
       "strength": {
-        "p50": 0.4208,
-        "p90": 0.6087,
-        "p99": 0.767,
+        "p50": 0.2621,
+        "p90": 0.519,
+        "p99": 0.7354,
         "max": 1
       },
       "top": [
@@ -3587,14 +4067,14 @@
         "max": 0.2506
       },
       "rooms": {
-        "aboveFloor": 660,
-        "atHalf": 25,
+        "aboveFloor": 256,
+        "atHalf": 14,
         "atPeak": 2
       },
       "strength": {
         "p50": 0,
         "p90": 0.35,
-        "p99": 0.5071,
+        "p99": 0.4876,
         "max": 1
       },
       "top": [
@@ -3608,15 +4088,15 @@
         },
         {
           "file": "00049.webp",
-          "strength": 0.7764
+          "strength": 0.7196
         },
         {
-          "file": "01055.webp",
-          "strength": 0.7152
+          "file": "00096.webp",
+          "strength": 0.6499
         },
         {
-          "file": "00986.webp",
-          "strength": 0.7057
+          "file": "02007.webp",
+          "strength": 0.6466
         }
       ]
     },
@@ -3635,14 +4115,14 @@
         "max": 0.2545
       },
       "rooms": {
-        "aboveFloor": 1743,
-        "atHalf": 68,
+        "aboveFloor": 649,
+        "atHalf": 8,
         "atPeak": 1
       },
       "strength": {
-        "p50": 0.1987,
-        "p90": 0.391,
-        "p99": 0.5659,
+        "p50": 0,
+        "p90": 0.2406,
+        "p99": 0.454,
         "max": 1
       },
       "top": [
@@ -3652,19 +4132,19 @@
         },
         {
           "file": "01775.webp",
-          "strength": 0.6697
+          "strength": 0.5834
         },
         {
           "file": "01422.webp",
-          "strength": 0.6488
+          "strength": 0.5548
         },
         {
           "file": "00226.webp",
-          "strength": 0.6452
+          "strength": 0.5499
         },
         {
           "file": "01696.webp",
-          "strength": 0.6209
+          "strength": 0.5166
         }
       ]
     },
@@ -3683,14 +4163,14 @@
         "max": 0.271
       },
       "rooms": {
-        "aboveFloor": 2019,
-        "atHalf": 352,
+        "aboveFloor": 1451,
+        "atHalf": 120,
         "atPeak": 1
       },
       "strength": {
-        "p50": 0.3368,
-        "p90": 0.5644,
-        "p99": 0.7069,
+        "p50": 0.1486,
+        "p90": 0.45,
+        "p99": 0.6302,
         "max": 1
       },
       "top": [
@@ -3700,19 +4180,19 @@
         },
         {
           "file": "01966.webp",
-          "strength": 0.843
+          "strength": 0.821
         },
         {
           "file": "00743.webp",
-          "strength": 0.8129
+          "strength": 0.7797
         },
         {
           "file": "01715.webp",
-          "strength": 0.7985
+          "strength": 0.7479
         },
         {
           "file": "00338.webp",
-          "strength": 0.7847
+          "strength": 0.733
         }
       ]
     },
@@ -3731,14 +4211,14 @@
         "max": 0.2649
       },
       "rooms": {
-        "aboveFloor": 1348,
-        "atHalf": 215,
+        "aboveFloor": 931,
+        "atHalf": 161,
         "atPeak": 7
       },
       "strength": {
-        "p50": 0.1838,
-        "p90": 0.5119,
-        "p99": 0.7254,
+        "p50": 0,
+        "p90": 0.3848,
+        "p99": 0.6823,
         "max": 1
       },
       "top": [
@@ -3779,36 +4259,36 @@
         "max": 0.2531
       },
       "rooms": {
-        "aboveFloor": 1535,
-        "atHalf": 253,
+        "aboveFloor": 970,
+        "atHalf": 127,
         "atPeak": 1
       },
       "strength": {
-        "p50": 0.2263,
-        "p90": 0.5167,
-        "p99": 0.6935,
-        "max": 0.9968
+        "p50": 0.0013,
+        "p90": 0.4001,
+        "p99": 0.6124,
+        "max": 0.9962
       },
       "top": [
         {
           "file": "00617.webp",
-          "strength": 0.9968
+          "strength": 0.9962
         },
         {
           "file": "01386.webp",
-          "strength": 0.8114
+          "strength": 0.7568
         },
         {
           "file": "01177.webp",
-          "strength": 0.7905
+          "strength": 0.7364
         },
         {
           "file": "00631.webp",
-          "strength": 0.7899
+          "strength": 0.7273
         },
         {
           "file": "00512.webp",
-          "strength": 0.7834
+          "strength": 0.7254
         }
       ]
     },
@@ -3827,14 +4307,14 @@
         "max": 0.3039
       },
       "rooms": {
-        "aboveFloor": 1623,
-        "atHalf": 570,
-        "atPeak": 34
+        "aboveFloor": 1203,
+        "atHalf": 409,
+        "atPeak": 25
       },
       "strength": {
-        "p50": 0.35,
-        "p90": 0.6858,
-        "p99": 0.8693,
+        "p50": 0.229,
+        "p90": 0.6099,
+        "p99": 0.8526,
         "max": 1
       },
       "top": [
@@ -3848,15 +4328,15 @@
         },
         {
           "file": "01617.webp",
-          "strength": 0.9995
+          "strength": 0.9994
         },
         {
           "file": "01893.webp",
-          "strength": 0.9531
+          "strength": 0.9457
         },
         {
           "file": "01151.webp",
-          "strength": 0.9236
+          "strength": 0.9052
         }
       ]
     },
@@ -3875,36 +4355,36 @@
         "max": 0.266
       },
       "rooms": {
-        "aboveFloor": 2010,
-        "atHalf": 933,
-        "atPeak": 5
+        "aboveFloor": 1779,
+        "atHalf": 491,
+        "atPeak": 2
       },
       "strength": {
-        "p50": 0.4806,
-        "p90": 0.6809,
-        "p99": 0.8072,
-        "max": 0.9974
+        "p50": 0.35,
+        "p90": 0.5986,
+        "p99": 0.7617,
+        "max": 0.9966
       },
       "top": [
         {
           "file": "00197.webp",
-          "strength": 0.9974
+          "strength": 0.9966
         },
         {
           "file": "00984.webp",
-          "strength": 0.881
+          "strength": 0.8522
         },
         {
           "file": "01807.webp",
-          "strength": 0.8582
+          "strength": 0.8291
         },
         {
           "file": "00794.webp",
-          "strength": 0.8573
+          "strength": 0.8197
         },
         {
-          "file": "00861.webp",
-          "strength": 0.8535
+          "file": "01751.webp",
+          "strength": 0.8145
         }
       ]
     },
@@ -3923,20 +4403,20 @@
         "max": 0.295
       },
       "rooms": {
-        "aboveFloor": 2047,
-        "atHalf": 1833,
-        "atPeak": 328
+        "aboveFloor": 2022,
+        "atHalf": 1582,
+        "atPeak": 252
       },
       "strength": {
-        "p50": 0.7202,
-        "p90": 0.87,
-        "p99": 0.9361,
-        "max": 0.9834
+        "p50": 0.6576,
+        "p90": 0.851,
+        "p99": 0.9357,
+        "max": 0.9791
       },
       "top": [
         {
           "file": "00237.webp",
-          "strength": 0.9834
+          "strength": 0.9791
         },
         {
           "file": "02021.webp",
@@ -3971,36 +4451,36 @@
         "max": 0.2679
       },
       "rooms": {
-        "aboveFloor": 2000,
-        "atHalf": 273,
-        "atPeak": 1
+        "aboveFloor": 1205,
+        "atHalf": 74,
+        "atPeak": 0
       },
       "strength": {
-        "p50": 0.2945,
-        "p90": 0.5278,
-        "p99": 0.6727,
-        "max": 0.8619
+        "p50": 0.0895,
+        "p90": 0.3981,
+        "p99": 0.5815,
+        "max": 0.8231
       },
       "top": [
         {
           "file": "00296.webp",
-          "strength": 0.8619
-        },
-        {
-          "file": "01715.webp",
-          "strength": 0.7832
+          "strength": 0.8231
         },
         {
           "file": "00743.webp",
-          "strength": 0.7786
+          "strength": 0.7327
+        },
+        {
+          "file": "01715.webp",
+          "strength": 0.727
         },
         {
           "file": "01789.webp",
-          "strength": 0.7738
+          "strength": 0.7189
         },
         {
           "file": "01040.webp",
-          "strength": 0.7506
+          "strength": 0.6944
         }
       ]
     },
@@ -4019,36 +4499,36 @@
         "max": 0.2548
       },
       "rooms": {
-        "aboveFloor": 468,
-        "atHalf": 27,
+        "aboveFloor": 183,
+        "atHalf": 11,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.2313,
-        "p99": 0.5304,
-        "max": 0.6629
+        "p90": 0.0021,
+        "p99": 0.4093,
+        "max": 0.5775
       },
       "top": [
         {
-          "file": "02025.webp",
-          "strength": 0.6629
-        },
-        {
-          "file": "01257.webp",
-          "strength": 0.6233
-        },
-        {
-          "file": "00099.webp",
-          "strength": 0.6198
-        },
-        {
-          "file": "00965.webp",
-          "strength": 0.6027
-        },
-        {
           "file": "00861.webp",
-          "strength": 0.6023
+          "strength": 0.5775
+        },
+        {
+          "file": "01419.webp",
+          "strength": 0.5775
+        },
+        {
+          "file": "01476.webp",
+          "strength": 0.5775
+        },
+        {
+          "file": "01866.webp",
+          "strength": 0.5775
+        },
+        {
+          "file": "01326.webp",
+          "strength": 0.5775
         }
       ]
     },
@@ -4067,14 +4547,14 @@
         "max": 0.2953
       },
       "rooms": {
-        "aboveFloor": 2028,
-        "atHalf": 762,
+        "aboveFloor": 1802,
+        "atHalf": 334,
         "atPeak": 11
       },
       "strength": {
-        "p50": 0.4505,
-        "p90": 0.6401,
-        "p99": 0.7978,
+        "p50": 0.3025,
+        "p90": 0.5623,
+        "p99": 0.7785,
         "max": 0.85
       },
       "top": [
@@ -4115,14 +4595,14 @@
         "max": 0.2562
       },
       "rooms": {
-        "aboveFloor": 341,
-        "atHalf": 3,
+        "aboveFloor": 28,
+        "atHalf": 2,
         "atPeak": 0
       },
       "strength": {
         "p50": 0,
-        "p90": 0.0963,
-        "p99": 0.3043,
+        "p90": 0,
+        "p99": 0.1022,
         "max": 0.728
       },
       "top": [
@@ -4132,19 +4612,19 @@
         },
         {
           "file": "01785.webp",
-          "strength": 0.588
+          "strength": 0.5775
         },
         {
           "file": "01569.webp",
-          "strength": 0.5876
+          "strength": 0.4904
         },
         {
           "file": "00962.webp",
-          "strength": 0.4354
+          "strength": 0.35
         },
         {
-          "file": "01627.webp",
-          "strength": 0.4011
+          "file": "01452.webp",
+          "strength": 0.35
         }
       ]
     },
@@ -4163,36 +4643,36 @@
         "max": 0.2557
       },
       "rooms": {
-        "aboveFloor": 1562,
-        "atHalf": 42,
+        "aboveFloor": 455,
+        "atHalf": 10,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1566,
-        "p90": 0.3561,
-        "p99": 0.5395,
-        "max": 0.7902
+        "p50": 0,
+        "p90": 0.1886,
+        "p99": 0.4244,
+        "max": 0.7747
       },
       "top": [
         {
           "file": "00385.webp",
-          "strength": 0.7902
+          "strength": 0.7747
         },
         {
           "file": "01841.webp",
-          "strength": 0.6715
-        },
-        {
-          "file": "00216.webp",
-          "strength": 0.6509
+          "strength": 0.5859
         },
         {
           "file": "01720.webp",
-          "strength": 0.6505
+          "strength": 0.5627
+        },
+        {
+          "file": "00216.webp",
+          "strength": 0.5577
         },
         {
           "file": "01693.webp",
-          "strength": 0.6271
+          "strength": 0.5251
         }
       ]
     },
@@ -4211,36 +4691,36 @@
         "max": 0.2698
       },
       "rooms": {
-        "aboveFloor": 1438,
-        "atHalf": 21,
+        "aboveFloor": 373,
+        "atHalf": 5,
         "atPeak": 0
       },
       "strength": {
-        "p50": 0.1284,
-        "p90": 0.3219,
-        "p99": 0.4954,
-        "max": 0.7638
+        "p50": 0,
+        "p90": 0.1263,
+        "p99": 0.3641,
+        "max": 0.7053
       },
       "top": [
         {
-          "file": "00237.webp",
-          "strength": 0.7638
+          "file": "01966.webp",
+          "strength": 0.7053
         },
         {
-          "file": "01966.webp",
-          "strength": 0.7444
+          "file": "00237.webp",
+          "strength": 0.6988
         },
         {
           "file": "00698.webp",
-          "strength": 0.6765
+          "strength": 0.6122
         },
         {
           "file": "00092.webp",
-          "strength": 0.6305
+          "strength": 0.5492
         },
         {
           "file": "00917.webp",
-          "strength": 0.6244
+          "strength": 0.5408
         }
       ]
     }

@@ -1,9 +1,9 @@
 /**
  * Measure where CLIP's raw cosine range actually sits on a real tile collection.
  *
- * `CLIP_STRENGTH` (`packages/map/scoring.ts`) and `search.density.clipCentre/
- * clipHigh` want numbers read off this collection's own behaviour, not
- * guessed. This script embeds every line of a keyword list with the same text
+ * A descriptive survey, not the measurement behind `CLIP_STRENGTH`
+ * (`packages/map/scoring.ts`, whose docblock says what that is read off).
+ * This script embeds every line of a keyword list with the same text
  * tower `packages/server/app.ts` loads at search time and scores each vector
  * against every row of a collection's `embeddings.bin` with the same
  * `embeddingScores()` the app ranks with. Reusing that path is the point: a
@@ -246,11 +246,11 @@ function printSummary(report: Report) {
   if (report.universal && report.irrelevant) {
     console.log('');
     console.log(
-      'Calibration anchors (docs/search_rules.md, "Image-content (CLIP) matching"): ' +
-        `centre=${report.overall.percentiles.p50.toFixed(3)} (overall p50), ` +
-        `high=${report.universal.ceiling.toFixed(3)} (universal ceiling), ` +
-        `low=${report.irrelevant.ceiling.toFixed(3)} (irrelevant ceiling) - ` +
-        'expected below centre, since the collection shares nothing with these keywords.'
+      'Landmarks: ' +
+        `overall p50=${report.overall.percentiles.p50.toFixed(3)}, ` +
+        `universal ceiling=${report.universal.ceiling.toFixed(3)}, ` +
+        `irrelevant ceiling=${report.irrelevant.ceiling.toFixed(3)} ` +
+        '(not the shipped anchors - see CLIP_STRENGTH in packages/map/scoring.ts).'
     );
   }
 
