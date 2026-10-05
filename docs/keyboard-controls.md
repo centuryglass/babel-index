@@ -52,6 +52,15 @@ browser's UI as it would on any page.
   - `main.tsx`'s `onControlKeyDown`, for every plain center-tile button
     (`.center-book`, the `.center-controls` buttons, `.search-trigger`).
 
+Escape moves focus but not Orca's mode. A reader who reached a control in
+browse mode stays in browse mode on the canvas, and switches to focus mode
+with Orca's own key; script focus on a `role="application"` element does not
+switch it.
+
+**The canvas's name holds while it has focus.** Arrivals, `?` and
+rearrangements are spoken only through the live region (`MapView.tsx`'s
+canvas comment).
+
 ## State 1 - Canvas focused (no overlay open, no book focused)
 
 `role="application"` canvas, `useMapCursor.ts`'s `onMapKeyDown`.
@@ -68,7 +77,7 @@ browser's UI as it would on any page.
 | `Ctrl/Cmd+End` | Fly to the last-ranked room, or announce "no ranked rooms" |
 | `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching right-click/long-press |
 | `/` | Focus search (fly home first if search is off-screen) |
-| `?` | Announce nearest ranked room in each direction + distance to boundary |
+| `?` | Announce nearest ranked room in each direction, distance to boundary, then the cursor's own cell; a repeat on the same cell is spoken again |
 | `f` / `F` | Toggle the favorite for the room under the cursor and announce the result; on the center or a generic cell, announce that only a room can be a favorite. Unbound without a favorite store, and with `Ctrl`/`Cmd`/`Alt` held (`Ctrl/Cmd+F` stays the browser's find) |
 | `Tab` | Leave the canvas forward, to the first visible stop after it (see "Focus states and tab order") |
 

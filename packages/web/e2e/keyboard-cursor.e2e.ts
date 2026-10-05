@@ -51,7 +51,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
   test('arrows pan the cursor and announce it; ctrl+arrow always lands on a room', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
 
     await canvas.focus();
     await page.keyboard.press('Home');
@@ -100,7 +100,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
   test('the boundary is announced once on crossing, not on every step past it', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     await canvas.focus();
     await page.keyboard.press('Home');
     await page.waitForTimeout(session.flightMs + 200);
@@ -130,7 +130,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
   test('Home and ctrl+Home fly the cursor, and Enter opens what it lands on [SR-48]', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     await canvas.focus();
 
     await page.keyboard.press('Control+Home');
@@ -451,7 +451,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     for (let i = 0; i < 15; i++) {
       await page.keyboard.press('ArrowRight');
       await page.waitForTimeout(200);
-      const text = (await page.locator('[role=status]').textContent()) ?? '';
+      const text = (await page.locator('.live').textContent()) ?? '';
       if (/edge of the library/.test(text)) {
         crossedX = (await hud(page)).x;
         break;
@@ -530,7 +530,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
   test('? announces the surroundings, on request rather than on every move', async () => {
     const { page } = session;
     const canvas = page.locator('canvas');
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     await canvas.focus();
     await page.keyboard.press('Home');
     await page.waitForTimeout(session.flightMs + 200);
@@ -541,6 +541,39 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
       2000,
       '? must report the distance to the edge'
     );
+    const first = (await live.textContent()) ?? '';
+    assert.match(first, /you are at the center of the library\s*$/, `? must end on where the cursor is: ${first}`);
+
+    // A repeat on the same cell must still change the region, or a reader hears nothing.
+    await page.keyboard.press('?');
+    await waitFor(
+      async () => ((await live.textContent()) ?? '') !== first,
+      2000,
+      'a repeated ? must change the live region'
+    );
+  });
+
+  test("the canvas's name holds while it has focus, and catches up on blur", async () => {
+    const { page } = session;
+    const canvas = page.locator('canvas');
+    const live = page.locator('.live');
+    await canvas.focus();
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(session.flightMs + 200);
+    await canvas.blur();
+    await canvas.focus();
+    const held = await canvas.getAttribute('aria-label');
+
+    await page.keyboard.press('ArrowRight');
+    await waitFor(
+      async () => !/center of the library/.test((await live.textContent()) ?? ''),
+      2000,
+      'the arrow must announce the new cell'
+    );
+    assert.equal(await canvas.getAttribute('aria-label'), held, 'the focused canvas must keep its name');
+
+    await canvas.blur();
+    assert.notEqual(await canvas.getAttribute('aria-label'), held, 'a blurred canvas must name the cursor cell');
   });
 
   test("the cursor's own story and chips are real, touch-reachable elements - not gated on Enter", async () => {
@@ -584,7 +617,7 @@ describe('the library, in a browser: the keyboard cursor', { concurrency: false 
     const seen = await page.waitForFunction(
       () => {
         const w = window as typeof window & { __heldKey?: boolean };
-        const live = document.querySelector('[role=status]')?.textContent ?? '';
+        const live = document.querySelector('.live')?.textContent ?? '';
         if (w.__heldKey) return { live };
         const button = [...document.querySelectorAll('button')].find((b) => b.textContent === 'center');
         if (!button?.disabled || !/^rearranging the library/.test(live)) return false;

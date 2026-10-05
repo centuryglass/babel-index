@@ -153,7 +153,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     const { page } = session;
     // A reader standing still while the library reorders must hear the new
     // occupant announced, whatever the animation does.
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
     await page.locator('input[type=search]').fill('clockwork');
@@ -243,7 +243,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
 
       release();
       await waitFor(
-        async () => /could not be run/.test((await page.locator('[role=status]').textContent()) ?? ''),
+        async () => /could not be run/.test((await page.locator('.live').textContent()) ?? ''),
         SEARCH_TIMEOUT,
         'a failed search never reported itself'
       );

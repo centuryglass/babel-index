@@ -347,7 +347,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // the instructions would read them aloud again every time a status
     // cleared. Leans on the ranked-listbox test's search ("clockwork") still
     // being active.
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     await live.waitFor({ timeout: 5000 });
     await waitFor(
       async () => /ranked by/.test((await live.textContent()) ?? ''),

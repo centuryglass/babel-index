@@ -193,7 +193,7 @@ describe('the library, in a browser: the catalog', { concurrency: false }, () =>
       // unhandled and the reader is told nothing at all, which is the case
       // this catches.
       await waitFor(
-        async () => /could not be run/.test((await page.locator('[role=status]').textContent()) ?? ''),
+        async () => /could not be run/.test((await page.locator('.live').textContent()) ?? ''),
         SEARCH_TIMEOUT,
         'a failed search never reported itself'
       );

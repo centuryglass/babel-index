@@ -415,7 +415,7 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     // hint. There is one region for the whole app, outside both views, so a
     // switch to the catalog does not unmount it.
     await waitFor(
-      async () => /keywords/.test(await page.locator('[role=status]').textContent()),
+      async () => /keywords/.test(await page.locator('.live').textContent()),
       SEARCH_TIMEOUT,
       'clicking a keyword chip never produced a keyword-driven ranking'
     );
