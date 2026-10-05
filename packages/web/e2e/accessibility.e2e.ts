@@ -170,7 +170,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // supports them (axe's `aria-allowed-attr` rule catches them on the
       // button). CDP's `Accessibility.getFullAXTree` does not surface either
       // property for a native `<li>`, so this checks only that the DOM carries
-      // the values, not that a screen reader receives them (issue #243).
+      // the values. AT-SPI does receive them, as checked by hand in Accerciser.
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
 

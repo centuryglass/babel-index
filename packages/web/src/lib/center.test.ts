@@ -324,6 +324,16 @@ test('an untitled book is stepped over, not landed on', () => {
   assert.equal(bookNeighbour(0, { dy: 1 }, sparse), 0);
 });
 
+test('an override book is stepped over, since it has its own tab stop', () => {
+  const wall = assignTitles({
+    tags: ['a', 'b', 'c'],
+    overrides: { 0: { text: 'READ ME', action: 'help' }, [BOOK_COUNT - 1]: { text: 'forget', action: 'forgetHistory' } },
+  });
+  assert.equal(bookNeighbour(-1, { dx: 1 }, wall), 1, 'Home skips the first-slot override');
+  assert.equal(bookNeighbour(BOOK_COUNT, { dx: -1 }, wall), BOOK_COUNT - 2, 'End skips the last-slot override');
+  assert.equal(bookNeighbour(1, { dx: -1 }, wall), 1);
+});
+
 test('a book says what it is as well as what it says', () => {
   const wall = assignTitles({ history: ['brass'], tags: ['spiral staircase'] });
   assert.match(describeBook(wall[0]), /^brass\b/);

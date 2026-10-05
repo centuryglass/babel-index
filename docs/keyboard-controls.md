@@ -21,15 +21,19 @@ Tab order through the map subtree, top to bottom in the DOM:
    positioned over the center tile and stays `display: none` until the
    render loop finds it on screen and legible (`MapView.tsx`). While hidden it
    is out of the tab sequence, not only visually hidden.
-3. **The shelf's one roving book** (`role="toolbar"`) - of the buttons
-   `BOOK_COUNT` generates, only the focused one has `tabIndex={0}` and the
-   rest are `tabIndex={-1}`, so the wall costs one tab stop. It is gated on
-   zoom and legibility like the search input (`useMapRenderer.ts`'s
-   `booksEl.style.display`).
+3. **The shelf**, in wall order. It is gated on zoom and legibility like the
+   search input (`useMapRenderer.ts`'s `booksEl.style.display`).
+   - The override books before the first search book ("READ ME", "The
+     Catalog"), one tab stop each.
+   - The search books' one roving stop (`role="toolbar"`): of the history
+     and tag books, only the focused one has `tabIndex={0}` and the rest are
+     `tabIndex={-1}`.
+   - The override books after it ("forget searches", while there is
+     history), one tab stop each.
 4. **`.center-book`** (the artist's-statement hotspot traced into the shelf
    gap) - gated like the shelf.
-5. **`.center-controls`' buttons** - the reorder button, the two
-   favorite-sort toggles when `favorites` is on, then the distill toggle
+5. **`.center-controls`' buttons** - the two favorite-sort toggles when
+   `favorites` is on, the reorder button, then the distill toggle
    (`aria-pressed`). Gated like the shelf.
 6. **`.search-trigger`** (the "go to search" icon button) - the one stop that
    is not zoom-gated. It is always mounted and always in the tab sequence, so
@@ -50,7 +54,8 @@ browser's UI as it would on any page.
   - `useCenterShelf.ts`'s `onBooksKeyDown`, for the shelf.
   - `main.tsx`'s `onSearchKeyDown`, for the search input.
   - `main.tsx`'s `onControlKeyDown`, for every plain center-tile button
-    (`.center-book`, the `.center-controls` buttons, `.search-trigger`).
+    (the shelf's override books, `.center-book`, the `.center-controls`
+    buttons, `.search-trigger`).
 
 Escape moves focus but not Orca's mode. A reader who reached a control in
 browse mode stays in browse mode on the canvas, and switches to focus mode
@@ -114,16 +119,17 @@ up the ring, matching every other focus ring in the app (`css/base.css`'s
   say so in the live region. They neither end the animation nor queue for
   later; only a pointer grab ends one (`main.tsx`'s `refuseHeldCamera`).
 
-## State 2 - Center shelf book focused (roving tabindex)
+## State 2 - Center shelf search book focused (roving tabindex)
 
-`role="toolbar"`, `useCenterShelf.ts`'s `onBooksKeyDown`.
+`role="toolbar"`, `useCenterShelf.ts`'s `onBooksKeyDown`. Override books are
+plain buttons outside the toolbar, in State 4.
 
 | Key | Behavior |
 |---|---|
-| `ArrowLeft/Right` | Move roving focus along the flat book queue, wrapping at row ends |
-| `ArrowUp/Down` | Move roving focus by shelf/column |
-| `Home` | Jump to first book slot |
-| `End` | Jump to last book slot |
+| `ArrowLeft/Right` | Move roving focus along the flat book queue, crossing shelf ends; holds at the wall's first and last search book |
+| `ArrowUp/Down` | Move roving focus by shelf/column; holds at the top and bottom shelf |
+| `Home` | Jump to the first search book |
+| `End` | Jump to the last search book |
 | `Escape` | Return focus to the canvas |
 | `Enter` / `Space` | Not intercepted - native `<button>` click activation fires `onBook(i)` |
 | `Tab` | Not intercepted - moves to the next visible stop in the tab order |
@@ -152,8 +158,8 @@ inserts a literal `/`.
 
 ## State 4 - A plain center-tile control button focused
 
-`.center-book`, `.center-controls`' reorder/mine/count/distill buttons, and
-`.search-trigger` - plain `<button>`s with no other keyboard behavior
+The shelf's override books, `.center-book`, `.center-controls`'
+mine/count/reorder/distill buttons, and `.search-trigger` - plain `<button>`s with no other keyboard behavior
 (activation is native click, as for the shelf's books), sharing one
 `onKeyDown` (`main.tsx`'s `onControlKeyDown`).
 

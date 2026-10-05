@@ -85,14 +85,21 @@ export function useCenterShelf({
     [history, tags, overrides]
   );
 
-  // Which book on the shelf holds the wall's single tab stop.
+  // Which search book on the shelf holds the toolbar's single tab stop.
   //
   // Roving tabindex - one stop in, arrows within, Tab straight out - because
   // the wall is a browsable index of keywords, and putting every book in the
   // tab sequence would tax every keyboard user with a press per book to get
-  // past it. The key-by-key spec is docs/keyboard-controls.md, "State 2 -
-  // Center shelf book focused".
-  const [bookFocus, setBookFocus] = useState(0);
+  // past it. Override books are not in the toolbar; each is its own tab stop.
+  // The key-by-key spec is docs/keyboard-controls.md, "State 2 - Center shelf
+  // search book focused".
+  //
+  // `bookFocus` falls back to the first search book whenever the stored index
+  // is not one, such as on first render or after history changes the wall.
+  const [storedFocus, setBookFocus] = useState(-1);
+  const bookFocus = centreSlots[storedFocus]?.term
+    ? storedFocus
+    : bookNeighbour(-1, { dx: 1 }, centreSlots);
 
   /** What an override book does, dispatched on its `action`. */
   const onOverride = useCallback(

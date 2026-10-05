@@ -713,9 +713,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [focusCanvas]
   );
 
-  // `Escape` handler shared by the five plain center-tile buttons
-  // (`.center-book`, reorder, the two sort toggles, the search trigger) -
-  // they use no other keys, since activation is native click.
+  // `Escape` handler shared by the plain center-tile buttons (the shelf's
+  // override books, `.center-book`, the `.center-controls` buttons, the
+  // search trigger) - they use no other keys, since activation is native
+  // click.
   const onControlKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
       if (e.key !== 'Escape') return;

@@ -207,6 +207,23 @@ export function MapView({
   // The canvas's name as it was when focus arrived, held until blur; see the
   // canvas's comment.
   const [heldLabel, setHeldLabel] = useState<string | null>(null);
+  // The override books either side of the toolbar, in wall order.
+  const firstSearchBook = centreSlots.findIndex((slot) => slot?.term);
+  const overrideSlots = centreSlots.flatMap((slot, i) => (slot?.action ? [i] : []));
+  const overridesBefore = overrideSlots.filter((i) => firstSearchBook < 0 || i < firstSearchBook);
+  const overridesAfter = overrideSlots.filter((i) => firstSearchBook >= 0 && i > firstSearchBook);
+  const overrideButton = (i: number) => (
+    <button
+      key={i}
+      type="button"
+      data-book={i}
+      className={showHelpHint && centreSlots[i].action === 'help' ? 'hint' : undefined}
+      style={BOOK_STYLES[i]}
+      aria-label={describeBook(centreSlots[i])}
+      onClick={() => onBook(i)}
+      onKeyDown={onControlKeyDown}
+    />
+  );
   return (
     <>
       {/* `display: contents`/`display: none` per `mode`; see the file
@@ -318,29 +335,40 @@ export function MapView({
         the shelf still pans. The keyboard still focuses these buttons. A
         sighted click routes through `onTap` -> `bookAtPoint` -> `onBook`,
         the same function the buttons call.
+
+
+        Search books (history and tags) share one roving tab stop in the
+        `role="toolbar"`. Each override book (READ ME, The Catalog, forget
+        searches) has a distinct function, so it is a plain button with its
+        own tab stop, placed before or after the toolbar to match where it
+        sits on the wall.
       */}
-      <div
-        ref={booksRef}
-        className="center-books"
-        role="toolbar"
-        aria-label="the center room's shelf"
-        onKeyDown={onBooksKeyDown}
-      >
-        {centreSlots.map((slot, i) =>
-          slot?.text ? (
-            <button
-              key={i}
-              type="button"
-              data-book={i}
-              className={showHelpHint && slot.action === 'help' ? 'hint' : undefined}
-              tabIndex={i === bookFocus ? 0 : -1}
-              style={BOOK_STYLES[i]}
-              aria-label={describeBook(slot)}
-              onFocus={() => setBookFocus(i)}
-              onClick={() => onBook(i)}
-            />
-          ) : null
+      <div ref={booksRef} className="center-books">
+        {overridesBefore.map(overrideButton)}
+        {firstSearchBook >= 0 && (
+          <div
+            className="center-books-shelf"
+            role="toolbar"
+            aria-label="the center room's shelf"
+            onKeyDown={onBooksKeyDown}
+          >
+            {centreSlots.map((slot, i) =>
+              slot?.term ? (
+                <button
+                  key={i}
+                  type="button"
+                  data-book={i}
+                  tabIndex={i === bookFocus ? 0 : -1}
+                  style={BOOK_STYLES[i]}
+                  aria-label={describeBook(slot)}
+                  onFocus={() => setBookFocus(i)}
+                  onClick={() => onBook(i)}
+                />
+              ) : null
+            )}
+          </div>
         )}
+        {overridesAfter.map(overrideButton)}
       </div>
       {/*
         The open book painted into a shelf gap, which opens the artist's
@@ -380,7 +408,8 @@ export function MapView({
         `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
         (`center.ts`) or `distillToggleAtPoint` (`distillToggle.ts`);
         `onClick` serves the keyboard and screen readers. The two switches
-        render only while `favorites` is true.
+        render only while `favorites` is true. DOM order is tab order, and it
+        follows the tile top to bottom: the switches, reorder, then distill.
 
         A `title` never pops up here, since pointer events never reach the
         button. The `.control-tooltip` child is the visible tooltip, shown
@@ -388,19 +417,6 @@ export function MapView({
         toggles, and on `:focus-visible`.
       */}
       <div ref={controlsRef} className="center-controls">
-        {SHUFFLE_STYLE && (
-          <button
-            type="button"
-            data-control="shuffle"
-            style={SHUFFLE_STYLE}
-            title="reorder the library"
-            aria-label="reorder the library"
-            onClick={onReorder}
-            onKeyDown={onControlKeyDown}
-          >
-            <span className="control-tooltip">reorder the library</span>
-          </button>
-        )}
         {favorites && MINE_TOGGLE_STYLE && (
           <button
             type="button"
@@ -427,6 +443,19 @@ export function MapView({
             onKeyDown={onControlKeyDown}
           >
             <span className="control-tooltip">sort by most favorited</span>
+          </button>
+        )}
+        {SHUFFLE_STYLE && (
+          <button
+            type="button"
+            data-control="shuffle"
+            style={SHUFFLE_STYLE}
+            title="reorder the library"
+            aria-label="reorder the library"
+            onClick={onReorder}
+            onKeyDown={onControlKeyDown}
+          >
+            <span className="control-tooltip">reorder the library</span>
           </button>
         )}
         {/*

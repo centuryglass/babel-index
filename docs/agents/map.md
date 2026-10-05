@@ -123,8 +123,10 @@ still apply.
   - The container is `pointer-events: none`, so a click routes through the
     canvas's `onTap` -> `bookAtPoint` -> `onBook`. A second copy of "what
     book i does" in either path will drift.
-  - The shelf is one tab stop (roving tabindex), with arrow-key movement in
-    `center.ts`'s `bookNeighbour`. `areSpinesLegible` is the single zoom gate
+  - The search books are one tab stop (roving tabindex in a
+    `role="toolbar"`), with arrow-key movement in `center.ts`'s
+    `bookNeighbour`, which steps over override books. Each override book is
+    its own tab stop outside the toolbar. `areSpinesLegible` is the single zoom gate
     that keeps a reader from tabbing to a book nobody can read.
 - **The center cell's DOM overlays are sized to the whole cell, and `#root`'s
   clip keeps them off the page.** `.center-search`, `.center-books`,

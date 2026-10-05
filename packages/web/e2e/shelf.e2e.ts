@@ -43,13 +43,13 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       const books = shelf.locator('button');
       await waitFor(async () => (await books.count()) > 0, 5000, 'the shelf mounted no books');
 
-      // One tab stop for the whole wall. A stop per book would put a press
+      // One tab stop for the search books. A stop per book would put a press
       // per spine between the map and the panel for every keyboard user, on
       // a wall that is mostly a browsable index of keywords.
       assert.equal(
-        await shelf.locator('button[tabindex="0"]').count(),
+        await shelf.locator('.center-books-shelf button[tabindex="0"]').count(),
         1,
-        'the shelf must be one tab stop, not one per book'
+        'the search books must be one tab stop, not one per book'
       );
 
       // Reached from the search field. The clear button only mounts once
@@ -62,14 +62,24 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
         await page.evaluate(() => document.activeElement?.classList.contains('search-clear')),
         'Tab from the search field must reach the clear button first'
       );
-      await page.keyboard.press('Tab');
       const inShelf = () =>
         page.evaluate(() => {
           const el = document.activeElement as HTMLElement | null;
-          return el?.closest('.center-books') ? el.dataset.book : null;
+          return el?.closest('.center-books-shelf') ? el.dataset.book : null;
         });
+      const focusedName = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+
+      // The override books are their own tab stops, in wall order, before the
+      // search books' one roving stop.
+      await page.keyboard.press('Tab');
+      assert.equal(await focusedName(), 'READ ME', 'Tab from the clear button must reach READ ME');
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await focusedName(), 'READ ME', 'arrows on an override book must not rove');
+      await page.keyboard.press('Tab');
+      assert.equal(await focusedName(), 'The Catalog', 'Tab from READ ME must reach The Catalog');
+      await page.keyboard.press('Tab');
       const first = await inShelf();
-      assert.ok(first !== null, 'Tab from the clear button must reach the shelf');
+      assert.ok(first !== null, 'Tab from The Catalog must reach the search books');
 
       // Arrows move within the shelf: right along the wall's flat queue, down
       // by a shelf. Both are `bookNeighbour`, which is asserted exactly in
@@ -107,7 +117,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       // reaches through the canvas, which is the point of there being one.
       const term = book.name.split(' - ')[0];
       await page.evaluate((want) => {
-        const el = [...document.querySelectorAll<HTMLElement>('.center-books button')].find(
+        const el = [...document.querySelectorAll<HTMLElement>('.center-books-shelf button')].find(
           (b) => b.getAttribute('aria-label')?.startsWith(want)
         );
         el.focus();

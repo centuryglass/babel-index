@@ -46,6 +46,8 @@ canvas.dragging { cursor: grabbing; }
  *   across its neighbours.
  */
 .center-books { position: absolute; display: none; pointer-events: none; }
+/* The search books' toolbar, the same box as `.center-books`, so `BOOK_STYLES` percentages resolve against the cell. */
+.center-books-shelf { position: absolute; inset: 0; }
 .center-books button {
   position: absolute; flex: none; margin: 0; padding: 0;
   background: none; border: none; border-radius: 2px;
@@ -86,7 +88,9 @@ canvas.dragging { cursor: grabbing; }
 .center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .center-book path { fill: transparent; stroke: none; }
 .center-book.hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
-.center-book:focus-visible { outline-offset: 1px; }
+/* The ring follows the book, not the cell-sized button; see `:focus-visible` in base.css. */
+.center-book:focus-visible { outline: none; }
+.center-book:focus-visible path { stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 
 /*
  * The favorites-sort switch, reorder button and distill toggle: one
