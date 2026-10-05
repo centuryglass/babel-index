@@ -18,6 +18,7 @@
  * listeners and never pans again (docs/agents/catalog.md, "The map is
  * hidden, never unmounted").
  */
+import { useState } from 'react';
 import type { FormEventHandler, KeyboardEventHandler, Ref } from 'react';
 import { RoomDetails, type FavoriteControl } from './RoomDetails.tsx';
 import { SearchForm } from './SearchForm.tsx';
@@ -203,6 +204,9 @@ export function MapView({
   preparingRearrangement: boolean;
 }) {
   const distillStyle = distillMode ? DISTILL_ON_STYLE : DISTILL_OFF_STYLE;
+  // The canvas's name as it was when focus arrived, held until blur; see the
+  // canvas's comment.
+  const [heldLabel, setHeldLabel] = useState<string | null>(null);
   return (
     <>
       {/* `display: contents`/`display: none` per `mode`; see the file
@@ -219,17 +223,23 @@ export function MapView({
         below are `tabIndex={-1}`: real elements a touch screen reader
         reaches, adding no tab stops.
 
-        `aria-label` is what a reader hears on arriving here. Every later
-        change arrives through the app's one live region, fed by
-        `announceCursorMove` (`useMapCursor.ts`) and rendered by `main.tsx`,
-        because an attribute change on an already-focused element is not
-        reliably announced.
+        `aria-label` is what a reader hears on arriving here, and it does
+        not change while the canvas has focus. Every later change arrives
+        through the app's one live region, fed by `announceCursorMove`
+        (`useMapCursor.ts`) and rendered by `main.tsx`. Changing the name of
+        the focused canvas breaks Orca in two ways:
+        - Orca speaks the new name as well as the live region, so every
+          move is read twice.
+        - Orca drops from focus mode to browse mode, so the arrow keys stop
+          panning.
       */}
       <canvas
         ref={canvasRef}
         role="application"
         tabIndex={0}
-        aria-label={cursorLabel}
+        aria-label={heldLabel ?? cursorLabel}
+        onFocus={() => setHeldLabel(cursorLabel)}
+        onBlur={() => setHeldLabel(null)}
         onKeyDown={onMapKeyDown}
       >
         {/*
@@ -471,8 +481,7 @@ export function MapView({
 
         {/*
           The ranked results list, the lossless reading of a search. It is
-          debug-only, like the rest of this panel; issue #238 tracks giving
-          it a reader-facing home. It is a plain list of buttons, each a
+          debug-only, like the rest of this panel. It is a plain list of buttons, each a
           Tab stop, not `role="listbox"`: a listbox needs arrow-key roving.
 
           Absent when there is no search, or when one matched nothing worth
@@ -597,7 +606,7 @@ export function MapView({
 
         {/*
           The static hint, shown only while no status is live. It must never
-          share a node with `role="status"`, or the hint is read aloud each
+          share a node with the live region, or the hint is read aloud each
           time a status clears. The live region is `main.tsx`'s
           (docs/agents/catalog.md, "One live region for the whole app").
         */}

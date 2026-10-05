@@ -7,6 +7,7 @@
  * (see the `cursor` state).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { cellDistance, type MapLayout } from '../../../map/ordering.ts';
 import {
   describeCell, describeRoom, describeArrangement, describeFavoriteToggle, withFavoriteStatus,
@@ -47,7 +48,7 @@ interface UseMapCursorOpts {
   /** `config.camera`, not the whole config */
   camera: Config['camera'];
   /** writes the one live region */
-  setStatus: (status: string) => void;
+  setStatus: Dispatch<SetStateAction<string>>;
   /**
    * true, having said why, while a rearrangement holds the camera - every key
    * that moves the camera checks it first (`main.tsx`'s `refuseHeldCamera`)
@@ -149,9 +150,9 @@ export function useMapCursor({
 
   /**
    * Move the cursor to a cell and announce the arrival through `setStatus`,
-   * the page's one polite live region. The canvas's `aria-label` changes too,
-   * but an attribute change on a focused element is not reliably announced
-   * across screen readers.
+   * the page's one polite live region. The live region is the only voice
+   * while the canvas has focus: `MapView.tsx` holds the canvas's
+   * `aria-label` still until blur.
    *
    * `lead` is whatever brought the cursor here - a search's signals, a
    * rearrangement's outcome. It goes in front of the cell's name in the same
@@ -219,8 +220,12 @@ export function useMapCursor({
   );
 
   /** `?` - the screen-reader equivalent of peripheral vision; see `describeSurroundings`. */
+  // A repeated `?` on the same cell toggles a trailing no-break space, the
+  // same trick as `lastAnnounced`, so the live region changes and is spoken
+  // again.
   const announceSurroundings = useCallback(() => {
-    setStatus(describeSurroundings(layout, order, metadata, cursor, nameCell(cursor)));
+    const text = describeSurroundings(layout, order, metadata, cursor, nameCell(cursor));
+    setStatus((prev) => (prev === text ? `${text}\u00a0` : text));
   }, [layout, order, metadata, cursor, setStatus, nameCell]);
 
   // The cursor's own story and keyword chips, nested inside the canvas as real
@@ -238,11 +243,11 @@ export function useMapCursor({
       ? describeRoom(cursorRoom.id, cursorRoom.rank, order.length, cursorEntry)
       : null;
 
-  // The canvas's own accessible name - what a reader hears landing on it for
-  // the first time, before any move has run `announceCursorMove` and pushed
-  // anything into the live region. Always the plain per-cell name, independent
-  // of the region/cell granularity split that only matters once movement is
-  // in progress.
+  // The canvas's own accessible name - what a reader hears landing on it,
+  // before any move has run `announceCursorMove` and pushed anything into the
+  // live region. Always the plain per-cell name, independent of the
+  // region/cell granularity split that only matters once movement is in
+  // progress. `MapView.tsx` applies it only while the canvas is unfocused.
   const cursorLabel = useMemo(() => nameCell(cursor), [cursor, nameCell]);
 
   const onMapKeyDown = useCallback(
@@ -418,9 +423,11 @@ export function useMapCursor({
 }
 
 /**
- * `?`'s sentence: where the cursor is (`here`, the cursor's name), the nearest ranked room in each
- * cardinal direction (straight-line walks with `nextRoom`), and how far the
- * edge is. Spoken on request, not on every move, so the live region stays
+ * `?`'s sentence: the nearest ranked room in each cardinal direction
+ * (straight-line walks with `nextRoom`), how far the edge is, and last where
+ * the cursor is (`here`, the cursor's name). `here` goes last because the
+ * reader heard it on arrival, and leading with it sounds like a repeat of that
+ * arrival. Spoken on request, not on every move, so the live region stays
  * quiet.
  */
 function describeSurroundings(
@@ -450,8 +457,8 @@ function describeSurroundings(
   const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, CELL_ASPECT));
 
   return [
-    here,
     nearby.length ? nearby.join('; ') : 'nothing else ranked nearby',
     `the edge of the library is about ${Math.round(edge)} away`,
+    `you are at ${here}`,
   ].join('. ');
 }

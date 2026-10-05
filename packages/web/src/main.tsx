@@ -1293,11 +1293,13 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         and a screen reader loses a live region that goes away. What it says
         varies by mode; the node a reader is listening to never changes.
 
-        `role="status"` announces every change to its subtree, so nothing
-        else may share it; the map's static hint stays in the panel.
+        `aria-live="polite"` with `aria-atomic` announces every change to
+        its subtree, so nothing else may share it; the map's static hint
+        stays in the panel. Orca, in Firefox and Chromium, speaks this
+        explicit `aria-live` and ignores `role="status"`'s implicit one.
       */}
-      <div className="live">
-        <span role="status">{status}</span>
+      <div className="live" aria-live="polite" aria-atomic="true">
+        {status}
       </div>
 
       {overlayRoom && (

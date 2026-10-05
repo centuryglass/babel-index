@@ -185,7 +185,7 @@ describe('the library, in a browser: favorites', { concurrency: false }, () => {
   test('f on the map toggles the favorite under the cursor, and arriving on a favorite says so', async () => {
     const { page, flightMs } = session;
     const canvas = page.locator('canvas');
-    const live = page.locator('[role=status]');
+    const live = page.locator('.live');
     const card = page.locator('.overlay');
     const liveText = async () => (await live.textContent()) ?? '';
 

@@ -24,12 +24,12 @@ conventions still apply.
 - **The catalog is not the accessibility mode.** It is a control offered to
   everyone: nothing detects a screen reader or defaults into it, and
   `role="application"` stays scoped to the canvas. The map's ranked results
-  list is debug-only for now (#238).
+  list is debug-only; the catalog is the ranked reading for every reader.
   The catalog is a `<ul>`, not a listbox, because its rows contain keyword
   chips.
 - **One live region for the whole app, outside both views,** so a mode
   switch can't unmount it. `.note` holds only the static hint and must never
-  share a node with `role="status"`.
+  share a node with the live region.
 - **Rows are a fixed height and the spacers are arithmetic, not
   estimates.** `spacerHeight` stands in for unmounted pages to the pixel, so
   recycling a page never moves the scroll position. Anything that makes row
