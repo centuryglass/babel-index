@@ -38,7 +38,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     await landed(page, session.flightMs);
 
     try {
-      const shelf = page.locator('.center-books');
+      const shelf = page.locator('.center-tile');
       await shelf.waitFor({ state: 'visible', timeout: 5000 });
       const books = shelf.locator('button');
       await waitFor(async () => (await books.count()) > 0, 5000, 'the shelf mounted no books');
@@ -69,10 +69,19 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
         });
       const focusedName = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
 
-      // The override books are their own tab stops, in wall order, before the
-      // search books' one roving stop.
-      await page.keyboard.press('Tab');
-      assert.equal(await focusedName(), 'READ ME', 'Tab from the clear button must reach READ ME');
+      // Tab order follows the tile's geometry: the controls down the left
+      // side (the favorite switches only with a favorite store), then the
+      // override books, each its own tab stop, then the search books' one
+      // roving stop.
+      const left: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        await page.keyboard.press('Tab');
+        const name = await focusedName();
+        if (name === 'READ ME') break;
+        left.push(name);
+      }
+      assert.equal(await focusedName(), 'READ ME', `Tab never reached READ ME; passed ${left.join(', ')}`);
+      assert.equal(left.at(-1), 'reorder the library', `reorder must come just before READ ME: ${left.join(', ')}`);
       await page.keyboard.press('ArrowRight');
       assert.equal(await focusedName(), 'READ ME', 'arrows on an override book must not rove');
       await page.keyboard.press('Tab');
@@ -95,9 +104,15 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
       await page.keyboard.press('ArrowUp');
       assert.equal(await inShelf(), right, 'up must come back to the book down left');
 
-      // And Tab leaves in one press, from the middle of the wall.
+      // And Tab leaves in one press, from the middle of the wall, to the
+      // books after it on the wall.
       await page.keyboard.press('Tab');
       assert.equal(await inShelf(), null, 'Tab must leave the shelf, not walk it');
+      const after = await focusedName();
+      assert.ok(
+        /^forget searches|^an artist's statement$/.test(after ?? ''),
+        `Tab from the search books must reach forget searches or the open book, not ${after}`
+      );
 
       // The names carry what the button does, not just what the spine says -
       // buttons called `brass` and `art nouveau` would say nothing about
@@ -145,7 +160,7 @@ describe('the library, in a browser: the center shelf', { concurrency: false }, 
     await page.locator('button.search-trigger').click();
     await landed(page, session.flightMs);
     try {
-      await page.locator('.center-books').waitFor({ state: 'visible', timeout: 5000 });
+      await page.locator('.center-tile').waitFor({ state: 'visible', timeout: 5000 });
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();

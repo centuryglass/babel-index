@@ -79,16 +79,14 @@ interface UseMapRendererOpts {
   canvasRef: { current: HTMLCanvasElement | null };
   /** the center tile's search field */
   searchFormRef: { current: HTMLFormElement | null };
-  /** the center tile's shelf of buttons */
-  booksRef: { current: HTMLElement | null };
-  /** the open book painted into a shelf gap - a distinct hotspot, not one of the shelf's buttons */
-  centerBookRef?: { current: HTMLElement | null };
   /**
-   * The favorites-sort switch and reorder button, painted into the center
-   * tile - one container over the whole cell, like `booksRef`, holding three
-   * buttons positioned in percentages of it.
+   * The center tile's controls: one container over the whole cell holding
+   * the shelf's books, the open book and the control buttons, each
+   * positioned in percentages of it.
    */
-  controlsRef?: { current: HTMLElement | null };
+  centerTileRef: { current: HTMLElement | null };
+  /** the open book painted into a shelf gap, inside `centerTileRef` - hovered on its own traced path */
+  centerBookRef?: { current: HTMLElement | null };
   /** the search badge's orbiting arrow */
   searchArrowRef?: { current: HTMLElement | null };
   /** assigned by this hook; called by `requestDraw` */
@@ -158,10 +156,9 @@ interface UseMapRendererOpts {
 export function useMapRenderer({
   canvasRef,
   searchFormRef,
-  booksRef,
+  centerTileRef,
   searchArrowRef,
   centerBookRef,
-  controlsRef,
   draw,
   anim,
   cam,
@@ -215,8 +212,8 @@ export function useMapRenderer({
 
     // The canvas and search-arrow rects are cached and refreshed by their own
     // `ResizeObserver`. Calling `getBoundingClientRect()` inside `render()`
-    // would force a reflow of the frame's own style writes (searchEl/booksEl/
-    // bookEl/controlsEl) every frame. Neither rect changes on pan/zoom/scroll.
+    // would force a reflow of the frame's own style writes (searchEl/tileEl)
+    // every frame. Neither rect changes on pan/zoom/scroll.
     // `hud` exists only under `?debug` and cannot appear mid-effect, so it is
     // looked up once here too.
     const hud = document.getElementById('hud');
@@ -236,11 +233,10 @@ export function useMapRenderer({
       badgeRO.observe(arrowElForObserver);
     }
 
-    // The favorites-sort switch and reorder button's three children, looked
-    // up once here for every `pointermove` to share. The container is
+    // The favorites-sort switches and reorder button, looked up once here for every `pointermove` to share. The container is
     // mounted (hidden, not unmounted) for the whole effect lifetime whether
     // or not its cell is on screen, so these don't change underneath the cache.
-    const controlsContainerEl = controlsRef?.current ?? null;
+    const controlsContainerEl = centerTileRef.current;
     const shuffleEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="shuffle"]') ?? null;
     const mineEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="mine"]') ?? null;
     const countEl = controlsContainerEl?.querySelector<HTMLElement>('[data-control="count"]') ?? null;
@@ -267,11 +263,9 @@ export function useMapRenderer({
       // itself is a ref: it moves on every pan, zoom and flight, and a
       // re-render per frame is not the architecture here.
       const searchEl = searchFormRef.current;
-      const booksEl = booksRef.current;
+      const tileEl = centerTileRef.current;
       const arrowEl = searchArrowRef?.current;
-      const bookEl = centerBookRef?.current;
-      const controlsEl = controlsRef?.current;
-      if (searchEl || booksEl || arrowEl || bookEl || controlsEl) {
+      if (searchEl || tileEl || arrowEl) {
         const { box, usable, cellRect, books } = centreOverlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
@@ -282,39 +276,16 @@ export function useMapRenderer({
             searchEl.style.height = `${box.h}px`;
           }
         }
-        // The shelf box - one style write; its book buttons are positioned
-        // in percentages of it, so a pan touches no per-button work.
-        if (booksEl) {
-          booksEl.style.display = books ? 'block' : 'none';
+        // The center tile's controls - one style write; the books, the open
+        // book and the control buttons are all positioned in percentages of
+        // it, so a pan touches no per-button work.
+        if (tileEl) {
+          tileEl.style.display = books ? 'block' : 'none';
           if (books) {
-            booksEl.style.left = `${cellRect.x}px`;
-            booksEl.style.top = `${cellRect.y}px`;
-            booksEl.style.width = `${cellRect.w}px`;
-            booksEl.style.height = `${cellRect.h}px`;
-          }
-        }
-        // The open book: same visibility gate and box as the shelf - its SVG
-        // path is drawn with `viewBox="0 0 1 1"` over the whole cell, so it
-        // needs no rect of its own.
-        if (bookEl) {
-          bookEl.style.display = books ? 'block' : 'none';
-          if (books) {
-            bookEl.style.left = `${cellRect.x}px`;
-            bookEl.style.top = `${cellRect.y}px`;
-            bookEl.style.width = `${cellRect.w}px`;
-            bookEl.style.height = `${cellRect.h}px`;
-          }
-        }
-        // The favorites-sort switch and the reorder button - the same
-        // whole-cell container with percentage-positioned children as
-        // `booksEl`, so one style write covers all of them.
-        if (controlsEl) {
-          controlsEl.style.display = books ? 'block' : 'none';
-          if (books) {
-            controlsEl.style.left = `${cellRect.x}px`;
-            controlsEl.style.top = `${cellRect.y}px`;
-            controlsEl.style.width = `${cellRect.w}px`;
-            controlsEl.style.height = `${cellRect.h}px`;
+            tileEl.style.left = `${cellRect.x}px`;
+            tileEl.style.top = `${cellRect.y}px`;
+            tileEl.style.width = `${cellRect.w}px`;
+            tileEl.style.height = `${cellRect.h}px`;
           }
         }
         // The arrow points at the center tile's screen position, not a fixed
@@ -472,7 +443,7 @@ export function useMapRenderer({
     canvas.addEventListener('blur', onBlur);
 
     // This listener only decides what highlights; the canvas keeps every
-    // gesture. The elements it hovers - `centerBookRef` and the `.center-books`
+    // gesture. The elements it hovers - `centerBookRef` and the `.center-tile`
     // buttons - are `pointer-events: none` (css/map.css), so a pan that starts
     // over them still pans and a click still reaches `main.tsx`'s `onTap` ->
     // `centerBookAtPoint`/`bookAtPoint`. That is also why this path needs no
@@ -536,7 +507,7 @@ export function useMapRenderer({
         }
       }
 
-      const next = booksRef.current ? bookAtPoint(px, py, cellRect) : null;
+      const next = centerTileRef.current ? bookAtPoint(px, py, cellRect) : null;
       if (next !== hoveredBook) {
         hoveredBook = next;
         draw.current();
@@ -598,7 +569,7 @@ export function useMapRenderer({
       }
       pendingMove = null;
       centerBookRef?.current?.classList.remove('hover');
-      controlsRef?.current
+      centerTileRef.current
         ?.querySelectorAll('.hover')
         .forEach((n) => n.classList.remove('hover'));
       if (favTooltipRef?.current) favTooltipRef.current.style.display = 'none';
@@ -631,7 +602,7 @@ export function useMapRenderer({
       canvas.removeEventListener('pointerleave', onLeave);
     };
   }, [
-    canvasRef, searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim,
+    canvasRef, searchFormRef, centerTileRef, searchArrowRef, centerBookRef, draw, anim,
     layout, order, renderer, slideRenderer, cache, cam, centreSlots, spineFontLimits, centreOverlay, mode,
     blockedCount, favorites, favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
     loadingAnim, cancelSearchPreload,

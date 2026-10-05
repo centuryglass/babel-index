@@ -21,8 +21,11 @@ Tab order through the map subtree, top to bottom in the DOM:
    positioned over the center tile and stays `display: none` until the
    render loop finds it on screen and legible (`MapView.tsx`). While hidden it
    is out of the tab sequence, not only visually hidden.
-3. **The shelf**, in wall order. It is gated on zoom and legibility like the
-   search input (`useMapRenderer.ts`'s `booksEl.style.display`).
+3. **The center tile's controls** (`.center-tile`), following the tile's
+   geometry from the top left. They are gated on zoom and legibility like
+   the search input (`useMapRenderer.ts`'s `tileEl.style.display`).
+   - The two favorite-sort toggles (`aria-pressed`), when `favorites` is
+     on, then the reorder button - the column left of the shelf.
    - The override books before the first search book ("READ ME", "The
      Catalog"), one tab stop each.
    - The search books' one roving stop (`role="toolbar"`): of the history
@@ -30,17 +33,15 @@ Tab order through the map subtree, top to bottom in the DOM:
      `tabIndex={-1}`.
    - The override books after it ("forget searches", while there is
      history), one tab stop each.
-4. **`.center-book`** (the artist's-statement hotspot traced into the shelf
-   gap) - gated like the shelf.
-5. **`.center-controls`' buttons** - the two favorite-sort toggles when
-   `favorites` is on, the reorder button, then the distill toggle
-   (`aria-pressed`). Gated like the shelf.
-6. **`.search-trigger`** (the "go to search" icon button) - the one stop that
+   - `.center-book`, the artist's-statement hotspot traced into the shelf
+     gap.
+   - The distill toggle (`aria-pressed`), right of the shelf's last book.
+4. **`.search-trigger`** (the "go to search" icon button) - the one stop that
    is not zoom-gated. It is always mounted and always in the tab sequence, so
    with the camera away from the center the list collapses to the canvas and
    `.search-trigger`.
 
-Plain `Tab` walks forward through whichever of 1-6 are visible, then leaves
+Plain `Tab` walks forward through whichever of 1-4 are visible, then leaves
 the map subtree for whatever follows in the document, normally the browser's
 own chrome. `Shift+Tab` walks the same list backward. Neither wraps: the map
 is the whole page, not a modal, so Tab past the last stop reaches the
@@ -49,12 +50,12 @@ browser's UI as it would on any page.
 **Getting back to the canvas** has two routes:
 
 - `Shift+Tab`, once per visible stop between focus and the canvas.
-- `Escape`, a direct jump to the canvas from any of stops 2-6. Three handlers
+- `Escape`, a direct jump to the canvas from any of stops 2-4. Three handlers
   implement it:
   - `useCenterShelf.ts`'s `onBooksKeyDown`, for the shelf.
   - `main.tsx`'s `onSearchKeyDown`, for the search input.
   - `main.tsx`'s `onControlKeyDown`, for every plain center-tile button
-    (the shelf's override books, `.center-book`, the `.center-controls`
+    (the shelf's override books, `.center-book`, the `.tile-control`
     buttons, `.search-trigger`).
 
 Escape moves focus but not Orca's mode. A reader who reached a control in
@@ -158,8 +159,8 @@ inserts a literal `/`.
 
 ## State 4 - A plain center-tile control button focused
 
-The shelf's override books, `.center-book`, `.center-controls`'
-mine/count/reorder/distill buttons, and `.search-trigger` - plain `<button>`s with no other keyboard behavior
+The shelf's override books, `.center-book`, the mine/count/reorder/distill
+`.tile-control` buttons, and `.search-trigger` - plain `<button>`s with no other keyboard behavior
 (activation is native click, as for the shelf's books), sharing one
 `onKeyDown` (`main.tsx`'s `onControlKeyDown`).
 

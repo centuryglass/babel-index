@@ -61,9 +61,8 @@ interface CentreOverlay {
 interface UseMapRendererGLOpts {
   canvasRef: { current: HTMLCanvasElement | null };
   searchFormRef: { current: HTMLFormElement | null };
-  booksRef: { current: HTMLElement | null };
+  centerTileRef: { current: HTMLElement | null };
   centerBookRef?: { current: HTMLElement | null };
-  controlsRef?: { current: HTMLElement | null };
   searchArrowRef?: { current: HTMLElement | null };
   draw: { current: () => void };
   anim: { current: RunningAnim | null };
@@ -117,7 +116,7 @@ interface Latest {
 }
 
 export function useMapRendererGL({
-  canvasRef, searchFormRef, booksRef, centerBookRef, controlsRef, searchArrowRef,
+  canvasRef, searchFormRef, centerTileRef, centerBookRef, searchArrowRef,
   draw, anim, cam, mode, layout, order, cache, overlays, centreSlots, spineFontLimits = null,
   centreOverlay, blockedCount = 0, favorites = null,
   minFavoriteInteractiveWidth = DEFAULTS.favorites.minInteractiveTileWidth,
@@ -194,11 +193,9 @@ export function useMapRendererGL({
       const h = canvas.clientHeight;
 
       const searchEl = searchFormRef.current;
-      const booksEl = booksRef.current;
+      const tileEl = centerTileRef.current;
       const arrowEl = searchArrowRef?.current;
-      const bookEl = centerBookRef?.current;
-      const controlsEl = controlsRef?.current;
-      if (searchEl || booksEl || arrowEl || bookEl || controlsEl) {
+      if (searchEl || tileEl || arrowEl) {
         const { box, usable, cellRect, books } = overlay(w, h);
         if (searchEl) {
           searchEl.style.display = usable ? 'block' : 'none';
@@ -209,31 +206,13 @@ export function useMapRendererGL({
             searchEl.style.height = `${box.h}px`;
           }
         }
-        if (booksEl) {
-          booksEl.style.display = books ? 'block' : 'none';
+        if (tileEl) {
+          tileEl.style.display = books ? 'block' : 'none';
           if (books) {
-            booksEl.style.left = `${cellRect.x}px`;
-            booksEl.style.top = `${cellRect.y}px`;
-            booksEl.style.width = `${cellRect.w}px`;
-            booksEl.style.height = `${cellRect.h}px`;
-          }
-        }
-        if (bookEl) {
-          bookEl.style.display = books ? 'block' : 'none';
-          if (books) {
-            bookEl.style.left = `${cellRect.x}px`;
-            bookEl.style.top = `${cellRect.y}px`;
-            bookEl.style.width = `${cellRect.w}px`;
-            bookEl.style.height = `${cellRect.h}px`;
-          }
-        }
-        if (controlsEl) {
-          controlsEl.style.display = books ? 'block' : 'none';
-          if (books) {
-            controlsEl.style.left = `${cellRect.x}px`;
-            controlsEl.style.top = `${cellRect.y}px`;
-            controlsEl.style.width = `${cellRect.w}px`;
-            controlsEl.style.height = `${cellRect.h}px`;
+            tileEl.style.left = `${cellRect.x}px`;
+            tileEl.style.top = `${cellRect.y}px`;
+            tileEl.style.width = `${cellRect.w}px`;
+            tileEl.style.height = `${cellRect.h}px`;
           }
         }
         if (arrowEl) {
@@ -363,7 +342,7 @@ export function useMapRendererGL({
       const el = centerBookRef?.current;
       if (el) el.classList.toggle('hover', centerBookAtPoint(px, py, cellRect));
 
-      const controls = controlsRef?.current;
+      const controls = centerTileRef.current;
       if (controls) {
         controls
           .querySelector('[data-control="shuffle"]')
@@ -395,7 +374,7 @@ export function useMapRendererGL({
         }
       }
 
-      const next = booksRef.current ? bookAtPoint(px, py, cellRect) : null;
+      const next = centerTileRef.current ? bookAtPoint(px, py, cellRect) : null;
       if (next !== hoveredBook) {
         hoveredBook = next;
         draw.current();
@@ -436,7 +415,7 @@ export function useMapRendererGL({
     };
     const onLeave = () => {
       centerBookRef?.current?.classList.remove('hover');
-      controlsRef?.current
+      centerTileRef.current
         ?.querySelectorAll('.hover')
         .forEach((n) => n.classList.remove('hover'));
       if (favTooltipRef?.current) favTooltipRef.current.style.display = 'none';

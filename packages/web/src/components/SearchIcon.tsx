@@ -30,7 +30,7 @@ export function SearchGlyph(props: ComponentPropsWithoutRef<'span'>) {
 
 // `forwardRef` because the render loop writes a per-frame `transform`
 // onto the live DOM node - the same imperative arrangement as
-// `.center-search` and `.center-books`, for the same reason: it turns with
+// `.center-search` and `.center-tile`, for the same reason: it turns with
 // the camera, which React re-rendering should not be driving.
 export const SearchOrbitArrow = forwardRef<HTMLSpanElement, ComponentPropsWithoutRef<'span'>>(function SearchOrbitArrow(props, ref) {
   return (

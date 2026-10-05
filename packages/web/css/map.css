@@ -34,101 +34,100 @@ canvas.dragging { cursor: grabbing; }
 .center-search input[type="search"]:focus { border-color: var(--paper-accent); background: rgba(var(--paper-rgb), 0.97); }
 
 /*
- * The shelf's book buttons, over the center tile's painted spines.
- * - Transparent: the canvas already draws each title. The buttons add what
- *   pixels cannot have: a name, a focus ring, activation.
- * - `pointer-events: none`, with no `:focus-within` exception: a click
- *   already reaches `onBook` through the canvas's tap handling, so taking
- *   the pointer here would only steal gestures from the map.
- * - The overrides undo the global `button` rule's fill, padding and flex,
- *   none of which fits a one-spine-wide sliver. The focus ring's offset
- *   shrinks from 2px for the same reason: at a spine's width, 2px reaches
- *   across its neighbours.
+ * The center tile's DOM controls: one container over the whole cell
+ * (`MapView.tsx`'s `.center-tile`), each button placed in percentages of
+ * it. The buttons are transparent: the canvas paints the art, and the
+ * buttons add what pixels cannot have - a name, a focus ring, activation.
+ * - `pointer-events: none` on the container, inherited by every button: a
+ *   click reaches the same handlers through the canvas's tap handling, so
+ *   taking the pointer here would only steal gestures from the map.
+ * - Focus shows on `:focus`, not `:focus-visible`. A pointer can never
+ *   focus these buttons, so every focus is a keyboard or a screen reader's.
+ *   The browser's `:focus-visible` heuristic gets that wrong after a mouse
+ *   drag on the map, since a screen reader's browse-mode arrows never reach
+ *   the page to reset it.
+ * - `.hover` is toggled by the render loop's pointermove listener, since
+ *   CSS `:hover` never fires on a `pointer-events: none` element.
  */
-.center-books { position: absolute; display: none; pointer-events: none; }
-/* The search books' toolbar, the same box as `.center-books`, so `BOOK_STYLES` percentages resolve against the cell. */
+.center-tile { position: absolute; display: none; pointer-events: none; }
+.center-tile button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/*
+ * The shelf's books, over the painted spines.
+ * - The rules undo the global `button` rule's fill, padding and flex, none
+ *   of which fits a one-spine-wide sliver. The focus ring's offset shrinks
+ *   from 2px for the same reason: at a spine's width, 2px reaches across its
+ *   neighbours.
+ * - `.center-books-shelf` is the search books' toolbar, the same box as
+ *   `.center-tile`, so `BOOK_STYLES` percentages resolve against the cell.
+ */
 .center-books-shelf { position: absolute; inset: 0; }
-.center-books button {
+.shelf-book {
   position: absolute; flex: none; margin: 0; padding: 0;
   background: none; border: none; border-radius: 2px;
 }
-.center-books button:hover { background: none; }
-.center-books button:focus-visible { outline-offset: 1px; }
+.shelf-book:hover { background: none; }
 /*
   The one-time nudge toward the help book (`showHelpHint`, main.tsx): a
   soft pulse that neither steals focus nor blocks input. Under reduced
   motion it is turned off entirely, since a book that glows without
   stopping reads as broken.
 */
-.center-books button.hint { animation: book-hint 1.8s ease-in-out infinite; }
+.shelf-book.hint { animation: book-hint 1.8s ease-in-out infinite; }
 @keyframes book-hint {
   0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb),0.6); }
   50% { box-shadow: 0 0 5px 2px rgba(var(--accent-rgb),0.9); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .center-books button.hint { animation: none; }
+  .shelf-book.hint { animation: none; }
 }
 
 /*
- * The open book's hotspot, sized over the whole cell like `.center-books`.
- * - The highlight is the traced SVG path inside it (`CENTER_BOOK_PATH`),
- *   stretched per axis by `viewBox="0 0 1 1"` and
- *   `preserveAspectRatio="none"` like the tile image, so it matches the
- *   book's silhouette instead of lapping onto neighbouring spines.
- * - The render loop positions and shows it. `pointer-events: none` for the
- *   same reason as `.center-books`: a click reaches `onTap` ->
- *   `centerBookAtPoint` through the canvas.
- * - `.hover` is toggled by the render loop's pointermove listener, since
- *   CSS `:hover` never fires on a `pointer-events: none` element.
+ * The open book's hotspot, covering the whole cell. The highlight is the
+ * traced SVG path inside it (`CENTER_BOOK_PATH`), stretched per axis by
+ * `viewBox="0 0 1 1"` and `preserveAspectRatio="none"` like the tile image,
+ * so it matches the book's silhouette instead of lapping onto neighbouring
+ * spines. The focus ring is drawn on that path too; see `:focus-visible` in
+ * base.css.
  */
 .center-book {
-  position: absolute; display: none; margin: 0; padding: 0; border: none;
-  background: none; pointer-events: none;
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; padding: 0; border: none; background: none;
 }
 .center-book svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .center-book path { fill: transparent; stroke: none; }
 .center-book.hover path { fill: rgba(var(--hover-glow-rgb),0.28); stroke: rgba(var(--hover-glow-rgb),0.55); stroke-width: 0.004; }
-/* The ring follows the book, not the cell-sized button; see `:focus-visible` in base.css. */
-.center-book:focus-visible { outline: none; }
-.center-book:focus-visible path { stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.center-tile .center-book:focus { outline: none; }
+.center-book:focus path { stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 
 /*
- * The favorites-sort switch, reorder button and distill toggle: one
- * container over the whole cell like `.center-books`, each button placed in
- * percentages from its traced rect.
- * - `pointer-events: none`: a click reaches `onTap` ->
- *   `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`/
- *   `distillToggleAtPoint` through the canvas.
- * - `.hover` comes from the render loop's pointermove listener, as on
- *   `.center-book`. The glow is a plain background tint, since these
- *   buttons have no text to protect. The distill toggle never gets it: its
- *   hover glow is painted on its traced silhouette.
+ * The favorites-sort switches, reorder button and distill toggle. The glow
+ * is a plain background tint, since these buttons have no text to protect.
+ * The distill toggle never gets `.hover`: its glow is painted on its traced
+ * silhouette.
  */
-.center-controls { position: absolute; display: none; pointer-events: none; }
-.center-controls button {
+.tile-control {
   position: absolute; margin: 0; padding: 0; border: none;
   background: none; border-radius: 2px;
 }
-.center-controls button.hover { background: rgba(var(--hover-glow-rgb),0.28); box-shadow: 0 0 0 1px rgba(var(--hover-glow-rgb),0.55); }
-.center-controls button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
+.tile-control.hover { background: rgba(var(--hover-glow-rgb),0.28); box-shadow: 0 0 0 1px rgba(var(--hover-glow-rgb),0.55); }
+.tile-control[aria-pressed="true"] { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb),0.75); }
 /* The distill toggle's art swaps faces with its state, so it takes no pressed frame. */
-.center-controls button[data-control="distill"][aria-pressed="true"] { box-shadow: none; }
-.center-controls button:focus-visible { outline-offset: 1px; }
+.tile-control[data-control="distill"][aria-pressed="true"] { box-shadow: none; }
 /*
- * A custom tooltip, not the native `title` popup, which never shows: the
- * button has `pointer-events: none` from `.center-controls`, so no
- * `mouseover` reaches it. Shown on the render loop's `.hover` class and on
- * `:focus-visible`, so keyboard focus shows it too.
+ * A custom tooltip, not the native `title` popup, which never shows on a
+ * `pointer-events: none` button. Shown on the render loop's `.hover` class
+ * and on focus.
  */
-.center-controls .control-tooltip {
+.tile-control .control-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   margin-bottom: 6px; padding: 4px 8px; white-space: nowrap;
   background: var(--panel); border: 1px solid var(--edge); border-radius: 5px;
   color: var(--ink); font-size: 11px; line-height: 1.3;
   opacity: 0; visibility: hidden; transition: opacity 0.1s ease;
 }
-.center-controls button.hover .control-tooltip,
-.center-controls button:focus-visible .control-tooltip {
+.tile-control.hover .control-tooltip,
+.tile-control:focus .control-tooltip {
   opacity: 1; visibility: visible;
 }
 

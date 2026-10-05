@@ -278,7 +278,7 @@ export function areSpinesLegible(cellRect: Rect): boolean {
  * - an untitled book has nothing to say. `assignTitles` leaves one only where
  *   history has not reached and the collection has no tags left to cycle.
  * - an override book is its own tab stop outside the toolbar (`MapView.tsx`'s
- *   `.center-books`).
+ *   `.center-tile`).
  *
  * `from` may sit outside the wall, which is how Home and End are expressed: -1
  * with `dx: 1` is the first titled book, `BOOK_COUNT` with `dx: -1` the last.

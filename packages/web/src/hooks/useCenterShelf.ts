@@ -32,7 +32,8 @@ interface UseCenterShelfOpts {
   slotSeed: number;
   /** search history, newest first */
   history: string[];
-  booksRef: { current: HTMLElement | null };
+  /** the center tile's controls, holding the book buttons */
+  centerTileRef: { current: HTMLElement | null };
   /** `Escape` returns focus here - the only way back to the canvas besides `Shift+Tab` */
   canvasRef: { current: HTMLElement | null };
   /** fills the search box to match a pressed book */
@@ -51,7 +52,7 @@ export function useCenterShelf({
   metadata,
   slotSeed,
   history,
-  booksRef,
+  centerTileRef,
   canvasRef,
   setQuery,
   search,
@@ -166,9 +167,9 @@ export function useCenterShelf({
       if (next === null) return;
       e.preventDefault();
       setBookFocus(next);
-      (booksRef.current?.querySelector(`[data-book="${next}"]`) as HTMLElement | null)?.focus();
+      (centerTileRef.current?.querySelector(`[data-book="${next}"]`) as HTMLElement | null)?.focus();
     },
-    [bookFocus, centreSlots, booksRef, canvasRef]
+    [bookFocus, centreSlots, centerTileRef, canvasRef]
   );
 
   return { centreSlots, bookFocus, setBookFocus, onBook, onBooksKeyDown };

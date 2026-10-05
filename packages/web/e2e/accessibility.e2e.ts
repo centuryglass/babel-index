@@ -59,11 +59,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Reached by Tab from the control before it, so it is in the tab order,
     // not only focusable.
     await page.evaluate(() => {
-      (document.querySelector('[data-control="shuffle"]') as HTMLElement | null)?.focus();
+      (document.querySelector('.center-book') as HTMLElement | null)?.focus();
     });
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.control);
-    assert.equal(focused, 'distill', 'Tab from the reorder button must reach the distill toggle');
+    assert.equal(focused, 'distill', 'Tab from the open book must reach the distill toggle');
 
     try {
       await page.keyboard.press('Enter');
