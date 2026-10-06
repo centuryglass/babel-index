@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.1](https://github.com/centuryglass/babel-index/compare/babel-index-v1.11.0...babel-index-v1.11.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **a11y:** restructure the center tile's keyboard model ([#466](https://github.com/centuryglass/babel-index/issues/466)) ([fc683c7](https://github.com/centuryglass/babel-index/commit/fc683c7f0ab5016238a00a95a6c8d0bca244ed74))
+* **a11y:** speak map announcements through aria-live and hold the canvas name while focused ([#465](https://github.com/centuryglass/babel-index/issues/465)) ([a4495af](https://github.com/centuryglass/babel-index/commit/a4495afcd8df1e343dddfaa6969a2a27c9be8e8f))
+* **search:** match multi-word tags whose other words are initials or short words ([#464](https://github.com/centuryglass/babel-index/issues/464)) ([7fc5d19](https://github.com/centuryglass/babel-index/commit/7fc5d190a8b45b874c3332fcb60c38e6655d16e2)), closes [#461](https://github.com/centuryglass/babel-index/issues/461)
+* **search:** raise CLIP's centre anchor to 0.225, measured from known non-matches ([#460](https://github.com/centuryglass/babel-index/issues/460)) ([b246bce](https://github.com/centuryglass/babel-index/commit/b246bcedafce86d2434f84f82fd5e6554707001f))
+
 ## [1.11.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.10.0...babel-index-v1.11.0) (2026-10-03)
 
 
