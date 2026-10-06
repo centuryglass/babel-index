@@ -273,9 +273,12 @@ export function areSpinesLegible(cellRect: Rect): boolean {
  * down move by shelf, aiming at the same column and taking the nearest titled
  * book either side of it.
  *
- * A book with no title is stepped over rather than landed on: it is a control
- * with nothing to say. `assignTitles` leaves one only where history has not
- * reached and the collection has no tags left to cycle.
+ * Only a book with a search `term` (history or tag) is landed on. The rest are
+ * stepped over:
+ * - an untitled book has nothing to say. `assignTitles` leaves one only where
+ *   history has not reached and the collection has no tags left to cycle.
+ * - an override book is its own tab stop outside the toolbar (`MapView.tsx`'s
+ *   `.center-tile`).
  *
  * `from` may sit outside the wall, which is how Home and End are expressed: -1
  * with `dx: 1` is the first titled book, `BOOK_COUNT` with `dx: -1` the last.
@@ -289,7 +292,7 @@ export function bookNeighbour(
   { dx = 0, dy = 0 }: { dx?: number; dy?: number },
   slots: (Slot | null)[] | null
 ): number {
-  const titled = (i: number) => i >= 0 && i < BOOK_COUNT && Boolean(slots?.[i]?.text);
+  const titled = (i: number) => i >= 0 && i < BOOK_COUNT && Boolean(slots?.[i]?.term);
 
   if (dx) {
     for (let i = from + Math.sign(dx); i >= 0 && i < BOOK_COUNT; i += Math.sign(dx))

@@ -117,19 +117,23 @@ still apply.
   `save`/`rotate` and its byte-cost assertions stable.
 - **The books are DOM buttons and painted spines, with one `onBook` for
   both.**
-  - `.center-books` is one container positioned once per frame in per-axis
-    percentages. Don't position each button per frame from
-    `bookScreenRects()`.
+  - `.center-tile` is one container positioned once per frame, holding the
+    books, the open book and the control buttons in per-axis percentages.
+    Don't position a button per frame from `bookScreenRects()`, and keep
+    every center-tile control in this container: its DOM order is the tab
+    order, which follows the tile's geometry
+    (docs/keyboard-controls.md, "Focus states and tab order").
   - The container is `pointer-events: none`, so a click routes through the
     canvas's `onTap` -> `bookAtPoint` -> `onBook`. A second copy of "what
     book i does" in either path will drift.
-  - The shelf is one tab stop (roving tabindex), with arrow-key movement in
-    `center.ts`'s `bookNeighbour`. `areSpinesLegible` is the single zoom gate
-    that keeps a reader from tabbing to a book nobody can read.
+  - The search books are one tab stop (roving tabindex in a
+    `role="toolbar"`), with arrow-key movement in `center.ts`'s
+    `bookNeighbour`, which steps over override books. Each override book is
+    its own tab stop outside the toolbar. `areSpinesLegible` is the single
+    zoom gate that keeps a reader from tabbing to a book nobody can read.
 - **The center cell's DOM overlays are sized to the whole cell, and `#root`'s
-  clip keeps them off the page.** `.center-search`, `.center-books`,
-  `.center-book` and `.center-controls` are several screens wide at reading
-  zoom. A phone responds to that by shrinking the page scale, which drags
+  clip keeps them off the page.** `.center-search` and `.center-tile` are
+  several screens wide at reading zoom. A phone responds to that by shrinking the page scale, which drags
   every dialog and the map's paint size with it. `#root`'s `overflow: clip`
   in `css/base.css` prevents it (its comment explains why `clip` and not
   `hidden`); `map-gestures.e2e.ts`'s "zooming in never grows the page past

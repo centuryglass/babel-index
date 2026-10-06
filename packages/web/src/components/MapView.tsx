@@ -73,10 +73,9 @@ export function MapView({
   mode,
   canvasRef,
   searchFormRef,
-  booksRef,
+  centerTileRef,
   searchArrowRef,
   centerBookRef,
-  controlsRef,
   favTooltipRef,
   onOpenArtistStatement,
   manifest,
@@ -133,10 +132,9 @@ export function MapView({
   mode: 'map' | 'catalog';
   canvasRef: Ref<HTMLCanvasElement>;
   searchFormRef: Ref<HTMLFormElement>;
-  booksRef: Ref<HTMLDivElement>;
+  centerTileRef: Ref<HTMLDivElement>;
   searchArrowRef: Ref<HTMLSpanElement>;
   centerBookRef: Ref<HTMLButtonElement>;
-  controlsRef: Ref<HTMLDivElement>;
   favTooltipRef: Ref<HTMLDivElement>;
   onOpenArtistStatement: () => void;
   manifest: Manifest;
@@ -207,6 +205,23 @@ export function MapView({
   // The canvas's name as it was when focus arrived, held until blur; see the
   // canvas's comment.
   const [heldLabel, setHeldLabel] = useState<string | null>(null);
+  // The override books either side of the toolbar, in wall order.
+  const firstSearchBook = centreSlots.findIndex((slot) => slot?.term);
+  const overrideSlots = centreSlots.flatMap((slot, i) => (slot?.action ? [i] : []));
+  const overridesBefore = overrideSlots.filter((i) => firstSearchBook < 0 || i < firstSearchBook);
+  const overridesAfter = overrideSlots.filter((i) => firstSearchBook >= 0 && i > firstSearchBook);
+  const overrideButton = (i: number) => (
+    <button
+      key={i}
+      type="button"
+      data-book={i}
+      className={showHelpHint && centreSlots[i].action === 'help' ? 'shelf-book hint' : 'shelf-book'}
+      style={BOOK_STYLES[i]}
+      aria-label={describeBook(centreSlots[i])}
+      onClick={() => onBook(i)}
+      onKeyDown={onControlKeyDown}
+    />
+  );
   return (
     <>
       {/* `display: contents`/`display: none` per `mode`; see the file
@@ -281,7 +296,7 @@ export function MapView({
       {/*
         The distill toggle's pointer tooltip - one floating element at the
         pointer, since the toggle's hover is hit-tested on its painted
-        silhouette. Its button in `.center-controls` carries the keyboard's.
+        silhouette. Its button in `.center-tile` carries the keyboard's.
       */}
       <div ref={distillTooltipRef} className="distill-tooltip" aria-hidden="true" />
       {/*
@@ -303,111 +318,40 @@ export function MapView({
         maxLength={maxQueryLength}
       />
       {/*
-        The shelf's DOM buttons, over the painted spines' rects, so search
-        history and the keyword index are reachable without a pointer.
-        These are the slots `assignTitles` returns and `composeSpines`
-        draws.
+        The center tile's DOM controls: the shelf's books, the open book and
+        the diegetic control buttons (docs/agents/map.md, "The center room's
+        controls"), so each painted control is reachable without a pointer.
+
+        One container for all of them, so DOM order (and so tab order) is
+        free to follow the tile's geometry. The order, top-left first: the
+        favorite-sort switches, reorder, READ ME and The Catalog, the search
+        books, forget searches, the open book, then distill. Book slots are
+        the ones `assignTitles` returns and `composeSpines` draws.
 
         The render loop positions this container in one style write per
-        frame, and the buttons are percentages of it (`BOOK_STYLES`).
-        `display: none` in the stylesheet is the pre-first-frame default;
-        the loop sets it from then on, so this element takes no `style`
-        prop.
+        frame, and every button is a percentage of it (`BOOK_STYLES`,
+        `rectStyle`). `display: none` in the stylesheet is the pre-first-frame
+        default; the loop sets it from then on, so this element takes no
+        `style` prop.
 
         `pointer-events: none`, from the stylesheet, so a pan that crosses
-        the shelf still pans. The keyboard still focuses these buttons. A
-        sighted click routes through `onTap` -> `bookAtPoint` -> `onBook`,
-        the same function the buttons call.
+        the tile still pans. The keyboard still focuses these buttons. A
+        sighted click routes through `onTap` -> `bookAtPoint`,
+        `centerBookAtPoint`, `shuffleButtonAtPoint`, `mineToggleAtPoint`,
+        `countToggleAtPoint` (`center.ts`) or `distillToggleAtPoint`
+        (`distillToggle.ts`), reaching the same functions the buttons call.
+        Since pointer events never reach a button, the render loop's
+        pointermove listener toggles a `.hover` class for the highlight, and
+        a `title` never pops up.
       */}
-      <div
-        ref={booksRef}
-        className="center-books"
-        role="toolbar"
-        aria-label="the center room's shelf"
-        onKeyDown={onBooksKeyDown}
-      >
-        {centreSlots.map((slot, i) =>
-          slot?.text ? (
-            <button
-              key={i}
-              type="button"
-              data-book={i}
-              className={showHelpHint && slot.action === 'help' ? 'hint' : undefined}
-              tabIndex={i === bookFocus ? 0 : -1}
-              style={BOOK_STYLES[i]}
-              aria-label={describeBook(slot)}
-              onFocus={() => setBookFocus(i)}
-              onClick={() => onBook(i)}
-            />
-          ) : null
-        )}
-      </div>
-      {/*
-        The open book painted into a shelf gap, which opens the artist's
-        statement. A sighted click goes through the canvas's `onTap` ->
-        `centerBookAtPoint` (`center.ts`); `onClick` serves the keyboard and
-        screen readers.
-
-        Positioned and sized every frame over the whole cell, like
-        `.center-books`. The highlight is the traced SVG path
-        (`CENTER_BOOK_PATH`, in 0-1 cell fractions), and `viewBox="0 0 1 1"`
-        with `preserveAspectRatio="none"` stretches it per-axis the way
-        `render.ts` stretches the tile image. `pointer-events: none` means
-        it never sees `:hover`, so the render loop's pointermove listener
-        toggles the hover highlight as a class.
-      */}
-      <button
-        ref={centerBookRef}
-        type="button"
-        className="center-book"
-        aria-label="an artist's statement"
-        onClick={onOpenArtistStatement}
-        onKeyDown={onControlKeyDown}
-      >
-        {CENTER_BOOK_PATH && (
-          <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-            <path d={CENTER_BOOK_PATH} />
-          </svg>
-        )}
-      </button>
-      {/*
-        The reorder button and the favorites-sort switches, diegetic
-        controls of the center tile (docs/agents/map.md, "The center room's
-        controls"). The container is sized to the whole cell like
-        `.center-books`, and each button is a percentage of it
-        (`rectStyle`). `pointer-events: none` on the container keeps the
-        canvas the gesture owner. A sighted click routes through `onTap` ->
-        `shuffleButtonAtPoint`/`mineToggleAtPoint`/`countToggleAtPoint`
-        (`center.ts`) or `distillToggleAtPoint` (`distillToggle.ts`);
-        `onClick` serves the keyboard and screen readers. The two switches
-        render only while `favorites` is true.
-
-        A `title` never pops up here, since pointer events never reach the
-        button. The `.control-tooltip` child is the visible tooltip, shown
-        by the `.hover` class the render loop's pointermove listener
-        toggles, and on `:focus-visible`.
-      */}
-      <div ref={controlsRef} className="center-controls">
-        {SHUFFLE_STYLE && (
-          <button
-            type="button"
-            data-control="shuffle"
-            style={SHUFFLE_STYLE}
-            title="reorder the library"
-            aria-label="reorder the library"
-            onClick={onReorder}
-            onKeyDown={onControlKeyDown}
-          >
-            <span className="control-tooltip">reorder the library</span>
-          </button>
-        )}
+      <div ref={centerTileRef} className="center-tile">
         {favorites && MINE_TOGGLE_STYLE && (
           <button
             type="button"
+            className="tile-control"
             data-control="mine"
             style={MINE_TOGGLE_STYLE}
             aria-pressed={sortMode === 'mine'}
-            title="sort the library by my favorites"
             aria-label="sort the library by my favorites"
             onClick={() => onToggleSort('mine')}
             onKeyDown={onControlKeyDown}
@@ -418,10 +362,10 @@ export function MapView({
         {favorites && COUNT_TOGGLE_STYLE && (
           <button
             type="button"
+            className="tile-control"
             data-control="count"
             style={COUNT_TOGGLE_STYLE}
             aria-pressed={sortMode === 'count'}
-            title="sort the library by most favorited"
             aria-label="sort the library by most favorited"
             onClick={() => onToggleSort('count')}
             onKeyDown={onControlKeyDown}
@@ -429,6 +373,72 @@ export function MapView({
             <span className="control-tooltip">sort by most favorited</span>
           </button>
         )}
+        {SHUFFLE_STYLE && (
+          <button
+            type="button"
+            className="tile-control"
+            data-control="shuffle"
+            style={SHUFFLE_STYLE}
+            aria-label="reorder the library"
+            onClick={onReorder}
+            onKeyDown={onControlKeyDown}
+          >
+            <span className="control-tooltip">reorder the library</span>
+          </button>
+        )}
+        {/*
+          Search books (history and tags) share one roving tab stop in the
+          `role="toolbar"`. Each override book (READ ME, The Catalog, forget
+          searches) has a distinct function, so it is a plain button with its
+          own tab stop, before or after the toolbar to match the wall.
+        */}
+        {overridesBefore.map(overrideButton)}
+        {firstSearchBook >= 0 && (
+          <div
+            className="center-books-shelf"
+            role="toolbar"
+            aria-label="the center room's shelf"
+            onKeyDown={onBooksKeyDown}
+          >
+            {centreSlots.map((slot, i) =>
+              slot?.term ? (
+                <button
+                  key={i}
+                  type="button"
+                  className="shelf-book"
+                  data-book={i}
+                  tabIndex={i === bookFocus ? 0 : -1}
+                  style={BOOK_STYLES[i]}
+                  aria-label={describeBook(slot)}
+                  onFocus={() => setBookFocus(i)}
+                  onClick={() => onBook(i)}
+                />
+              ) : null
+            )}
+          </div>
+        )}
+        {overridesAfter.map(overrideButton)}
+        {/*
+          The open book painted into a shelf gap, which opens the artist's
+          statement. It covers the whole cell; the highlight is the traced
+          SVG path (`CENTER_BOOK_PATH`, in 0-1 cell fractions), and
+          `viewBox="0 0 1 1"` with `preserveAspectRatio="none"` stretches it
+          per-axis the way `render.ts` stretches the tile image.
+        */}
+        <button
+          ref={centerBookRef}
+          type="button"
+          className="center-book"
+          aria-label="an artist's statement"
+          onClick={onOpenArtistStatement}
+          onKeyDown={onControlKeyDown}
+        >
+          {CENTER_BOOK_PATH && (
+            <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+              <path d={CENTER_BOOK_PATH} />
+            </svg>
+          )}
+        </button>
         {/*
           The distill toggle, over the active state's traced box, since the
           two states' art has different outlines. Its pointer highlight and
@@ -438,6 +448,7 @@ export function MapView({
         {distillStyle && (
           <button
             type="button"
+            className="tile-control"
             data-control="distill"
             style={distillStyle}
             aria-pressed={distillMode}
@@ -552,7 +563,7 @@ export function MapView({
           Debug-only actions with no diegetic equivalent: `rescatter`
           reseeds which cells hold a room, and `center` resets the camera.
           Distill mode's control is on the center tile, in
-          `.center-controls`.
+          `.center-tile`.
         */}
         <div className="buttons">
           <button onClick={onRescatter}>rescatter</button>

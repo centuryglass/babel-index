@@ -120,21 +120,18 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   // The live search field on the center tile.
   const searchFormRef = useRef<HTMLFormElement>(null);
-  // The shelf's book buttons: one box matching the center cell, its buttons
-  // laid out in percentages inside it - so panning costs one style write,
-  // not one per book.
-  const booksRef = useRef<HTMLDivElement>(null);
+  // The center tile's controls: one box matching the center cell, holding
+  // the shelf's books, the open book and the control buttons in percentages
+  // - so panning costs one style write, not one per button.
+  const centerTileRef = useRef<HTMLDivElement>(null);
   // The search badge's orbiting arrow: it points at wherever the center
   // tile currently is on screen.
   const searchArrowRef = useRef<HTMLSpanElement>(null);
-  // The artist's-statement hotspot, sized over the whole cell. The traced
+  // The artist's-statement hotspot, inside `centerTileRef`. The traced
   // `CENTER_BOOK_PATH` SVG inside is the visual shape; taps reach it through
   // the canvas (`centerBookAtPoint`), so the button itself stays
   // `pointer-events: none` (see css/map.css).
   const centerBookRef = useRef<HTMLButtonElement>(null);
-  // The reorder button and favorites-sort switch, laid out in percentages
-  // the same way `booksRef`'s buttons are.
-  const controlsRef = useRef<HTMLDivElement>(null);
   // The favorite badge's tooltip. Badges are painted onto every tile and
   // have no DOM of their own, so one floating element serves the whole map.
   const favTooltipRef = useRef<HTMLDivElement>(null);
@@ -713,9 +710,10 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     [focusCanvas]
   );
 
-  // `Escape` handler shared by the five plain center-tile buttons
-  // (`.center-book`, reorder, the two sort toggles, the search trigger) -
-  // they use no other keys, since activation is native click.
+  // `Escape` handler shared by the plain center-tile buttons (the shelf's
+  // override books, `.center-book`, the `.tile-control` buttons, the
+  // search trigger) - they use no other keys, since activation is native
+  // click.
   const onControlKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
       if (e.key !== 'Escape') return;
@@ -778,7 +776,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     metadata,
     slotSeed: config.map.slotSeed,
     history,
-    booksRef,
+    centerTileRef,
     canvasRef,
     setQuery,
     search,
@@ -874,7 +872,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
 
   useMapRenderer({
     canvasRef: WEBGL ? inertCanvasRef : canvasRef,
-    searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
+    searchFormRef, centerTileRef, searchArrowRef, centerBookRef, draw, anim, cam,
     mode, layout, order, renderer, slideRenderer, cache, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, minFavoriteInteractiveWidth: config.favorites.minInteractiveTileWidth,
     favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
@@ -882,7 +880,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   });
   useMapRendererGL({
     canvasRef: WEBGL ? canvasRef : inertCanvasRef,
-    searchFormRef, booksRef, searchArrowRef, centerBookRef, controlsRef, draw, anim, cam,
+    searchFormRef, centerTileRef, searchArrowRef, centerBookRef, draw, anim, cam,
     mode, layout, order, cache, overlays, centreSlots, spineFontLimits, centreOverlay, blockedCount,
     favorites: favoritesOverlay, minFavoriteInteractiveWidth: config.favorites.minInteractiveTileWidth,
     favTooltipRef, sortMode, genericFade, distillMode, distillTooltipRef,
@@ -1183,10 +1181,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         mode={mode}
         canvasRef={canvasRef}
         searchFormRef={searchFormRef}
-        booksRef={booksRef}
+        centerTileRef={centerTileRef}
         searchArrowRef={searchArrowRef}
         centerBookRef={centerBookRef}
-        controlsRef={controlsRef}
         favTooltipRef={favTooltipRef}
         onOpenArtistStatement={openArtistStatement}
         manifest={manifest}

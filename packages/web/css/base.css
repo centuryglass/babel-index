@@ -143,7 +143,12 @@ input[type="search"]:focus { border-color: var(--accent); }
  * One focus ring for everything, and it must stay visible. No control opts
  * out with `outline: none`, text fields included. A border-colour shift
  * alone is not an indicator: at low contrast it disappears against the
- * panel.
+ * panel. Two exceptions:
+ * - A control whose box is not its shape: the open-book hotspots
+ *   (`.center-book`, `.catalog-center-book`) are sized to the whole cell,
+ *   so they draw the ring as a 2px `--accent` stroke on their traced path.
+ * - The center tile's controls ring on `:focus`, since no pointer can focus
+ *   them (css/map.css, `.center-tile`).
  * - The offset keeps the ring off the control's border, so the two do not
  *   read as one thicker edge.
  * - `:focus-visible`, not `:focus`, so a mouse click on a button leaves no

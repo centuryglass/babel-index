@@ -15,7 +15,7 @@
  *
  * No DOM - this is the pure hit-test half, split out the same way
  * `favoriteBadge.ts` and `center.ts` are. The keyboard's way in is a DOM
- * button in `MapView.tsx`'s `.center-controls`, over the active state's
+ * button in `MapView.tsx`'s `.center-tile`, over the active state's
  * traced box.
  */
 import { layout } from '../../../../tools/center-placement/lib/geometry.ts';

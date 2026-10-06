@@ -59,11 +59,11 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
     // Reached by Tab from the control before it, so it is in the tab order,
     // not only focusable.
     await page.evaluate(() => {
-      (document.querySelector('[data-control="shuffle"]') as HTMLElement | null)?.focus();
+      (document.querySelector('.center-book') as HTMLElement | null)?.focus();
     });
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.control);
-    assert.equal(focused, 'distill', 'Tab from the reorder button must reach the distill toggle');
+    assert.equal(focused, 'distill', 'Tab from the open book must reach the distill toggle');
 
     try {
       await page.keyboard.press('Enter');
@@ -170,7 +170,7 @@ describe('the library, in a browser: accessibility', { concurrency: false }, () 
       // supports them (axe's `aria-allowed-attr` rule catches them on the
       // button). CDP's `Accessibility.getFullAXTree` does not surface either
       // property for a native `<li>`, so this checks only that the DOM carries
-      // the values, not that a screen reader receives them (issue #243).
+      // the values. AT-SPI does receive them, as checked by hand in Accerciser.
       assert.equal(posinset, '1');
       assert.ok(Number(setsize) >= count, `setsize ${setsize} must be at least the ${count} mounted`);
 

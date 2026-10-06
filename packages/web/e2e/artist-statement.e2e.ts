@@ -25,8 +25,8 @@ describe('the library, in a browser: the artist statement', { concurrency: false
     await closeLibrary(session, 'library-artist-statement.png');
   });
 
-  // The center-book button is `display:none`/`pointer-events:none` until the
-  // render loop shows it (the canvas owns the click via `centerBookAtPoint`),
+  // The center-book button is hidden (its `.center-tile` is `display:none`)
+  // and `pointer-events:none` until the render loop shows it (the canvas owns the click via `centerBookAtPoint`),
   // so the honest way in for a test is the same one a keyboard reader has:
   // focus the button and press Enter.
   async function openStatement(page) {

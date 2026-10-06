@@ -123,9 +123,9 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
 
   test('zooming in never grows the page past the viewport', async () => {
     const { page, flightMs } = session;
-    // The center tile's DOM overlays (`.center-search`, `.center-books`,
-    // `.center-book`, `.center-controls`) are positioned over the whole
-    // center cell, which at reading zoom is several screens wide. On a
+    // The center tile's DOM overlays (`.center-search`, `.center-tile`) are
+    // positioned over the whole center cell, which at reading zoom is
+    // several screens wide. On a
     // desktop the overflow is invisible. A phone reads it as a page wider
     // than the screen: it drops the page scale to fit and grows the layout
     // viewport to match, and `position: fixed` resolves against that, so every
