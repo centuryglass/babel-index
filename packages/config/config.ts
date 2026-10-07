@@ -129,7 +129,7 @@ interface SearchDensity {
   peak: number;
   peakAt: number;
   floor: number;
-  clipCentre: number;
+  clipLow: number;
   clipHigh: number;
 }
 
@@ -530,13 +530,13 @@ export const DEFAULTS: Defaults = {
       floor: STRENGTH_FLOOR,
 
       /**
-       * The measured anchors of CLIP's strength curve: `clipCentre` is the
+       * The measured anchors of CLIP's strength curve: `clipLow` is the
        * no-opinion point (0), `clipHigh` a genuine match's typical confidence
        * (1). The one part of the gradient that is a measurement rather than a
        * preference - `CLIP_STRENGTH` (`packages/map/scoring.ts`) is where they
        * were measured.
        */
-      clipCentre: CLIP_STRENGTH.centre,
+      clipLow: CLIP_STRENGTH.low,
       clipHigh: CLIP_STRENGTH.high,
     },
   },
@@ -763,7 +763,7 @@ function atLeast(n: number, min: number, path: string, notes: string[]): number 
  * Two inverted pairs get a note and fall back together:
  *   - `floor >= peakAt` leaves the ramp no width, and `createLayout()` throws
  *     on it.
- *   - `clipHigh <= clipCentre` means CLIP contributes no strength at all,
+ *   - `clipHigh <= clipLow` means CLIP contributes no strength at all,
  *     which from the map looks like a collection with no embeddings blob.
  */
 function density(src: Section, notes: string[]): SearchDensity {
@@ -772,11 +772,11 @@ function density(src: Section, notes: string[]): SearchDensity {
     peak: ratio(src.peak, d.peak, 'search.density.peak', notes),
     peakAt: ratio(src.peakAt, d.peakAt, 'search.density.peakAt', notes),
     floor: unitInterval(src.floor, d.floor, 'search.density.floor', notes),
-    clipCentre: number(src.clipCentre, d.clipCentre, 'search.density.clipCentre', notes),
+    clipLow: number(src.clipLow, d.clipLow, 'search.density.clipLow', notes),
     clipHigh: number(src.clipHigh, d.clipHigh, 'search.density.clipHigh', notes),
   };
-  // `clipLow` was a setting in older configs; say it no longer applies.
-  if (src.clipLow !== undefined) notes.push('search.density.clipLow is not a setting; ignored');
+  // `clipCentre` is the old name of `clipLow`; a config still setting it gets a note.
+  if (src.clipCentre !== undefined) notes.push('search.density.clipCentre was renamed clipLow; ignored');
   if (!(out.peakAt > out.floor)) {
     notes.push(
       `search.density.peakAt ${out.peakAt} is not above floor ${out.floor}; using ${d.peakAt}/${d.floor}`
@@ -784,12 +784,12 @@ function density(src: Section, notes: string[]): SearchDensity {
     out.peakAt = d.peakAt;
     out.floor = d.floor;
   }
-  if (!(out.clipHigh > out.clipCentre)) {
+  if (!(out.clipHigh > out.clipLow)) {
     notes.push(
-      `search.density.clipHigh ${out.clipHigh} is not above clipCentre ${out.clipCentre}; ` +
-        `using ${d.clipHigh}/${d.clipCentre}`
+      `search.density.clipHigh ${out.clipHigh} is not above clipLow ${out.clipLow}; ` +
+        `using ${d.clipHigh}/${d.clipLow}`
     );
-    out.clipCentre = d.clipCentre;
+    out.clipLow = d.clipLow;
     out.clipHigh = d.clipHigh;
   }
   return out;

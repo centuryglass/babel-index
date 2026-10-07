@@ -128,10 +128,10 @@ export function summarize(values: ArrayLike<number>, percentiles: number[] = REP
  * `keywordMax` as a typical best match.
  *
  * A first read off the shape of the collection, not what the app ships (see
- * `CLIP_STRENGTH`). The pair's names are not config keys: `search.density`
- * has no `clipLow`, and its `clipHigh` is not this `clipHigh`. Do not promote
- * `clipLow` to a strength floor on its own - a high percentile of `overall`
- * assumes most pairs are unrelated, and a common word that is genuinely true of
+ * `CLIP_STRENGTH`). The pair shares its names with `search.density.clipLow`
+ * and `clipHigh`, but those hold `CLIP_STRENGTH`'s anchors, not these
+ * percentile cuts. Do not ship this `clipLow` as the anchor on its own - a
+ * high percentile of `overall` assumes most pairs are unrelated, and a common word that is genuinely true of
  * many rooms (`book`) scores below such a cutoff on correct matches.
  *
  * `valid: false` means the two bands overlap at the chosen percentiles on this

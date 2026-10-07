@@ -119,7 +119,7 @@ test('image content alone clusters most of the collection for what every room sh
       dim: fixture.dim,
       scale: fixture.scale,
       vector: query.vector,
-      clipStrength: { centre: SEARCH.density.clipCentre, high: SEARCH.density.clipHigh },
+      clipStrength: { low: SEARCH.density.clipLow, high: SEARCH.density.clipHigh },
     });
     const strong = clipOnly.strength.filter((s) => s >= 0.5).length;
     assert.ok(strong > fixture.files.length / 2, `"${query.text}": CLIP alone puts only ${strong} rooms at 0.5 or more`);

@@ -43,7 +43,7 @@ const { noun, verb, adjective } = winkLemmatizer;
 
 /** The anchor band `clipCurveStrength` reads a raw cosine against. */
 export interface ClipBand {
-  centre: number;
+  low: number;
   high: number;
 }
 
@@ -64,12 +64,12 @@ export function lemmatise(word: string): string {
 
 /**
  * The measured anchors of CLIP's strength curve (docs/search_rules.md
- * "Image-content (CLIP) matching" + "Computing strength"): `centre` is the
+ * "Image-content (CLIP) matching" + "Computing strength"): `low` is the
  * no-opinion point (0), `high` is a genuine match's typical confidence (1).
- * Linear between them, 0 below `centre` - see `clipCurveStrength`.
+ * Linear between them, 0 below `low` - see `clipCurveStrength`.
  *
  * Both were measured on the full production collection (CLIP ViT-B/32):
- *   - `centre` is the 95th percentile of known non-match pairs: library words
+ *   - `low` is the 95th percentile of known non-match pairs: library words
  *     (`bookshelf`, `a wall of books`, ...) against synthetic content-free
  *     images (solid colors, gradients, noise, patterns). Rooms cannot supply
  *     known non-matches, since the collection's art gives almost any concept a
@@ -82,11 +82,11 @@ export function lemmatise(word: string): string {
  * Narrowing the band amplifies small cosine differences: the int8 blob's
  * quantisation noise (about 0.003) is a larger share of it.
  *
- * A cosine below `centre` is absence of evidence, not evidence of a
+ * A cosine below `low` is absence of evidence, not evidence of a
  * mismatch - CLIP's joint space has no meaningful antipode - so it reads as
  * 0, never as a negative claim.
  */
-export const CLIP_STRENGTH: ClipBand = { centre: 0.225, high: 0.279 };
+export const CLIP_STRENGTH: ClipBand = { low: 0.225, high: 0.279 };
 
 /**
  * Words carrying no retrieval signal, dropped from queries.
@@ -844,7 +844,7 @@ function storyRunCurve(chars: number): number {
 /**
  * CLIP's raw cosine placed against the anchor band, in [0, 1]
  * (docs/search_rules.md "Image-content (CLIP) matching"): 0 at or below
- * `band.centre` (the no-opinion point), rising linearly to 1 at
+ * `band.low` (the no-opinion point), rising linearly to 1 at
  * `band.high` (a genuine match's typical confidence). `weights.clip` scales
  * it into CLIP's pull.
  *
@@ -852,10 +852,10 @@ function storyRunCurve(chars: number): number {
  */
 export function clipCurveStrength(cosine: number | null | undefined, band: ClipBand = CLIP_STRENGTH): number {
   if (cosine === null || cosine === undefined || !Number.isFinite(cosine)) return 0;
-  const { centre, high } = band;
-  const span = high - centre;
+  const { low, high } = band;
+  const span = high - low;
   if (!(span > 0)) return 0;
-  return clamp01((cosine - centre) / span);
+  return clamp01((cosine - low) / span);
 }
 
 /**

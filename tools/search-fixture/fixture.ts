@@ -217,7 +217,7 @@ export function rankFixtureQuery(
     scale: fixture.scale,
     vector: query.vector,
     index,
-    clipStrength: { centre: search.density.clipCentre, high: search.density.clipHigh },
+    clipStrength: { low: search.density.clipLow, high: search.density.clipHigh },
   });
 }
 

@@ -147,7 +147,7 @@ export function useSearch({
         vector: res.vector,
         index: searchIndex,
         clipStrength: {
-          centre: searchConfig.density.clipCentre,
+          low: searchConfig.density.clipLow,
           high: searchConfig.density.clipHigh,
         },
       });
