@@ -43,6 +43,18 @@ regenerated whenever the set of images changes. The server ignores a blob
 whose row count no longer matches the collection, and search falls back to
 keywords and story.
 
+## Tile size and shape
+
+The first room with a readable size sets the collection's tile size
+(`manifest.tile`), and with it the shape of every cell on the map. Every room
+is drawn at that shape, so the rooms should share one aspect ratio. A
+collection with no readable image size is refused.
+
+The center tile's traced controls (`shelf_geometry.svg`) are fractions of the
+tile, so they fit any size of the shape they were traced at. The server
+refuses to start on a collection of another aspect; a new shape needs the
+center re-traced and `npm run generate:shelf-geometry` re-run.
+
 ## `metadata.json`
 
 One object, keyed by image filename. Each value describes that room:
