@@ -737,11 +737,11 @@ const atCosines = (...cosines) =>
   );
 
 /**
- * `CLIP_STRENGTH.centre` snapped down onto `atCosines`' int8 grid, so a room
+ * `CLIP_STRENGTH.low` snapped down onto `atCosines`' int8 grid, so a room
  * planted there reads 0. The rounded anchor itself can land above
- * the centre, and a narrow band turns that rounding into visible strength.
+ * the low anchor, and a narrow band turns that rounding into visible strength.
  */
-const AT_CENTRE = Math.floor(CLIP_STRENGTH.centre * 127) / 127;
+const AT_LOW = Math.floor(CLIP_STRENGTH.low * 127) / 127;
 
 const CLIP_QUERY = Float32Array.from([1, 0]);
 
@@ -765,12 +765,12 @@ test('one matched story word pulls at weights.story, and a full clause at least 
 });
 
 test('CLIP strength is read off the raw cosine, against the anchor band [SR-16] [SR-19]', () => {
-  const { centre, high } = CLIP_STRENGTH;
-  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.05, centre - 0.1, (centre + high) / 2) });
+  const { low, high } = CLIP_STRENGTH;
+  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.05, low - 0.1, (low + high) / 2) });
   // `atCosines` round-trips each cosine through int8, hence the tolerances.
   assert.ok(Math.abs(strength[0] - SEARCH_WEIGHTS.clip) < 1e-6, `past the high anchor gave ${strength[0]}`);
   assert.ok(Math.abs(strength[1] - SEARCH_WEIGHTS.clip / 2) < 0.05, `halfway gave ${strength[1]}`);
-  assert.equal(strength[2], 0, 'below centre is no evidence, not a mismatch');
+  assert.equal(strength[2], 0, 'below `low` is no evidence, not a mismatch');
 });
 
 test('strengthPercent reports the full 0-100 range, clamped at both ends', () => {
@@ -781,14 +781,14 @@ test('strengthPercent reports the full 0-100 range, clamped at both ends', () =>
   assert.equal(strengthPercent(1.5), 100);
 });
 
-test('clipCurveStrength is a monotone [0, 1] curve, zero at and below the centre [SR-16]', () => {
-  const { centre, high } = CLIP_STRENGTH;
-  assert.equal(clipCurveStrength(centre), 0, 'the no-opinion centre');
+test('clipCurveStrength is a monotone [0, 1] curve, zero at and below the low anchor [SR-16]', () => {
+  const { low, high } = CLIP_STRENGTH;
+  assert.equal(clipCurveStrength(low), 0, 'the no-opinion anchor');
   assert.equal(clipCurveStrength(high + 1), 1, 'saturates at the high extreme');
-  assert.equal(clipCurveStrength(centre - 0.01), 0, 'below centre reads as no evidence');
-  assert.equal(clipCurveStrength(centre - 1), 0, 'however far below');
+  assert.equal(clipCurveStrength(low - 0.01), 0, 'below `low` reads as no evidence');
+  assert.equal(clipCurveStrength(low - 1), 0, 'however far below');
   assert.equal(clipCurveStrength(null), 0);
-  assert.ok(clipCurveStrength((centre + high) / 2) > 0, 'above centre reads positive');
+  assert.ok(clipCurveStrength((low + high) / 2) > 0, 'above `low` reads positive');
 });
 
 test('match strength stays in [0, 1], whatever the pulls [SR-16]', () => {
@@ -800,12 +800,12 @@ test('match strength stays in [0, 1], whatever the pulls [SR-16]', () => {
 });
 
 test('a query nothing matches clusters nothing, and does not even decide the order [SR-19]', () => {
-  // Every cosine sits below the no-opinion centre, so CLIP finds no evidence
+  // Every cosine sits below the no-opinion anchor, so CLIP finds no evidence
   // for any room. A reading relative to the collection would still crown one of
   // them; strength reads the raw cosine, so all three stay at 0 and keep id
   // order, as if there were no signal at all.
   const cosines = [-0.2, -0.15, -0.1];
-  assert.ok(cosines.every((c) => c < CLIP_STRENGTH.centre));
+  assert.ok(cosines.every((c) => c < CLIP_STRENGTH.low));
   const { order, strength } = rankHybrid({
     query: 'cghjj',
     count: 3,
@@ -816,10 +816,10 @@ test('a query nothing matches clusters nothing, and does not even decide the ord
   });
   assert.ok(strength.every((c) => c === 0), `expected zero strength, got ${[...strength]}`);
   assert.ok(strength.every((c) => c < STRENGTH_FLOOR), 'and nothing that would survive the floor');
-  assert.deepEqual(order, [0, 1, 2], 'nothing cleared the centre, so nothing decided the order');
+  assert.deepEqual(order, [0, 1, 2], 'nothing cleared the low anchor, so nothing decided the order');
 });
 
-test('a cosine that clears the centre leads the rooms that do not [SR-11]', () => {
+test('a cosine that clears the low anchor leads the rooms that do not [SR-11]', () => {
   const cosines = [0.4, -0.2, -0.3];
   const { order } = rankHybrid({
     query: 'cghjj',
@@ -829,30 +829,30 @@ test('a cosine that clears the centre leads the rooms that do not [SR-11]', () =
     scale: 127,
     vector: CLIP_QUERY,
   });
-  assert.equal(order[0], 0, 'the room that cleared the centre leads');
+  assert.equal(order[0], 0, 'the room that cleared the low anchor leads');
 });
 
 test('a strong cosine reaches CLIP\'s full weight on its own [SR-16]', () => {
   // "red", against rooms planted past the high anchor, halfway to it, and at
-  // the no-opinion centre: strength falls off gradually with the cosine,
+  // the no-opinion anchor: strength falls off gradually with the cosine,
   // which is what makes the density falloff gradual. `atCosines` round-trips
   // every cosine through int8 quantisation, so the halfway room lands close to
   // but not on its target - hence its tolerance.
-  const { centre, high } = CLIP_STRENGTH;
-  const midHigh = centre + (high - centre) / 2;
-  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, AT_CENTRE) });
+  const { low, high } = CLIP_STRENGTH;
+  const midHigh = low + (high - low) / 2;
+  const strength = strengthOf({ query: 'red', embeddings: atCosines(high + 0.1, midHigh, AT_LOW) });
   assert.ok(Math.abs(strength[0] - SEARCH_WEIGHTS.clip) < 1e-6);
   assert.ok(Math.abs(strength[1] - SEARCH_WEIGHTS.clip / 2) < 0.05, `halfway to the high extreme gave ${strength[1]}`);
-  assert.equal(strength[2], 0, 'at the no-opinion centre');
+  assert.equal(strength[2], 0, 'at the no-opinion anchor');
 });
 
 test('an exact keyword match is full strength whatever the picture looks like', () => {
   // "lora:yuiop" tagged on a room CLIP genuinely has no opinion about (cosine
-  // at the no-opinion centre). The tag is the answer; the cosine has no say in
+  // at the no-opinion anchor). The tag is the answer; the cosine has no say in
   // whether it is one.
   const strength = strengthOf({
     query: 'yuiop',
-    embeddings: atCosines(AT_CENTRE, AT_CENTRE, AT_CENTRE),
+    embeddings: atCosines(AT_LOW, AT_LOW, AT_LOW),
     index: indexOf([['yuiop'], null], [['oak'], null], [['pine'], null]),
   });
   assert.equal(strength[0], 1, 'the tagged room');
@@ -890,11 +890,11 @@ test('a room is placed by the strength it reports, so strength never rises with 
   // partial tag, scattered story words, a confident CLIP match and an exact
   // tag. Each rank's strength must be the soft OR of the pulls reported for
   // that same rank, and no rank may report more than the one above it.
-  const { centre, high } = CLIP_STRENGTH;
+  const { low, high } = CLIP_STRENGTH;
   const { order, strength, breakdown } = rankHybrid({
     query: 'glass tower',
     count: 5,
-    embeddings: atCosines(centre - 0.1, centre - 0.1, centre - 0.1, high + 0.1, centre - 0.1),
+    embeddings: atCosines(low - 0.1, low - 0.1, low - 0.1, high + 0.1, low - 0.1),
     dim: 2,
     scale: 127,
     vector: CLIP_QUERY,
@@ -932,7 +932,7 @@ test('the strength bounds are configurable', () => {
   const loosened = rankHybrid({
     count: 3,
     ...opts,
-    clipStrength: { centre: -0.2, high: -0.15 },
+    clipStrength: { low: -0.2, high: -0.15 },
   });
   assert.ok(Math.abs(loosened.strength[0] - SEARCH_WEIGHTS.clip) < 1e-6, 'a shifted band gives the same cosine CLIP\'s full pull');
 });
@@ -1182,12 +1182,12 @@ test('explainRanking reports an exact vs. a partial title match', () => {
   assert.ok(partial.title.partial > 0 && partial.title.partial < 1);
 });
 
-test('the CLIP line reads a cosine below the centre as 0%, off the raw cosine [SR-32] [SR-36]', () => {
-  // Every cosine is below `CLIP_STRENGTH.centre`: CLIP finds no evidence for
+test('the CLIP line reads a cosine below the low anchor as 0%, off the raw cosine [SR-32] [SR-36]', () => {
+  // Every cosine is below `CLIP_STRENGTH.low`: CLIP finds no evidence for
   // any of these rooms. The line must carry the raw cosine, so a reader can
   // see why it reads 0, and never a negative percentage.
   const cosines = [-0.1, -0.15, -0.2];
-  assert.ok(cosines.every((c) => c < CLIP_STRENGTH.centre));
+  assert.ok(cosines.every((c) => c < CLIP_STRENGTH.low));
 
   const { breakdown, strength, ranks, ties } = rankHybrid({
     query: 'cghjj',
@@ -1202,7 +1202,7 @@ test('the CLIP line reads a cosine below the centre as 0%, off the raw cosine [S
 
   assert.equal(breakdown.clip[0], 0, 'no pull');
   assert.ok(Math.abs(explanation.clip.cosine - cosines[0]) < 0.01, 'the clip summary carries the raw cosine');
-  assert.ok(explanation.clip.cosine < CLIP_STRENGTH.centre, 'which is below the no-opinion centre');
+  assert.ok(explanation.clip.cosine < CLIP_STRENGTH.low, 'which is below the no-opinion anchor');
   assert.equal(explanation.clip.percent, 0, 'reported at the clamped floor, never negative');
   assert.equal(explanation.percent, 0, 'and the composite reading agrees there is no evidence');
 });

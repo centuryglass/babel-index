@@ -78,8 +78,8 @@ Two more constants in `scoring.ts` shape the curves:
 
 - `STORY_LONG_RANGE` (`{ low: 16, high: 40 }`): the character band the story
   run curve ramps across.
-- `CLIP_STRENGTH` (`{ centre, high }`): the default CLIP anchors, overridable
-  as `search.density.clipCentre`/`clipHigh`.
+- `CLIP_STRENGTH` (`{ low, high }`): the default CLIP anchors, overridable
+  as `search.density.clipLow`/`clipHigh`.
 
 ### Text matching mechanics
 
@@ -243,7 +243,7 @@ run is.
 ### Image-content (CLIP) matching
 
 CLIP's reading is the curve `clipCurveStrength` of the raw cosine: `0` at
-and below the anchor `centre`, rising linearly to `1` at `high`. CLIP's pull
+and below the anchor `low`, rising linearly to `1` at `high`. CLIP's pull
 is `clip` times the curve.
 
 **A query CLIP has no real opinion about cannot look confident just because
@@ -251,15 +251,15 @@ some room scored highest.** The best cosine of a bad lot must not read as a
 strong match for `cghjj`.
 *Enforcement:* the curve reads the raw cosine against fixed anchors, never
 the cosine's position among this query's results. A query with no real
-signal has most raw cosines near or below `centre`, so its CLIP pulls are
+signal has most raw cosines near or below `low`, so its CLIP pulls are
 near zero.
 
 **The anchors are measured against known matches and known non-matches, not
 guessed.**
-*Enforcement:* `CLIP_STRENGTH` holds the defaults (`centre` 0.225, `high`
-0.279); config can override them as `search.density.clipCentre`
+*Enforcement:* `CLIP_STRENGTH` holds the defaults (`low` 0.225, `high`
+0.279); config can override them as `search.density.clipLow`
 and `clipHigh`.
-- `centre` is the 95th percentile of known non-matches: library words
+- `low` is the 95th percentile of known non-matches: library words
   against synthetic content-free images (solid colors, gradients, noise).
   Rooms cannot supply known non-matches, since the collection's art gives
   almost any concept a few genuine partial matches.
@@ -269,11 +269,11 @@ and `clipHigh`.
 
 `CLIP_STRENGTH`'s docblock carries the measurement details.
 
-**A cosine below `centre` is absence of evidence, not evidence of a
+**A cosine below `low` is absence of evidence, not evidence of a
 mismatch.** CLIP's joint space has no meaningful antipode: a text vector
 pointing away from an image vector is an unrelated concept, not a claim that
 the image is the query's opposite.
-*Enforcement:* the curve clamps everything below `centre` to `0`.
+*Enforcement:* the curve clamps everything below `low` to `0`.
 
 ## Quoted phrases
 
@@ -359,7 +359,7 @@ does not split into additive parts, so a share is of the pulls, not of
 `0%`, so a room no text touched shows only the image share.
 
 **CLIP's row reports its curve as a percentage.** It reads
-"#2 by image: 41.00% match": `0` at or below `centre`, `100%` at `high`. The
+"#2 by image: 41.00% match": `0` at or below `low`, `100%` at `high`. The
 raw cosine is in the row's tooltip.
 *Enforcement:* the percentage is `strengthPercent(clipStrength)`, the curve
 before `weights.clip` scales it.

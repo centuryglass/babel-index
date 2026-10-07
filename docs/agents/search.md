@@ -58,7 +58,7 @@ conventions still apply.
   Min-max puts some room at 1 for *any* query, and a gradient driven by that
   clusters nonsense as confidently as an exact match. CLIP reads its raw
   cosine against absolute bounds (`CLIP_STRENGTH`, config
-  `search.density.clipCentre/High`).
+  `search.density.clipLow/High`).
 - **`embeddings.bin` is keyed by row order; `metadata.json` by filename.**
   `scan.ts` rejects a blob whose row count drifted. The sidecar joins per
   file, so a partial match is just partial - but `matched: 0` against

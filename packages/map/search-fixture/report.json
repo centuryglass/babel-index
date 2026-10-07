@@ -15,7 +15,7 @@
       "peak": 1,
       "peakAt": 0.85,
       "floor": 0.05,
-      "clipCentre": 0.225,
+      "clipLow": 0.225,
       "clipHigh": 0.279
     }
   },

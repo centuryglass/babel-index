@@ -228,25 +228,32 @@ test('the density block comes through, and a partial one keeps its neighbours', 
   assert.deepEqual(c.notes, []);
   assert.equal(c.search.density.peak, 0.6);
   assert.equal(c.search.density.floor, DEFAULTS.search.density.floor);
-  assert.equal(c.search.density.clipCentre, DEFAULTS.search.density.clipCentre);
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
 });
 
 test('an inverted cosine band is reported rather than silently disabling CLIP', () => {
   // Why the note exists is in `density()`; what this pins is that both
   // anchors fall back together rather than one surviving out of order.
   const c = resolveConfig(
-    { search: { density: { clipCentre: 0.5, clipHigh: 0.4 } } },
+    { search: { density: { clipLow: 0.5, clipHigh: 0.4 } } },
     { zoomLimits: LIMITS }
   );
-  assert.equal(c.search.density.clipCentre, DEFAULTS.search.density.clipCentre);
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
   assert.equal(c.search.density.clipHigh, DEFAULTS.search.density.clipHigh);
-  assert.ok(c.notes.some((n) => n.includes('clipHigh') && n.includes('clipCentre')), c.notes.join('; '));
+  assert.ok(c.notes.some((n) => n.includes('clipHigh') && n.includes('clipLow')), c.notes.join('; '));
 });
 
-test('a leftover clipLow is reported, not silently dropped', () => {
-  const c = resolveConfig({ search: { density: { clipLow: 0.1 } } }, { zoomLimits: LIMITS });
-  assert.ok(!('clipLow' in c.search.density));
-  assert.ok(c.notes.some((n) => n.includes('clipLow')), c.notes.join('; '));
+test('clipLow overrides the CLIP anchor', () => {
+  const c = resolveConfig({ search: { density: { clipLow: 0.2 } } }, { zoomLimits: LIMITS });
+  assert.deepEqual(c.notes, []);
+  assert.equal(c.search.density.clipLow, 0.2);
+});
+
+test('a leftover clipCentre is reported as renamed, not silently dropped', () => {
+  const c = resolveConfig({ search: { density: { clipCentre: 0.1 } } }, { zoomLimits: LIMITS });
+  assert.ok(!('clipCentre' in c.search.density));
+  assert.equal(c.search.density.clipLow, DEFAULTS.search.density.clipLow);
+  assert.ok(c.notes.some((n) => n.includes('clipCentre') && n.includes('clipLow')), c.notes.join('; '));
 });
 
 test('a nonsense peak or floor falls back and says so', () => {
@@ -281,9 +288,9 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
   // Not a preference but a measurement, and the one number here most likely to
   // move: image-text cosines have to be able to land inside the band for the
   // gradient to grade anything at all.
-  const { clipCentre, clipHigh } = DEFAULTS.search.density;
-  assert.ok(clipHigh > clipCentre, `${clipCentre}-${clipHigh}`);
-  assert.ok(clipCentre > -1 && clipHigh < 1, 'a cosine, not a normalised score');
+  const { clipLow, clipHigh } = DEFAULTS.search.density;
+  assert.ok(clipHigh > clipLow, `${clipLow}-${clipHigh}`);
+  assert.ok(clipLow > -1 && clipHigh < 1, 'a cosine, not a normalised score');
 });
 
 // --- the catalog's block ---------------------------------------------------
