@@ -57,7 +57,6 @@
  * on-camera rectangle ever slide. The duration is set by the viewport, and
  * collection size does not enter into it.
  */
-import type { Pyramid } from './pyramid.ts';
 import type { TileCache } from './tiles.ts';
 import type { Board, Motion, Move } from '../../../map/moves.ts';
 import type { Config } from '../../../config/config.ts';
@@ -318,7 +317,6 @@ export interface CreateSlideRendererOpts {
   cache: TileCache;
   /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
   overlays: Overlays;
-  pyramid?: Pyramid;
 }
 
 /** `slidePlan.ts`'s `SlideFrameOpts` plus the context to paint on. */
@@ -329,8 +327,8 @@ export type SlideDrawOpts = SlideFrameOpts & { ctx: DrawContext };
  * `render.ts`'s `paintCanvas2D` paints it, so a frame's decisions are
  * assertable without a browser.
  */
-export function createSlideRenderer({ cache, overlays, pyramid }: CreateSlideRendererOpts) {
-  const planner = createSlidePlanner({ cache, overlays, pyramid });
+export function createSlideRenderer({ cache, overlays }: CreateSlideRendererOpts) {
+  const planner = createSlidePlanner({ cache, overlays });
 
   function draw({ ctx, ...opts }: SlideDrawOpts): SlideDrawResult {
     const result = planner.plan(opts);

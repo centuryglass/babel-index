@@ -31,7 +31,7 @@
  * it stops a zoom held near a boundary from flickering between two levels,
  * and it can only apply if it knows what was on screen last frame.
  */
-import { PYRAMID, prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
+import { prefetchBounds, type Bounds, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
 import {
   CENTER, FAVORITE_BADGE, FAVORITE_SWITCH, DISTILL_TOGGLE, CLEAR_HISTORY,
@@ -263,7 +263,7 @@ export function planOverlay(
   const want = overlay.scale === 'pyramid' ? level : 0;
   const hit = cache.get(overlayFaceId(id, face), want);
   if (!hit || hit.level !== want) return null;
-  const r = overlayScreenRect(overlay.anchor, cellPx, sx, sy, naturalIconSize(hit), hit.level);
+  const r = overlayScreenRect(overlay.anchor, cellPx, sx, sy, naturalIconSize(hit), cache.pyramid, hit.level);
   list.image(hit.img, hit.rect, r.x, r.y, r.w, r.h);
   return r;
 }
@@ -359,14 +359,14 @@ export interface CreateMapPlannerOpts {
   cache: TileCache;
   /** `manifest.overlays`: the corner overlays' art, anchors and scales. */
   overlays: Overlays;
-  pyramid?: Pyramid;
 }
 
 /**
  * One renderer's map planner. `plan()` fills `list` for a frame and returns
  * its stats; the list is reused, so paint it before the next `plan()`.
  */
-export function createMapPlanner({ cache, overlays, pyramid = PYRAMID }: CreateMapPlannerOpts) {
+export function createMapPlanner({ cache, overlays }: CreateMapPlannerOpts) {
+  const { pyramid } = cache;
   const list = createDrawList();
   // Survives across frames purely so hysteresis has something to compare to.
   let level: number | null = null;

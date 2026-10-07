@@ -47,7 +47,7 @@ import {
   focusScrollTop,
 } from '../lib/catalog.ts';
 import { CENTER, DISTILL_OFF, DISTILL_ON } from '../lib/tiles.ts';
-import { BASE_TILE } from '../lib/pyramid.ts';
+import type { TileShape } from '../lib/tileShape.ts';
 
 /** One center-shelf slot, as `center.ts`'s `assignTitles()` returns it, or null for an empty one. */
 type Slot = CentreSlot | null;
@@ -315,6 +315,7 @@ const shelfColumnCh = (slots: Slot[]): number =>
 
 export function CatalogView({
   config,
+  tile,
   urlFor,
   order,
   metadata,
@@ -350,6 +351,8 @@ export function CatalogView({
   onSpotlightHandled,
 }: {
   config: Config;
+  /** The collection's tile shape: thumbnail aspect and pyramid. */
+  tile: TileShape;
   urlFor: UrlFor;
   order: number[];
   metadata: (RoomMeta | null)[] | null;
@@ -456,10 +459,10 @@ export function CatalogView({
   // The distill toggle's size as a percentage of the thumbnail, anchored
   // bottom-right in css/catalog.css. The map's canvas overlay
   // (`overlay.ts`'s `overlayScreenRect`) scales the icon by the tile's
-  // pixels per `BASE_TILE` pixel, so its share of the tile is
-  // `iconSize / BASE_TILE` at any thumbnail size.
-  const distillW = distillIconSize.w ? `${(distillIconSize.w / BASE_TILE.w) * 100}%` : '0';
-  const distillH = distillIconSize.h ? `${(distillIconSize.h / BASE_TILE.h) * 100}%` : '0';
+  // pixels per level-0 tile pixel, so its share of the tile is
+  // `iconSize / tile.base` at any thumbnail size.
+  const distillW = distillIconSize.w ? `${(distillIconSize.w / tile.base.w) * 100}%` : '0';
+  const distillH = distillIconSize.h ? `${(distillIconSize.h / tile.base.h) * 100}%` : '0';
   // Fits the center row's cover picture to whole grid cells (`centreGrid`),
   // before paint.
   //
@@ -520,11 +523,11 @@ export function CatalogView({
   // and the text minimum) plus the score strip beneath it, plus padding. An
   // ultra-narrow row is its stack (`stackedRowHeight`) and shows no score.
   // A search grows every row by the same `scoreH`, so rows stay uniform.
-  const flowH = ultraNarrow ? 0 : Math.max(tileHeight(rowThumbPx) + 2 * matPad, TEXT_MIN + titleReserve);
+  const flowH = ultraNarrow ? 0 : Math.max(tileHeight(rowThumbPx, tile.aspect) + 2 * matPad, TEXT_MIN + titleReserve);
   const rowPx = ultraNarrow
-    ? stackedRowHeight(rowThumbPx, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, matPad, ULTRA_STACK_GAP)
+    ? stackedRowHeight(rowThumbPx, tile.aspect, ULTRA_HEAD_PX, ULTRA_DETAILS_PX, ROW_PAD + cardPad, matPad, ULTRA_STACK_GAP)
     : flowH + scoreH + ROW_PAD + cardPad;
-  const level = thumbLevel(rowThumbPx, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
+  const level = thumbLevel(rowThumbPx, tile.pyramid, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
   const total = order.length;
   const pages = pageCount(total, perPage);
@@ -797,7 +800,7 @@ export function CatalogView({
                 src={urlFor(CENTER, 0) ?? ''}
                 alt=""
                 width={thumbPx}
-                height={tileHeight(thumbPx)}
+                height={tileHeight(thumbPx, tile.aspect)}
                 decoding="async"
               />
               {/*
@@ -871,6 +874,7 @@ export function CatalogView({
               entry={metadata?.[id] ?? null}
               src={urlFor(id, level) ?? urlFor(id, 0) ?? ''}
               thumbPx={rowThumbPx}
+              aspect={tile.aspect}
               cell={cellOfId(id)}
               onShowOnMap={onShowOnMap}
               onKeyword={onKeyword}
@@ -927,7 +931,7 @@ export function CatalogView({
  * predict where the font breaks a line.
  */
 function CatalogRow({
-  id, rank, total, entry, src, thumbPx, cell,
+  id, rank, total, entry, src, thumbPx, aspect, cell,
   onShowOnMap, onKeyword, onExpand, highlight, tagLinks, result, favorite,
   narrow = false, ultraNarrow = false, spotlit = false,
 }: {
@@ -937,6 +941,8 @@ function CatalogRow({
   entry: RoomMeta | null;
   src: string;
   thumbPx: number;
+  /** The collection's cell aspect, for the thumbnail's height. */
+  aspect: number;
   cell: { x: number; y: number } | null;
   onShowOnMap: (x: number, y: number) => void;
   onKeyword: (keyword: string) => void;
@@ -1034,7 +1040,7 @@ function CatalogRow({
         src={src}
         alt={desc.picture ?? ''}
         width={thumbPx}
-        height={tileHeight(thumbPx)}
+        height={tileHeight(thumbPx, aspect)}
         loading="lazy"
         decoding="async"
       />

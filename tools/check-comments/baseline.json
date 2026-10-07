@@ -105,7 +105,7 @@
     "conviction": 1
   },
   "packages/web/src/lib/pyramid.test.ts": {
-    "conviction": 3
+    "conviction": 2
   },
   "packages/web/src/lib/pyramid.ts": {
     "conviction": 1

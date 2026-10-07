@@ -31,7 +31,7 @@ import { roomAtPoint } from '../lib/picking.ts';
 import { favoriteHitRect, favoriteToggleAtPoint } from '../lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from '../lib/distillToggle.ts';
 import type { SortMode } from '../../../map/favorites.ts';
-import { sizeOf as pyramidSizeOf, DPR_CAP } from '../lib/pyramid.ts';
+import { DPR_CAP } from '../lib/pyramid.ts';
 import type { TileCache } from '../lib/tiles.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
 import type { Board, Motion, Point } from '../../../map/moves.ts';
@@ -371,7 +371,7 @@ export function useMapRenderer({
         hud.textContent = 'rearranging · preparing…' + (anim ? ` · anim ${anim}` : '');
       } else if (hud) {
         const renderStats = stats as DrawResult;
-        const size = pyramidSizeOf(renderStats.level);
+        const size = cache.pyramid.sizeOf(renderStats.level);
         const over = cache.overBudget();
         const favHit = favoriteHitRect(pxPerCell(cam.current), 0, 0, COARSE_POINTER);
         const favHitLabel = favHit

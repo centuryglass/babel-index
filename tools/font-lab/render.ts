@@ -41,7 +41,7 @@ const OUT = join(HERE, 'out');
 //   - 2048: the manual zoom ceiling, MAX_ZOOM_FACTOR x native - "zoom in to read
 //           a spine".
 // Panels render at 1:1 from these.
-const NATIVE_W = 1024; // BASE_TILE's native width; also the page-load zoom cap
+const NATIVE_W = 1024; // the sample collection's tile width; also the page-load zoom cap
 const MAX_ZOOM_FACTOR = 2; // camera.ts's MAX_ZOOM_FACTOR; local copy
 const ZOOMS = [600, NATIVE_W, NATIVE_W * MAX_ZOOM_FACTOR];
 

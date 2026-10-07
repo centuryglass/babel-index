@@ -29,8 +29,8 @@
  */
 import { layout, type Rect } from '../../../../tools/center-placement/lib/geometry.ts';
 import { prng, seedFrom } from '../../../map/prng.ts';
-import { CELL_ASPECT, fitZoom, pxPerCell, worldToScreen, type Camera, type ViewportRect, type ZoomLimits } from './camera.ts';
-import { BASE_TILE } from './pyramid.ts';
+import { fitZoom, pxPerCell, worldToScreen, type Camera, type ViewportRect, type ZoomLimits } from './camera.ts';
+import type { TileShape } from './tileShape.ts';
 import type { DrawContext } from './render.ts';
 import { SPINE_FONT_FAMILY } from './spineFont.ts';
 import { flattenPath, pointInPolygon } from './svgPath.ts';
@@ -395,7 +395,7 @@ export function isSearchBoxUsable(cellRect: Rect): boolean {
  * camera is framed on: where the box's own on-screen height reaches
  * `MIN_SEARCH_BOX_PX`, read independently of the shelf.
  */
-export function minZoomForSearchBox(aspect: number = CELL_ASPECT): number {
+export function minZoomForSearchBox(aspect: number): number {
   return MIN_SEARCH_BOX_PX / (aspect * CENTER_SEARCH_RECT.h);
 }
 
@@ -413,12 +413,16 @@ const OPENING_MARGIN = 0.94;
  * (`overviewZoom`). `main.tsx`'s `goToSearch` flies here, so the search button
  * never moves the camera further than where the page opened.
  */
-export function openingZoom(viewport: ViewportRect, limits?: ZoomLimits): number {
+export function openingZoom(
+  viewport: ViewportRect,
+  { base, aspect }: Pick<TileShape, 'base' | 'aspect'>,
+  limits: ZoomLimits
+): number {
   return Math.min(
-    BASE_TILE.w,
+    base.w,
     Math.max(
-      fitZoom({ ...viewport, target: CENTER_OPENING_RECT, limits, margin: OPENING_MARGIN }),
-      minZoomForSearchBox()
+      fitZoom({ ...viewport, target: CENTER_OPENING_RECT, aspect, limits, margin: OPENING_MARGIN }),
+      minZoomForSearchBox(aspect)
     )
   );
 }

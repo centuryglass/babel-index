@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULTS, resolveConfig } from './config.ts';
-import { FLIGHT_MS, ZOOM_LIMITS } from '../web/src/lib/camera.ts';
+import { FLIGHT_MS } from '../web/src/lib/camera.ts';
+import { TEST_TILE } from '../web/src/lib/tile-fixtures.ts';
 import { SEARCH_WEIGHTS } from '../map/scoring.ts';
 
 /**
@@ -93,10 +94,10 @@ test('a fractional overviewCellsPerAxis is rounded, and a non-positive one is fl
 
 test('narrowing far enough to orphan a rung is allowed and silent', () => {
   // A range that can only tighten can never invalidate the ladder's
-  // reachability assertion - see `ZOOM_LIMITS` in `camera.ts`. Widening is the
+  // reachability assertion - see `zoomLimitsFor` in `camera.ts`. Widening is the
   // thing that must never happen, and 'config cannot widen the zoom range, in
   // either direction' covers that.
-  const c = resolveConfig({ camera: { minZoom: 26, maxZoom: 30 } }, { zoomLimits: ZOOM_LIMITS });
+  const c = resolveConfig({ camera: { minZoom: 26, maxZoom: 30 } }, { zoomLimits: TEST_TILE.zoomLimits });
   assert.deepEqual(c.notes, []);
   assert.equal(c.camera.maxZoom, 30);
 });
@@ -153,7 +154,7 @@ test('search weights are not config: an overlay setting one is reported and igno
 });
 
 test('the shipped defaults are valid against the real limits', () => {
-  const c = resolveConfig({}, { zoomLimits: ZOOM_LIMITS });
+  const c = resolveConfig({}, { zoomLimits: TEST_TILE.zoomLimits });
   assert.deepEqual(c.notes, [], 'defaults must not need correcting');
   assert.ok(c.camera.overviewCellsPerAxis >= 1);
 });
@@ -296,17 +297,17 @@ test('the default gradient bounds bracket a real CLIP cosine', () => {
 // --- the catalog's block ---------------------------------------------------
 
 test('the catalog block defaults, and a stored paging choice is not its business', () => {
-  const { catalog } = resolveConfig({});
+  const { catalog } = resolveConfig({}, { zoomLimits: LIMITS });
   assert.deepEqual(catalog, DEFAULTS.catalog);
   // A legal value, not a floored one: unlike a zero `perPage`, a zero window is
   // what pagination passes.
-  assert.equal(resolveConfig({ catalog: { windowPages: 0 } }).catalog.windowPages, 0);
+  assert.equal(resolveConfig({ catalog: { windowPages: 0 } }, { zoomLimits: LIMITS }).catalog.windowPages, 0);
 });
 
 test('nonsense in the catalog block is adjusted with a note, never thrown', () => {
   const { catalog, notes } = resolveConfig({
     catalog: { perPage: 0, windowPages: -3, paging: 'sideways', transitionMs: -5 },
-  });
+  }, { zoomLimits: LIMITS });
 
   // Both counts floored rather than rejected - `catalog()`'s note.
   assert.equal(catalog.perPage, 1);
@@ -319,7 +320,7 @@ test('nonsense in the catalog block is adjusted with a note, never thrown', () =
 });
 
 test('a catalog transition of zero means swap at once, and is not an error', () => {
-  const { catalog, notes } = resolveConfig({ catalog: { transitionMs: 0 } });
+  const { catalog, notes } = resolveConfig({ catalog: { transitionMs: 0 } }, { zoomLimits: LIMITS });
   assert.equal(catalog.transitionMs, 0);
   assert.ok(!notes.some((n) => n.startsWith('catalog.transitionMs')));
 });
@@ -327,21 +328,21 @@ test('a catalog transition of zero means swap at once, and is not an error', () 
 // --- the center shelf's auto-fit font range ---------------------------------
 
 test('the center block defaults, and narrows the auto-fit range', () => {
-  const { center } = resolveConfig({});
+  const { center } = resolveConfig({}, { zoomLimits: LIMITS });
   assert.deepEqual(center, DEFAULTS.center);
 
-  const narrowed = resolveConfig({ center: { spineMinPx: 8, spineMaxPx: 20 } }).center;
+  const narrowed = resolveConfig({ center: { spineMinPx: 8, spineMaxPx: 20 } }, { zoomLimits: LIMITS }).center;
   assert.deepEqual(narrowed, { spineMinPx: 8, spineMaxPx: 20 });
 });
 
 test('an inverted spine range falls back to the defaults together, with a note', () => {
-  const { center, notes } = resolveConfig({ center: { spineMinPx: 30, spineMaxPx: 12 } });
+  const { center, notes } = resolveConfig({ center: { spineMinPx: 30, spineMaxPx: 12 } }, { zoomLimits: LIMITS });
   assert.deepEqual(center, DEFAULTS.center);
   assert.ok(notes.some((n) => n.startsWith('center.spineMinPx')));
 });
 
 test('a non-positive spine bound is floored at 1px, not rejected', () => {
-  const { center, notes } = resolveConfig({ center: { spineMinPx: 0, spineMaxPx: -5 } });
+  const { center, notes } = resolveConfig({ center: { spineMinPx: 0, spineMaxPx: -5 } }, { zoomLimits: LIMITS });
   assert.equal(center.spineMinPx, 1);
   assert.equal(center.spineMaxPx, 1);
   for (const key of ['center.spineMinPx', 'center.spineMaxPx'])
@@ -351,21 +352,21 @@ test('a non-positive spine bound is floored at 1px, not rejected', () => {
 // --- the favorite badge's interactivity cutoff -------------------------------
 
 test('the favorites block defaults, and an override replaces it', () => {
-  const { favorites } = resolveConfig({});
+  const { favorites } = resolveConfig({}, { zoomLimits: LIMITS });
   assert.deepEqual(favorites, DEFAULTS.favorites);
 
-  const overridden = resolveConfig({ favorites: { minInteractiveTileWidth: 64 } }).favorites;
+  const overridden = resolveConfig({ favorites: { minInteractiveTileWidth: 64 } }, { zoomLimits: LIMITS }).favorites;
   assert.deepEqual(overridden, { minInteractiveTileWidth: 64 });
 });
 
 test('a negative minInteractiveTileWidth is floored at 0, not rejected - 0 means always interactive', () => {
-  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: -5 } });
+  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: -5 } }, { zoomLimits: LIMITS });
   assert.equal(favorites.minInteractiveTileWidth, 0);
   assert.ok(notes.some((n) => n.startsWith('favorites.minInteractiveTileWidth')));
 });
 
 test('a non-integer minInteractiveTileWidth is rounded, with a note', () => {
-  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: 100.4 } });
+  const { favorites, notes } = resolveConfig({ favorites: { minInteractiveTileWidth: 100.4 } }, { zoomLimits: LIMITS });
   assert.equal(favorites.minInteractiveTileWidth, 100);
   assert.ok(notes.some((n) => n.startsWith('favorites.minInteractiveTileWidth')));
 });

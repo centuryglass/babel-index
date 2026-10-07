@@ -6,6 +6,11 @@ import { CENTER, FAV_ON, FAV_OFF, genericId, type Drawable, type RoomId, type Ti
 import { CENTER as BOARD_CENTER, GENERIC as BOARD_GENERIC } from '../../../map/board.ts';
 import type { Board, BoardValue } from '../../../map/moves.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const PYRAMID = TEST_TILE.pyramid;
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 const ZOOM = 220;
 
@@ -13,6 +18,7 @@ const ZOOM = 220;
 function readyCache() {
   const ids = new Map<Drawable, RoomId>();
   const cache: TileCache = {
+    pyramid: PYRAMID,
     beginFrame: () => {},
     request: () => null,
     get: (id, want) => {
@@ -63,7 +69,7 @@ test('a sliding generic keeps the face of its home cell, not of where it is draw
   const indexAt = (x: number, y: number) => 100 + x * 10 + y;
   // Row 9 (map row 1) half a cell to the right.
   planner.plan({
-    width: 1600, height: 900, dpr: 1, cam: { x: 0.5, y: 0.5, zoom: ZOOM }, board: b, origin,
+    width: 1600, height: 900, dpr: 1, cam: { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, board: b, origin,
     motions: [{ kind: 'row', index: 9, dir: 1, offset: 0.5 }], genericIndexAt: indexAt,
   });
   const cellW = ZOOM;
@@ -83,7 +89,7 @@ test('badges ride on room cells only, and the center chrome is planned after eve
   const { cache, idOf } = readyCache();
   const planner = createSlidePlanner({ cache, overlays: TEST_OVERLAYS });
   const result = planner.plan({
-    width: 1600, height: 900, dpr: 1, cam: { x: 0.5, y: 0.5, zoom: ZOOM }, board: board(), origin: { x: 8, y: 8 },
+    width: 1600, height: 900, dpr: 1, cam: { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, board: board(), origin: { x: 8, y: 8 },
     favorites: { isFavorite: () => false }, distillMode: false,
   });
   const all = images(planner.list.items, planner.list.length);

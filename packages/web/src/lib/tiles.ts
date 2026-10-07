@@ -66,7 +66,7 @@
  * `createImage` exists so all of this can be tested without a DOM; the browser
  * never passes it.
  */
-import { PYRAMID, PREFETCH, SHEETS, type Pyramid } from './pyramid.ts';
+import { PREFETCH, SHEETS, type Pyramid } from './pyramid.ts';
 import type { Rect, LocateTile } from './rooms.ts';
 import { perfRecordSheetStart, perfRecordSheetLoaded } from './perfProbe.ts';
 import { overlayFaceId } from '../../../map/overlays.ts';
@@ -229,8 +229,8 @@ export interface TileHit {
 export interface CreateTileCacheOpts {
   /** Where a level of a room lives, and its rect within a shared sheet image if it is packed into one; null if that level does not exist. */
   locateTile: LocateTile;
-  /** The ladder and its budgets. */
-  pyramid?: Pyramid;
+  /** The collection's ladder and its budgets (`tileShape.ts`). */
+  pyramid: Pyramid;
   /** Decoded sheet images held at once, across every sheet-packed level. */
   sheetBudget?: number;
   /** Sheet-packed levels whose sheets, once loaded, are never evicted regardless of `sheetBudget` - defaults to just the coarsest level. */
@@ -243,6 +243,8 @@ export interface CreateTileCacheOpts {
 }
 
 export interface TileCache {
+  /** The ladder this cache was built on, for a caller sizing what it draws. */
+  pyramid: Pyramid;
   beginFrame: () => void;
   request: (id: RoomId, level: number) => { img: Drawable; rect: Rect | null } | null;
   get: (id: RoomId, want: number) => TileHit | null;
@@ -404,7 +406,7 @@ function createBitmapImage(): LoadableImage {
 
 export function createTileCache({
   locateTile,
-  pyramid = PYRAMID,
+  pyramid,
   sheetBudget = SHEETS.cacheBudget,
   neverEvictSheetLevels = [pyramid.fallbackLevel],
   onLoad,
@@ -708,6 +710,7 @@ export function createTileCache({
   const size = () => [...levels.values()].reduce((n, store) => n + store.size, 0) + sheetImages.size;
 
   return {
+    pyramid,
     beginFrame,
     request,
     get,

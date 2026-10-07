@@ -23,7 +23,7 @@
  * `metadata.json` (and `tagLinks.json`) via `fetch()`, which enforces CORS
  * unlike a plain `<img>` tag.
  */
-import type { Manifest } from '../map/manifest.ts';
+import type { ImageSize, LevelInfo, Manifest } from '../map/manifest.ts';
 
 /** The manifest filename `upload-r2.ts` writes under a collection's prefix. */
 export const REMOTE_MANIFEST_NAME = 'manifest.json';
@@ -35,6 +35,12 @@ export const REMOTE_MANIFEST_NAME = 'manifest.json';
  */
 function rebase(url: string, oldBase: string, newBase: string): string {
   return url.startsWith(`${oldBase}/`) ? `${newBase}${url.slice(oldBase.length)}` : url;
+}
+
+/** Level 0's size from a manifest's ladder, or null if it states none. */
+function tileOf(levels: LevelInfo[] | undefined): ImageSize | null {
+  const base = levels?.find((l) => l.level === 0);
+  return base?.w && base?.h ? { w: base.w, h: base.h } : null;
 }
 
 /**
@@ -63,9 +69,15 @@ export async function scanRemote(baseUrl: string, prefix: string): Promise<Manif
   // rewrites apply. `rebase` leaves a url with neither prefix untouched.
   const toTile = (u: string) => rebase(toImages(u), oldSharedBase, sharedBase);
 
+  // A manifest uploaded before the tile size rode on it has none; level 0 of
+  // its ladder is the same measurement (`scanDirectory`'s `source`).
+  const tile = manifest.tile ?? tileOf(manifest.levels);
+  if (!tile) throw new Error(`remote manifest states no tile size - re-run the upload (${url})`);
+
   return {
     ...manifest,
     mode: 'remote',
+    tile,
     source: url,
     imagesBase,
     sharedBase,

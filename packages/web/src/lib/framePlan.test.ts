@@ -10,17 +10,22 @@ import {
   type Drawable, type RoomId, type TileCache, type TileHit,
 } from './tiles.ts';
 import { FAVORITE_TOGGLE_PATH } from './favoriteBadge.ts';
-import { CELL_ASPECT } from './camera.ts';
-import { BASE_TILE, PYRAMID } from './pyramid.ts';
 import type { LoadingFrame } from './loadingAnimation.ts';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
 import type { OverlayAnchor } from '../../../map/overlays.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const BASE_TILE = TEST_TILE.base;
+const PYRAMID = TEST_TILE.pyramid;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 /** A `TileCache` whose `get` is `lookup`, recording every request; the rest is inert. */
 function stubCache(lookup: (id: RoomId, want: number) => TileHit | null) {
   const asked: [RoomId, number][] = [];
   const cache: TileCache = {
+    pyramid: PYRAMID,
     beginFrame: () => {},
     request: () => null,
     get: (id, want) => {
@@ -213,7 +218,7 @@ function planner() {
 test('a frame plans one tile per on-screen cell, with no context at all', () => {
   const p = planner();
   const result = p.planner.plan({
-    width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220 }, layout: p.layout, order: p.order,
+    width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: p.layout, order: p.order,
   });
   const tiles = itemsOf(p.planner.list).filter((i) => i.kind === 'image' && i.stat !== 'none');
   assert.equal(tiles.length, result.cells);
@@ -223,7 +228,7 @@ test('a frame plans one tile per on-screen cell, with no context at all', () => 
 test('the keyboard cursor\'s ring is the last item planned', () => {
   const p = planner();
   p.planner.plan({
-    width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220 }, layout: p.layout, order: p.order,
+    width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: p.layout, order: p.order,
     cursor: { x: 1, y: 0 },
   });
   const last = p.planner.list.items[p.planner.list.length - 1];

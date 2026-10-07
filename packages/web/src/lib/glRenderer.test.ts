@@ -6,13 +6,19 @@ import {
   createTileCache, CENTER, DISTILL_ON, FAV_ON, FAV_OFF, CLEAR_HISTORY_BOOK,
   type LoadableImage, type RoomId,
 } from './tiles.ts';
-import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
-import { sizeOf } from './pyramid.ts';
+import { MIN_ZOOM } from './camera.ts';
 import { BOOK_COUNT, type Slot } from './center.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import type { GLTextureCache } from './gl/textureCache.ts';
 import type { GlowTextureCache } from './gl/glowTexture.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const MAX_ZOOM = TEST_TILE.zoomLimits.max;
+const { sizeOf } = TEST_TILE.pyramid;
+const PYRAMID = TEST_TILE.pyramid;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 /**
  * Records instead of drawing - the GL counterpart of `render.test.ts`'s
@@ -115,6 +121,7 @@ const ROOMS = 400;
 function world({ concurrency = 4 }: { concurrency?: number } = {}) {
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
     concurrency,
@@ -139,7 +146,7 @@ const frame = (
 ): GLDrawResult =>
   w.renderer.draw({
     gl, width: 1600, height: 900, dpr,
-    cam: { x, y, zoom }, layout: w.layout, order: w.order, ...rest,
+    cam: { x, y, zoom, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, ...rest,
   } as GLDrawOpts);
 
 // --- level selection --------------------------------------------------------
@@ -207,7 +214,7 @@ test('a resident tile whose texture has not uploaded draws the blank fill and co
   const renderer = createGLRenderer({ cache: w.cache, overlays: TEST_OVERLAYS, textures: noUploads, glowTextures: fakeGlowTextureCache() });
   const gl = fakeGLContext();
   const stats = renderer.draw({
-    gl, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order,
+    gl, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order,
   });
   assert.equal(stats.drawn, 0);
   assert.equal(stats.substituted, 0);
@@ -345,6 +352,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   const images = fakeImages();
   const calls: { id: RoomId; level: number }[] = [];
   const base = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
     concurrency: 1000,
@@ -358,7 +366,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   const order = shuffledOrder(ROOMS, 1);
   const renderer = createGLRenderer({ cache, overlays: TEST_OVERLAYS, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
   const stats = renderer.draw({
-    gl: fakeGLContext(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
+    gl: fakeGLContext(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order,
   } as GLDrawOpts);
 
   const warmLevel = stats.level + 1;

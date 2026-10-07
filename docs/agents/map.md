@@ -11,10 +11,16 @@ still apply.
   it. Center-tile geometry is human-managed in `shelf_geometry.svg`, parsed
   with `import-shelf-svg.ts` (`npm run generate:shelf-geometry`), and
   validated with `npm test`.
-- **Don't assume the tile aspect ratio; read it from `BASE_TILE`.** If it
-  ever changes, update `BASE_TILE` in `pyramid.ts` and `shelf_geometry.svg`
-  together and re-run `import-shelf-svg.ts`. Nothing else should need
-  updating.
+- **The tile size is collection data; never assume one.** `scan.ts` reads
+  it off the rooms into `manifest.tile`, and `tileShape.ts`'s `tileShapeFor`
+  derives the cell aspect, the pyramid and the hard zoom range from it.
+  `main.tsx` builds that once and passes the parts down; nothing in the
+  client states a tile size or aspect of its own.
+- **The center trace has a shape, and the collection must share it.** The
+  server refuses to start on a collection whose tile aspect differs from
+  `measured.ts`'s `tile` (`scan.ts`'s `tileTraceMismatch`). A collection of
+  a new shape needs `shelf_geometry.svg` re-traced at that shape and
+  `import-shelf-svg.ts` re-run.
 - **Don't pin art choices in tests.** Shelf spacing, book width, shelf count
   and book count are free to move. Assert only that books stay inside the
   opening, don't overlap, and each shelf has one baseline.
@@ -26,9 +32,9 @@ still apply.
 - **The world's base unit is the cell, and a cell is not square.** World
   coordinates are in cells. `zoom` is pixels per cell *width*, and
   `camera.ts`'s `pxPerCell()` is the only place height is derived from it -
-  never write `zoom` for both axes. Cameras carry an optional `aspect` and
-  `limits`, so code that builds a camera spreads the old one rather than
-  rebuilding `{x, y, zoom}`, or the shape and range are lost mid-gesture.
+  never write `zoom` for both axes. Cameras carry `aspect` and `limits`, so
+  code that builds a camera spreads the old one rather than rebuilding
+  `{x, y, zoom}`, or the shape and range are lost mid-gesture.
 - **`packages/map` measures distance as it looks, not as it indexes.** Every
   distance goes through `cellDistance()` - `hypot(x, y * aspect)`, in cell
   widths - which makes the library round on screen. A raw
@@ -90,7 +96,7 @@ still apply.
     `tile` one, reached through `servableLevel`.
 
   `main.tsx` pins the center at level 0 and each generic or distill tile at
-  the coarsest level its own array has - never a hardcoded `FALLBACK_LEVEL`,
+  the coarsest level its own array has - never the pyramid's `fallbackLevel`,
   since a collection with no shared pyramid has only level 0. `framePlan.ts`'s
   `planGenericFade`, shared by every renderer, draws the distill alternate
   at the base tile's level: distill is a mode toggle, visible at any zoom.
@@ -153,9 +159,9 @@ still apply.
   Collapsing them breaks whichever view loses. `camera.ts`'s
   `fitZoom`/`overviewZoom` comments carry the derivation.
 - **The zoom cap is `MAX_ZOOM_FACTOR` times the tile's native width**,
-  derived in `camera.ts`'s `ZOOM_LIMITS`. A reader may zoom past 1x by hand
-  to read a spine. Raising the cap breaks the "tile too large to reach"
-  example in `pyramid.test.ts`; that is the test doing its job.
+  derived per collection in `camera.ts`'s `zoomLimitsFor`. A reader may zoom
+  past 1x by hand to read a spine. Lowering the factor below 1 would leave
+  level 0 unreachable, which `pyramid.test.ts`'s reachability checks catch.
 
 ## Camera and gestures
 
@@ -195,11 +201,13 @@ still apply.
   silently not taking effect is the one failure a tuning file has.
 - **Consuming files state no fallback defaults.** They read values from
   config with nothing restated locally.
-- **Zoom config narrows, never widens.** `camera.ts`'s `ZOOM_LIMITS` is the
-  only statement of the hard range. The configured range rides on the
+- **Zoom config narrows, never widens.** `camera.ts`'s `zoomLimitsFor` is
+  the only statement of the hard range, so `index.ts` loads the config after
+  the scan, against the collection's tile. The configured range rides on the
   camera as `limits` (see "The world's base unit is the cell").
-- **Every pyramid number lives in `packages/web/src/lib/pyramid.ts`** - tile
-  dimensions, the ladder, cache budgets, the prefetch ring. `tiles.ts` and
+- **Every pyramid number lives in `packages/web/src/lib/pyramid.ts`** - the
+  ladder, cache budgets, the prefetch ring. The tile dimensions are the
+  collection's (`manifest.tile`). `tiles.ts` and
   the render loop read it rather than restating it.
 - **A level is per-file or sheet-packed, never both on disk.** The pipeline
   writes levels below `SHEETS.fromLevel` per-file and resizes the rest

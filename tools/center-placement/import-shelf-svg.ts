@@ -419,7 +419,7 @@ console.log(
   `viewBox ${round(vbW)} x ${round(vbH)} (aspect ${round(vbH / vbW)}), ` +
     `layer translate ${round(tx)},${round(ty)}`
 );
-console.log('  -> BASE_TILE in packages/web/src/lib/pyramid.ts must match this aspect');
+console.log("  -> the collection's tiles must share this aspect (scan.ts's tileTraceMismatch)");
 console.log(`rects ${rects.length}: ${spines.length} books, ${searchBoxRects.length} search_box, ${other.length} unlabelled`);
 console.log(`search_box: ${searchBox ? nrect(searchBox).join(', ') : 'MISSING'}`);
 console.log(`fav_mine_toggle: ${mineToggle ? nrect(mineToggle).join(', ') : 'none traced'}`);
@@ -463,8 +463,8 @@ const body = `/**
  * Values are normalised to the tile edge (0-1), x against the traced width and
  * y against the traced height, so they carry no aspect of their own. \`tile\`
  * records the shape they were traced at: the one fact the normalisation
- * throws away, and the one that has to keep agreeing with BASE_TILE in
- * packages/web/src/lib/pyramid.ts. \`geometry.test.ts\` asserts that it does.
+ * throws away, and the one a collection's tiles have to share. The server
+ * refuses a collection of another shape (\`scan.ts\`'s \`tileTraceMismatch\`).
  */
 
 /** A measured rect as [x, y, w, h]. */

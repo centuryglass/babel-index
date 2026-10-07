@@ -14,6 +14,7 @@ function baseManifest(overrides: Partial<Manifest> = {}): Manifest {
     mode: 'offline',
     imagesBase: 'images',
     sharedBase: 'shared',
+    tile: { w: 1024, h: 768 },
     shared: {
       center: null, generic: [], genericDistill: [],
       levels: [{ level: 0, dir: null }], distillLevels: [{ level: 0, dir: null }],

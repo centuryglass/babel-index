@@ -12,7 +12,7 @@
  *   a scroll offset are exact arithmetic ("Rows are a fixed height and the
  *   spacers are arithmetic, not estimates").
  */
-import { BASE_TILE, idealLevel, DPR_CAP } from './pyramid.ts';
+import { DPR_CAP, type Pyramid } from './pyramid.ts';
 
 export interface RankedRoom {
   id: number;
@@ -102,12 +102,11 @@ export function spacerHeight(
 }
 
 /**
- * How tall a thumbnail of this width is, from `BASE_TILE`'s aspect
- * (docs/agents/map.md, "Don't assume the tile aspect ratio; read it from
- * `BASE_TILE`").
+ * How tall a thumbnail of this width is, at the collection's cell `aspect`
+ * (height over width, `tileShape.ts`).
  */
-export function tileHeight(thumbWidth: number): number {
-  return Math.round(thumbWidth * (BASE_TILE.h / BASE_TILE.w));
+export function tileHeight(thumbWidth: number, aspect: number): number {
+  return Math.round(thumbWidth * aspect);
 }
 
 /**
@@ -116,6 +115,7 @@ export function tileHeight(thumbWidth: number): number {
  * takes the taller of two side-by-side columns.
  *
  * @param thumbWidth css pixels, the full-bleed width - see `ultraThumbWidth`
+ * @param aspect the collection's cell aspect - see `tileHeight`
  * @param headPx the rank/title/favorite line
  * @param detailsPx the "keywords & story" link that stands in for the chips and story
  * @param padding the row's vertical padding, both halves
@@ -124,31 +124,34 @@ export function tileHeight(thumbWidth: number): number {
  */
 export function stackedRowHeight(
   thumbWidth: number,
+  aspect: number,
   headPx: number,
   detailsPx: number,
   padding = 0,
   matPad = 0,
   gap = 0,
 ): number {
-  return tileHeight(thumbWidth) + 2 * matPad + headPx + detailsPx + padding + gap;
+  return tileHeight(thumbWidth, aspect) + 2 * matPad + headPx + detailsPx + padding + gap;
 }
 
 /**
  * Which pyramid level a thumbnail of this width should ask for.
  *
- * Delegates to `pyramid.ts`'s `idealLevel`, the one place the ladder lives.
+ * Delegates to the collection pyramid's `idealLevel`, the one place the
+ * ladder lives.
  *
  * No hysteresis, unlike the map: a thumbnail's width changes only on a resize,
  * not continuously under a pinch, so the answer need not depend on the current
  * level.
  *
  * @param cssWidth the width the image is displayed at
+ * @param pyramid the collection's ladder (`tileShape.ts`)
  * @param dpr device pixel ratio, capped at `DPR_CAP` as both map renderers cap it
  * @returns a level, which `rooms.ts` may still resolve to null
  */
-export function thumbLevel(cssWidth: number, dpr = 1): number {
+export function thumbLevel(cssWidth: number, pyramid: Pyramid, dpr = 1): number {
   const drawn = Math.max(1, cssWidth) * Math.min(DPR_CAP, Math.max(1, dpr));
-  return idealLevel({ w: drawn, h: drawn * (BASE_TILE.h / BASE_TILE.w) });
+  return pyramid.idealLevel({ w: drawn, h: drawn * (pyramid.base.h / pyramid.base.w) });
 }
 
 /**

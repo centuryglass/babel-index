@@ -8,7 +8,6 @@
  * them). Each cell's tile, fade and badge come from `framePlan.ts`'s shared
  * rules, so a sliding tile looks like the still one it hands back to.
  */
-import { PYRAMID, type Pyramid } from './pyramid.ts';
 import { pxPerCell, type Camera } from './camera.ts';
 import { CENTER, genericId, genericDistillId, type RoomId, type TileCache } from './tiles.ts';
 import { areSpinesLegible } from './center.ts';
@@ -98,14 +97,14 @@ export interface CreateSlidePlannerOpts {
   cache: TileCache;
   /** `manifest.overlays` - see `CreateMapPlannerOpts`. */
   overlays: Overlays;
-  pyramid?: Pyramid;
 }
 
 /**
  * One renderer's slide planner. `plan()` fills `list` for a frame and returns
  * its stats; the list is reused, so paint it before the next `plan()`.
  */
-export function createSlidePlanner({ cache, overlays, pyramid = PYRAMID }: CreateSlidePlannerOpts) {
+export function createSlidePlanner({ cache, overlays }: CreateSlidePlannerOpts) {
+  const { pyramid } = cache;
   const list = createDrawList();
 
   function plan({

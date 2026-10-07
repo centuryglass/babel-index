@@ -31,6 +31,12 @@
   */
   --hover-glow-rgb: 200, 169, 95;
   /*
+    The collection's level-0 tile width. `cssVars.ts`'s `applyTileCssVars`
+    sets it from the manifest; the literal is the sample collection's, for
+    the moment before the manifest arrives.
+  */
+  --tile-w: 1024px;
+  /*
     Paper: the open book's pages read as warm cream sheets with dark ink,
     set inside the dark cover the rest of the app uses. A separate variable
     set from --ink/--panel, so it can become a full light theme without

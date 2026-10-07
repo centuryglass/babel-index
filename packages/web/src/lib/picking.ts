@@ -13,14 +13,7 @@
  *
  * No DOM.
  */
-import { screenToWorld } from './camera.ts';
-
-interface Camera {
-  x: number;
-  y: number;
-  zoom: number;
-  aspect?: number;
-}
+import { screenToWorld, type Camera } from './camera.ts';
 
 interface Rect {
   width: number;

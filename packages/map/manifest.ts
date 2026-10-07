@@ -140,6 +140,12 @@ export interface Manifest {
    * in a remote manifest uploaded before overlays were described in data.
    */
   overlays: Overlays;
+  /**
+   * The level-0 pixel size every tile in the collection is drawn at, and so
+   * the map's cell shape (`packages/web/src/lib/tileShape.ts`). Read off the
+   * rooms by `scanDirectory`.
+   */
+  tile: ImageSize;
   rooms: Room[];
   count: number;
   embeddings: EmbeddingsInfo | null;

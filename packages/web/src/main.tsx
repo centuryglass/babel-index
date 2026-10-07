@@ -17,7 +17,7 @@
  * - Module-scope constants at the end are read once at page load, from the
  *   url and the server's route hint.
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createLayout, shuffledOrder } from '../../map/ordering.ts';
 import { favoriteOrder, favoriteStrength, favoriteCount, type SortMode } from '../../map/favorites.ts';
@@ -55,7 +55,7 @@ import {
 } from './lib/center.ts';
 import { ArtistStatementOverlay } from './components/ArtistStatementOverlay.tsx';
 import {
-  CELL_ASPECT, fitZoom, overviewZoom, pxPerCell, worldToScreen, clampZoom, ZOOM_LIMITS, type Camera,
+  fitZoom, overviewZoom, pxPerCell, worldToScreen, clampZoom, type Camera,
 } from './lib/camera.ts';
 import {
   createTileCache, CENTER, FAVORITE_BADGE, FAVORITE_SWITCH, genericId, genericDistillId,
@@ -64,7 +64,7 @@ import { favoriteHitRect, pointInRect } from './lib/favoriteBadge.ts';
 import { distillToggleAtPoint } from './lib/distillToggle.ts';
 import { createUrlFor, createTileLocator } from './lib/rooms.ts';
 import { createRenderer } from './lib/render.ts';
-import { applyCssVars } from './lib/cssVars.ts';
+import { applyCssVars, applyTileCssVars } from './lib/cssVars.ts';
 import { loadSpineFont } from './lib/spineFont.ts';
 import { createSlideRenderer } from './lib/slide.ts';
 import { WEBGL } from './lib/webglFlag.ts';
@@ -79,6 +79,7 @@ import { useMapCursor } from './hooks/useMapCursor.ts';
 import { useCenterShelf } from './hooks/useCenterShelf.ts';
 import { useModeTransition } from './hooks/useModeTransition.ts';
 import { useTileCollection } from './hooks/useTileCollection.ts';
+import { tileShapeFor } from './lib/tileShape.ts';
 import { useRearrangement } from './hooks/useRearrangement.ts';
 import { useDistillMode } from './hooks/useDistillMode.ts';
 import { useSearch, describeSignals } from './hooks/useSearch.ts';
@@ -142,6 +143,12 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // Config (packages/config) supplies every by-feel number, including where
   // the sliders start; nothing here restates those values as literals.
   const config = manifest.config as unknown as Config;
+
+  // The collection's tile shape (`lib/tileShape.ts`): the cell aspect every
+  // camera carries, the pyramid the tile cache runs on, and the hard zoom
+  // range `config.camera` was resolved against on the server.
+  const tile = useMemo(() => tileShapeFor(manifest.tile), [manifest]);
+  useLayoutEffect(() => applyTileCssVars(tile.base.w), [tile]);
 
   const [status, setStatus] = useState('');
 
@@ -289,14 +296,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
         roomCount: Math.min(roomCount, total),
         contentRatio,
         seed,
-        aspect: CELL_ASPECT,
+        aspect: tile.aspect,
         genericCount,
         genericSeed,
         density: sortResult.strength
           ? { ...config.search.density, strength: sortResult.strength }
           : null,
       }),
-    [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed]
+    [roomCount, contentRatio, seed, total, sortResult, config, genericCount, genericSeed, tile]
   );
 
   // The catalog's order: alphabetical at rest, since a shuffle is not an
@@ -376,6 +383,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   const cache = useMemo(() => {
     const tiles = createTileCache({
       locateTile,
+      pyramid: tile.pyramid,
       onLoad: () => requestDraw(),
     });
     // The shared tiles are pinned and preloaded so every cell can draw
@@ -431,7 +439,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       }
     }
     return tiles;
-  }, [manifest, requestDraw, locateTile, favorites.enabled]);
+  }, [manifest, requestDraw, locateTile, favorites.enabled, tile]);
 
   const overlays = manifest.overlays;
   const renderer = useMemo(() => createRenderer({ cache, overlays }), [cache, overlays]);
@@ -622,11 +630,9 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // not ours.
   const opening = useMemo(() => {
     const rect = CENTER_OPENING_RECT;
-    const zoom = openingZoom(
-      { width: window.innerWidth, height: window.innerHeight },
-      { min: config.camera.minZoom, max: config.camera.maxZoom }
-    );
-    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2, zoom };
+    const limits = { min: config.camera.minZoom, max: config.camera.maxZoom };
+    const zoom = openingZoom({ width: window.innerWidth, height: window.innerHeight }, tile, limits);
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2, zoom, aspect: tile.aspect, limits };
     // Intentionally empty deps: the opening view is a one-time mount decision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1127,8 +1133,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       width: canvas.clientWidth,
       height: canvas.clientHeight,
       target: { w: 1, h: 1 },
-      aspect: camera.aspect ?? CELL_ASPECT,
-      limits: camera.limits ?? { min: config.camera.minZoom, max: config.camera.maxZoom },
+      aspect: camera.aspect,
+      limits: camera.limits,
       margin: 0.92,
     });
     flyTo(hit.x, hit.y, zoom);
@@ -1145,7 +1151,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   if (DEBUG) {
     const debugActions: DebugActions = {
       pan: (dx, dy) => nudgeBy(dx, dy),
-      zoom: (factor) => flyTo(cam.current.x, cam.current.y, clampZoom(cam.current.zoom * factor, cam.current.limits ?? ZOOM_LIMITS)),
+      zoom: (factor) => flyTo(cam.current.x, cam.current.y, clampZoom(cam.current.zoom * factor, cam.current.limits)),
       search: (term) => search(term),
       favorite: (id) => favoriteFor(id)?.toggle(),
       enterCatalog: () => enterCatalog(),
@@ -1241,6 +1247,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       {(mode === 'catalog' || leaving) && (
         <CatalogView
           config={config}
+          tile={tile}
           urlFor={urlFor}
           order={catalogOrder}
           metadata={metadata}
@@ -1310,7 +1317,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           )}
           entry={metadata?.[overlayRoom.id] ?? null}
           src={urlFor(overlayRoom.id, 0)}
-          naturalSize={overlayNaturalSize}
+          naturalSize={overlayNaturalSize ?? tile.base}
           onClose={() => dispatch({ type: 'closeOverlay' })}
           onKeyword={searchKeyword}
           highlight={highlight}
@@ -1366,7 +1373,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
           desc={cardDescription}
           entry={'id' in card ? metadata?.[card.id] ?? null : null}
           src={cardSrc}
-          naturalSize={cardNaturalSize}
+          naturalSize={cardNaturalSize ?? tile.base}
           onClose={() => dispatch({ type: 'closeCard' })}
           onKeyword={searchKeyword}
           highlight={highlight}

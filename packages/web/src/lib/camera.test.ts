@@ -1,12 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CELL_ASPECT,
   FLIGHT_MS,
-  MAX_ZOOM,
   MIN_ZOOM,
   WHEEL_ZOOM_RATE,
-  ZOOM_LIMITS,
   beginFlight,
   cameraAtCell,
   clampZoom,
@@ -24,10 +21,16 @@ import {
   worldToScreen,
   zoomAt,
   zoomBy,
+  type Camera,
 } from './camera.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
+const MAX_ZOOM = ZOOM_LIMITS.max;
 
 const rect = { width: 1280, height: 720 };
-const cam = { x: 3.25, y: -7.5, zoom: 220 };
+const cam: Camera = { x: 3.25, y: -7.5, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
 /**
  * The same camera at cell shapes the collection is not in. Nothing may assume a
@@ -40,7 +43,7 @@ const SHAPES = [
   { name: '3:4 tall', aspect: 1024 / 768 },
   { name: 'the configured tile', aspect: CELL_ASPECT },
 ];
-const shaped = (aspect) => ({ ...cam, aspect });
+const shaped = (aspect: number): Camera => ({ ...cam, aspect });
 
 test('screen and world coordinates round-trip, at every cell shape', () => {
   for (const { name, aspect } of SHAPES) {
@@ -138,9 +141,9 @@ test('the fixed point holds when the zoom clamps', () => {
 test('scrolling up zooms in, down zooms out, and both stay in range', () => {
   assert.ok(zoomAt(cam, 640, 360, -120, rect).zoom > cam.zoom);
   assert.ok(zoomAt(cam, 640, 360, 120, rect).zoom < cam.zoom);
-  assert.equal(clampZoom(-5), MIN_ZOOM);
-  assert.equal(clampZoom(1e6), MAX_ZOOM);
-  assert.equal(clampZoom(220), 220);
+  assert.equal(clampZoom(-5, ZOOM_LIMITS), MIN_ZOOM);
+  assert.equal(clampZoom(1e6, ZOOM_LIMITS), MAX_ZOOM);
+  assert.equal(clampZoom(220, ZOOM_LIMITS), 220);
 });
 
 test('zoomBy keeps the world point under the anchor fixed', () => {
@@ -173,7 +176,7 @@ test('a factor of 1 is exactly a no-op', () => {
   // Two fingers that hold their distance while sliding must contribute zoom of
   // nothing at all, or a pinch-pan creeps.
   const next = zoomBy(cam, 400, 300, 1, rect);
-  assert.deepEqual({ x: next.x, y: next.y, zoom: next.zoom }, { x: cam.x, y: cam.y, zoom: cam.zoom });
+  assert.deepEqual({ ...cam, x: next.x, y: next.y, zoom: next.zoom }, { ...cam, x: cam.x, y: cam.y, zoom: cam.zoom });
 });
 
 test('the wheel is zoomBy with an exponential factor', () => {
@@ -257,7 +260,7 @@ test('resistance damps the drag without ever stopping it', () => {
 });
 
 test('the glide pulls toward the origin only outside the region', () => {
-  const outside = { x: 40, y: -30, zoom: 220 };
+  const outside = { ...cam, x: 40, y: -30, zoom: 220 };
   const stepped = glideStep(outside, 0.2);
   assert.ok(Math.hypot(stepped.x, stepped.y) < Math.hypot(outside.x, outside.y));
   // It must not overshoot past the origin, however weak the resistance.
@@ -271,7 +274,7 @@ test('the glide pulls toward the origin only outside the region', () => {
 });
 
 test('repeated glide steps converge on the origin', () => {
-  let c = { x: 60, y: 60, zoom: 220 };
+  let c = { ...cam, x: 60, y: 60, zoom: 220 };
   for (let i = 0; i < 4000; i++) c = glideStep(c, 0);
   assert.ok(Math.hypot(c.x, c.y) < 1, `still at ${c.x}, ${c.y}`);
 });
@@ -286,7 +289,7 @@ test('glideToRest reaches the same place repeated glideStep calls would', () => 
     if (d <= 5) return 1;
     return Math.max(0, 1 - (d - 5) / 12) ** 3;
   };
-  const start = { x: 40, y: 0, zoom: 220 };
+  const start = { ...cam, x: 40, y: 0, zoom: 220 };
 
   let iterated = start;
   for (let i = 0; i < 5000; i++) iterated = glideStep(iterated, resistanceAt(iterated.x, iterated.y));
@@ -302,20 +305,20 @@ test('glideToRest reaches the same place repeated glideStep calls would', () => 
 test('glideToRest is a no-op, by identity, when already at rest', () => {
   // The render loop skips a redraw on an unchanged reference - a fresh object
   // with the same numbers would defeat that every frame.
-  const cam = { x: 3, y: 3, zoom: 220 };
-  assert.equal(glideToRest(cam, () => 1), cam);
+  const still = { ...cam, x: 3, y: 3, zoom: 220 };
+  assert.equal(glideToRest(still, () => 1), still);
 });
 
 test('flying to a cell aims at its middle and keeps zoom unless asked', () => {
-  assert.deepEqual(cameraAtCell(cam, 0, 0), { x: 0.5, y: 0.5, zoom: 220 });
-  assert.deepEqual(cameraAtCell(cam, -4, 9, 300), { x: -3.5, y: 9.5, zoom: 300 });
+  assert.deepEqual(cameraAtCell(cam, 0, 0), { ...cam, x: 0.5, y: 0.5, zoom: 220 });
+  assert.deepEqual(cameraAtCell(cam, -4, 9, 300), { ...cam, x: -3.5, y: 9.5, zoom: 300 });
   assert.equal(cameraAtCell(cam, 0, 0, 1e6).zoom, MAX_ZOOM);
 });
 
 // --- flights ---------------------------------------------------------------
 
-const far = { x: 40, y: -25, zoom: MIN_ZOOM };
-const home = { x: 0.5, y: 0.5, zoom: MAX_ZOOM };
+const far = { ...cam, x: 40, y: -25, zoom: MIN_ZOOM };
+const home = { ...cam, x: 0.5, y: 0.5, zoom: MAX_ZOOM };
 const at = (t, from = far, to = home) =>
   flightAt(beginFlight(from, to, 1000), 1000 + t * FLIGHT_MS);
 
@@ -407,8 +410,8 @@ test('a flight interrupted by another picks up from where it had got to', () => 
   const midway = at(0.4).cam;
   const second = flightAt(beginFlight(midway, far, 2000), 2000);
   assert.deepEqual(
-    { x: second.cam.x, y: second.cam.y, zoom: second.cam.zoom },
-    { x: midway.x, y: midway.y, zoom: midway.zoom }
+    { ...cam, x: second.cam.x, y: second.cam.y, zoom: second.cam.zoom },
+    { ...cam, x: midway.x, y: midway.y, zoom: midway.zoom }
   );
 });
 
@@ -416,15 +419,15 @@ test('the cursor cell is the cell under the camera center', () => {
   // A floor and nothing more, asserted so a future refactor cannot quietly swap
   // in a round or a different rounding direction. `cameraAtCell`'s `+ 0.5` is the
   // same convention stated the other way round.
-  assert.deepEqual(cursorCell({ x: 3.9, y: -0.1, zoom: 220 }), { x: 3, y: -1 });
-  assert.deepEqual(cursorCell({ x: 0, y: 0, zoom: 220 }), { x: 0, y: 0 });
+  assert.deepEqual(cursorCell({ ...cam, x: 3.9, y: -0.1, zoom: 220 }), { x: 3, y: -1 });
+  assert.deepEqual(cursorCell({ ...cam, x: 0, y: 0, zoom: 220 }), { x: 0, y: 0 });
 });
 
 test('the cursor tracks a fractional camera position exactly at cell boundaries', () => {
   // A camera sitting exactly on an integer is the edge case `Math.floor` gets
   // right and a naive round would not: cell N owns its own lower corner.
-  assert.deepEqual(cursorCell({ x: 5, y: 5, zoom: 220 }), { x: 5, y: 5 });
-  assert.deepEqual(cursorCell({ x: 4.999999, y: 5, zoom: 220 }), { x: 4, y: 5 });
+  assert.deepEqual(cursorCell({ ...cam, x: 5, y: 5, zoom: 220 }), { x: 5, y: 5 });
+  assert.deepEqual(cursorCell({ ...cam, x: 4.999999, y: 5, zoom: 220 }), { x: 4, y: 5 });
 });
 
 test('granularity picks region only once a cell is too small to be a specific place', () => {
@@ -464,7 +467,7 @@ test('granularity never oscillates across a boundary held steady', () => {
 test('a keyboard nudge is exactly one cell inside the content region', () => {
   // The cursor contract: one arrow press is one room. Damping must not touch
   // that in the case a reader is normally in.
-  const c = { x: 3.5, y: 3.5, zoom: 220 };
+  const c = { ...cam, x: 3.5, y: 3.5, zoom: 220 };
   const moved = panByCells(c, 1, 0, 1);
   assert.equal(moved.x, 4.5);
   assert.equal(moved.y, 3.5);
@@ -476,7 +479,7 @@ test('a keyboard nudge is exactly one cell inside the content region', () => {
 test('a keyboard nudge has NO floor, unlike a pointer drag', () => {
   // The nudge has no floor because a held key repeats for as long as it is
   // down; `camera.ts`'s `panByCells` carries the measurement behind it.
-  const c = { x: 40, y: 0, zoom: 220 };
+  const c = { ...cam, x: 40, y: 0, zoom: 220 };
   assert.equal(panByCells(c, 1, 0, 0).x, 40, 'at zero resistance a nudge must not move at all');
 
   // The pointer keeps its floor, asserted alongside the nudge's absence of one
@@ -486,7 +489,7 @@ test('a keyboard nudge has NO floor, unlike a pointer drag', () => {
 });
 
 test('a keyboard nudge scales smoothly between the two', () => {
-  const c = { x: 10, y: 0, zoom: 220 };
+  const c = { ...cam, x: 10, y: 0, zoom: 220 };
   const half = panByCells(c, 1, 0, 0.5);
   assert.ok(Math.abs(half.x - 10.5) < 1e-9, `expected half a cell, got ${half.x - 10}`);
   // Monotone in the resistance, which is what makes pushing outward feel
@@ -501,7 +504,7 @@ test('a keyboard nudge scales smoothly between the two', () => {
 
 test('the cell shape and limits survive a keyboard nudge', () => {
   const limits = { min: 50, max: 300 };
-  const c = { x: 0, y: 0, zoom: 220, aspect: 720 / 1280, limits };
+  const c = { ...cam, x: 0, y: 0, zoom: 220, aspect: 720 / 1280, limits };
   const moved = panByCells(c, 1, 1, 1);
   assert.equal(moved.aspect, c.aspect);
   assert.equal(moved.limits, limits);
@@ -511,7 +514,7 @@ test('a keyboard nudge re-centers an off-grid camera, on BOTH axes', () => {
   // The bug this pins: a trip outside the region leaves the camera off the grid,
   // because the damped steps out there are fractional and the glide stops
   // wherever it happens to cross back in. Arrowing must recover that.
-  const off = { x: 7.0, y: 0.3, zoom: 220 };
+  const off = { ...cam, x: 7.0, y: 0.3, zoom: 220 };
   const moved = panByCells(off, -1, 0, 1);
   assert.equal(moved.x, 6.5, 'the axis moved along must land cell-centered');
   assert.equal(moved.y, 0.5, 'the OTHER axis must be re-centered too');
@@ -522,7 +525,7 @@ test('the offset does not survive repeated in-bounds presses', () => {
   // stuck at that same offset". One press is enough to fix it, but assert
   // across several so a fix that merely reduces the offset each time - rather
   // than snapping - cannot pass.
-  let c = { x: 7.0, y: 0.3, zoom: 220 };
+  let c = { ...cam, x: 7.0, y: 0.3, zoom: 220 };
   for (let i = 0; i < 4; i++) {
     c = panByCells(c, -1, 0, 1);
     assert.equal(c.x - Math.floor(c.x), 0.5, `x off-center after press ${i + 1}`);
@@ -535,7 +538,7 @@ test('the offset does not survive repeated in-bounds presses', () => {
 test('re-centering happens only inside the region, never against the damping', () => {
   // Snapping outside would defeat the resistance entirely - it would round a
   // heavily damped fractional step back up to a whole cell.
-  const outside = { x: 20.0, y: 0.3, zoom: 220 };
+  const outside = { ...cam, x: 20.0, y: 0.3, zoom: 220 };
   const nudged = panByCells(outside, 1, 0, 0.1);
   assert.ok(Math.abs(nudged.x - 20.1) < 1e-9, `expected a damped 0.1, got ${nudged.x - 20}`);
   assert.equal(nudged.y, 0.3, 'the other axis must not snap while outside either');
@@ -545,7 +548,7 @@ test('overviewZoom binds to whichever axis a narrow viewport actually has less o
   // A phone: narrower than it is tall, so 5 columns fill the width before 5
   // rows fill the height - the zoom is bound by width.
   const portrait = { clientWidth: 400, clientHeight: 800 };
-  const zoom = overviewZoom(portrait, 5, { x: 0, y: 0, zoom: 999, aspect: 1 });
+  const zoom = overviewZoom(portrait, 5, { ...cam, x: 0, y: 0, zoom: 999, aspect: 1 });
   assert.ok(Math.abs(zoom - portrait.clientWidth / 5) < 1e-9, String(zoom));
   // 5 whole columns fit exactly, and at least 5 rows fit too (more, since the
   // height is not the binding axis).
@@ -555,13 +558,13 @@ test('overviewZoom binds to whichever axis a narrow viewport actually has less o
 test('overviewZoom binds to height on a wide viewport, aspect included', () => {
   const landscape = { clientWidth: 1600, clientHeight: 900 };
   const aspect = 0.75;
-  const zoom = overviewZoom(landscape, 5, { x: 0, y: 0, zoom: 999, aspect });
+  const zoom = overviewZoom(landscape, 5, { ...cam, x: 0, y: 0, zoom: 999, aspect });
   assert.ok(Math.abs(zoom - landscape.clientHeight / (aspect * 5)) < 1e-9, String(zoom));
   assert.ok(landscape.clientWidth / zoom >= 5 - 1e-9);
 });
 
 test('overviewZoom falls back to the camera aspect and the hard limits when the camera carries neither', () => {
-  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { x: 0, y: 0, zoom: 999 });
+  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { ...cam, x: 0, y: 0, zoom: 999 });
   assert.equal(zoom, clampZoom(100 / 5, ZOOM_LIMITS));
 });
 
@@ -569,11 +572,11 @@ test('overviewZoom is clamped into the camera\'s own limits, like any other zoom
   const limits = { min: 200, max: 900 };
   // A huge viewport would want a zoom below the floor to fit 5 cells - clamped
   // to the floor instead, same as `fitZoom` clamps any other target.
-  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { x: 0, y: 0, zoom: 999, aspect: 1, limits });
+  const zoom = overviewZoom({ clientWidth: 100, clientHeight: 100 }, 5, { ...cam, x: 0, y: 0, zoom: 999, aspect: 1, limits });
   assert.equal(zoom, limits.min);
 });
 
 test('overviewZoom falls back to the camera\'s own zoom with no canvas to measure', () => {
-  const cam = { x: 0, y: 0, zoom: 321 };
-  assert.equal(overviewZoom(null, 5, cam), cam.zoom);
+  const here = { ...cam, x: 0, y: 0, zoom: 321 };
+  assert.equal(overviewZoom(null, 5, here), here.zoom);
 });

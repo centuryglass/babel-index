@@ -16,7 +16,7 @@
  *
  * No DOM, like `favoriteBadge.ts` and `center.ts`.
  */
-import { BASE_TILE, sizeOf as pyramidSizeOf } from './pyramid.ts';
+import type { Pyramid } from './pyramid.ts';
 import type { OverlayAnchor } from '../../../map/overlays.ts';
 
 export interface Rect {
@@ -29,12 +29,12 @@ export interface Rect {
 /**
  * The overlay's screen rect on a tile whose top left corner is at `(sx, sy)`
  * and whose size is `cellPx`. `artSize` is the art's decoded pixel size and
- * `level` the pyramid rung it came from.
+ * `level` the rung of the collection's `pyramid` it came from.
  *
- * The scale denominator is that level's reference width, never a flat
- * `BASE_TILE.w`: a `pyramid` overlay's coarser rung is already scaled down
- * on disk to match a tile drawn at that level, so dividing by the level-0
- * width would shrink it twice. Level 0's reference width is `BASE_TILE.w`.
+ * The scale denominator is that level's reference width, never the level-0
+ * width: a `pyramid` overlay's coarser rung is already scaled down on disk to
+ * match a tile drawn at that level, so dividing by the level-0 width would
+ * shrink it twice.
  */
 export function overlayScreenRect(
   anchor: OverlayAnchor,
@@ -42,9 +42,10 @@ export function overlayScreenRect(
   sx: number,
   sy: number,
   artSize: { w: number; h: number },
+  pyramid: Pyramid,
   level = 0
 ): Rect {
-  const scale = cellPx.x / (pyramidSizeOf(level)?.w ?? BASE_TILE.w);
+  const scale = cellPx.x / (pyramid.sizeOf(level)?.w ?? pyramid.base.w);
   const w = artSize.w * scale;
   const h = artSize.h * scale;
   const x = anchor === 'top-right' || anchor === 'bottom-right' ? sx + cellPx.x - w : sx;

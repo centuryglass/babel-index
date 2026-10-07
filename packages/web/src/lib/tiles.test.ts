@@ -10,6 +10,7 @@ import type { LocateTile } from './rooms.ts';
  * the ladder's - pyramid.test.ts owns the ladder.
  */
 const LADDER = createPyramid({
+  base: { w: 1024, h: 768 },
   levels: [
     { level: 0, divisor: 1, budget: 4 },
     { level: 1, divisor: 2, budget: 6 },

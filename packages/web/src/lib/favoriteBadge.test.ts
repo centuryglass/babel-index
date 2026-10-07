@@ -8,7 +8,9 @@ import {
   FAVORITE_TOGGLE_PATH,
   favoriteToggleAtPoint,
 } from './favoriteBadge.ts';
-import { BASE_TILE } from './pyramid.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const BASE_TILE = TEST_TILE.base;
 
 const GEO = layout({ width: 1, height: 1 });
 test('the mouse hit rect matches the traced bbox scaled per axis, unrelated to icon draw size', () => {

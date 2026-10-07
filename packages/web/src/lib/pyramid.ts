@@ -24,9 +24,10 @@
  *      its own, so zooming in cannot evict the coarse field that rule 1 falls
  *      back on.
  *
- * Nothing here assumes a tile size or a tile shape. BASE_TILE is the only place
- * either is stated; the ladder is expressed as divisors of it, and every pixel
- * count, byte count and level choice is derived. See "Changing the tile" below.
+ * Nothing here assumes a tile size or a tile shape. The collection states both
+ * (`manifest.tile`, read by `tileShape.ts`), the ladder is expressed as
+ * divisors of that base, and every pixel count, byte count and level choice
+ * is derived from it in `createPyramid`.
  *
  * No DOM, no imports: this is arithmetic and policy, tested as such.
  */
@@ -68,35 +69,6 @@ export interface Bounds {
 export type Demand = number | Size;
 
 /**
- * The source tile the pipeline writes at level 0 - the base render's pixel
- * dimensions, and the ONLY statement of tile size or aspect in the codebase's
- * runtime path.
- *
- * ### Changing the tile
- *
- * Edit this one object. Sizes, decoded-byte costs, level selection and the
- * ladder's reachability all derive from it, and `npm test` re-checks the
- * derived facts against the new shape:
- *
- *   - that every level is still reachable within the camera's zoom clamp (a
- *     much taller tile needs a rung added or dropped),
- *   - that every budget still holds a worst-case screen at the new aspect,
- *     since a shorter tile fits more rows and so puts more cells on a screen.
- *
- * Non-square is not merely tolerated, it is what the tile currently is: 4:3.
- * The aspect is threaded through the whole map from here - `camera.ts` derives
- * CELL_ASPECT from this object and applies it in `pxPerCell()`, and
- * `packages/map` takes it to measure distance in cell widths. Change the shape
- * and the world changes shape with it, which is the point.
- *
- * The trace that produced `tools/center-placement/lib/measured.ts` records the
- * shape it was made at, and `geometry.test.ts` asserts it against this
- * object - so this and the `viewBox` of `shelf_geometry.svg` cannot drift apart
- * silently.
- */
-export const BASE_TILE: Size = { w: 1024, h: 768 };
-
-/**
  * The device pixel ratio both map renderers, `useRearrangement.ts`'s
  * `landingRectangle`, and `catalog.ts`'s `thumbLevel` cap backing-store
  * resolution at. Raising it makes the catalog demand a finer pyramid rung
@@ -108,8 +80,8 @@ export const DPR_CAP = 2;
 /**
  * The ladder, finest first.
  *
- * `divisor` is what BASE_TILE is divided by, so the ladder is a statement about
- * ratios and survives any change to the tile. Level 0 is the source art.
+ * `divisor` is what the collection's base tile is divided by, so the ladder
+ * is a statement about ratios and holds for any tile size or shape. Level 0 is the source art.
  *
  * `budget` is the maximum number of entries held at that level, a ceiling
  * rather than a reservation. What an entry costs depends on the level:
@@ -121,7 +93,7 @@ export const DPR_CAP = 2;
  *   separately by `SHEETS.cacheBudget`.
  *
  * Budgets must satisfy rules 1 and 3, and `pyramid.test.ts` asserts both from
- * the live constants and `BASE_TILE`:
+ * the live constants across several tile shapes:
  *
  * - Each level holds at least one worst-case screen plus its prefetch ring,
  *   or it evicts tiles it is still drawing.
@@ -231,7 +203,13 @@ export const SHEETS: SheetsConfig = {
 };
 
 export interface PyramidOpts {
-  base?: Size;
+  /**
+   * The collection's level-0 tile size (`manifest.tile`). Every size, byte
+   * cost and level choice derives from it, and `pyramid.test.ts` checks the
+   * ladder and budgets hold across several shapes, since a shorter tile fits
+   * more rows and so more cells on a screen.
+   */
+  base: Size;
   levels?: LevelSpec[];
   cacheScale?: number;
   hysteresis?: number;
@@ -256,19 +234,18 @@ export interface Pyramid {
 }
 
 /**
- * Build a pyramid over a tile shape and a ladder.
+ * Build a pyramid over a collection's tile size and a ladder.
  *
- * A factory rather than bare functions so the whole policy can be exercised at
- * a different tile size or aspect without editing the constants above - which
- * is how the tests prove none of this is pinned to one size or one aspect, and
- * how an experiment can try a shape before it is adopted.
+ * The app builds one per collection (`tileShape.ts`'s `tileShapeFor`), and the
+ * tests build several, which is how they show the policy is pinned to no one
+ * size or aspect.
  */
 export function createPyramid({
-  base = BASE_TILE,
+  base,
   levels = LEVELS,
   cacheScale = CACHE_SCALE,
   hysteresis = HYSTERESIS,
-}: PyramidOpts = {}): Pyramid {
+}: PyramidOpts): Pyramid {
   const byLevel = new Map(levels.map((l) => [l.level, l]));
   const coarsest = levels[levels.length - 1];
   const finest = levels[0];
@@ -396,23 +373,6 @@ export function createPyramid({
     warmLevels,
   };
 }
-
-/** The pyramid the app runs on, built from the constants above. */
-export const PYRAMID: Pyramid = createPyramid();
-
-export const {
-  fallbackLevel: FALLBACK_LEVEL,
-  sizeOf,
-  bytesOf,
-  budgetOf,
-  budgetBytes,
-  totalBudgetBytes,
-  demandWidth,
-  idealLevel,
-  pickLevel,
-  bestAvailable,
-  warmLevels,
-} = PYRAMID;
 
 /**
  * How wide a ring to warm around a given viewport: the larger of the flat

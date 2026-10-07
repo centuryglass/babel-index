@@ -1,14 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MIN_ZOOM, MAX_ZOOM } from './camera.ts';
+import { MIN_ZOOM, zoomLimitsFor } from './camera.ts';
 import {
-  PYRAMID,
-  BASE_TILE,
   LEVELS,
-  FALLBACK_LEVEL,
   HYSTERESIS,
   PREFETCH,
   createPyramid,
+  prefetchBounds,
+  marginFor,
+  SHEETS,
+} from './pyramid.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const PYRAMID = TEST_TILE.pyramid;
+const BASE_TILE = PYRAMID.base;
+const {
+  fallbackLevel: FALLBACK_LEVEL,
   budgetOf,
   bytesOf,
   sizeOf,
@@ -17,10 +24,7 @@ import {
   pickLevel,
   bestAvailable,
   warmLevels,
-  prefetchBounds,
-  marginFor,
-  SHEETS,
-} from './pyramid.ts';
+} = PYRAMID;
 
 /** The largest viewport the budgets are sized against, in device pixels. */
 const VIEWPORT = { w: 2560, h: 1440 };
@@ -30,7 +34,7 @@ const VIEWPORT = { w: 2560, h: 1440 };
  * the rules below may depend on 1024, on a power of two, or on being square.
  */
 const SHAPES = [
-  { name: 'the current 4:3 tile', base: BASE_TILE },
+  { name: 'the sample collection\'s 4:3 tile', base: BASE_TILE },
   { name: 'a 16:9 wall', base: { w: 1280, h: 720 } },
   { name: 'a tall 3:4 tile', base: { w: 864, h: 1152 } },
   { name: 'a small square tile', base: { w: 832, h: 832 } },
@@ -57,11 +61,12 @@ function lowestDemandFor(p, level) {
   return coarser ? p.sizeOf(coarser.level).w + 1 : MIN_ZOOM;
 }
 
-/** Every level some zoom within the camera's clamp can actually select. */
+/** Every level some zoom within the camera's clamp for this tile can actually select. */
 function reachableLevels(p) {
   const seen = new Set();
+  const { min, max } = zoomLimitsFor(p.base);
   for (const dpr of [1, 2])
-    for (let zoom = MIN_ZOOM; zoom <= MAX_ZOOM; zoom++) seen.add(p.idealLevel(zoom * dpr));
+    for (let zoom = min; zoom <= max; zoom++) seen.add(p.idealLevel(zoom * dpr));
   return seen;
 }
 
@@ -77,7 +82,7 @@ test('the ladder is contiguous and each rung is coarser than the last', () => {
 });
 
 test('sizes and byte costs are derived from the base tile, not written down', () => {
-  // Changing BASE_TILE must move every derived number with it. If this ever
+  // A different base tile must move every derived number with it. If this ever
   // needs updating with a literal, something has been hard-coded again.
   for (const { base } of SHAPES) {
     const p = createPyramid({ base });
@@ -178,14 +183,11 @@ test('every level is reachable within the camera clamp', () => {
   }
 });
 
-test('a tile too large for the camera to ever zoom into is reported', () => {
-  // Not a hypothetical: at 8192 the source art can never be selected, because
-  // MAX_ZOOM x dpr 2 lands exactly at half of it (level 1), and selection needs
-  // to EXCEED a level's width to reach the finer one. The reachability test is
-  // what says so, and this is the proof it is live rather than vacuously true.
-  // The threshold tracks MAX_ZOOM: this example doubled when the zoom cap did.
+test('the zoom cap tracks the tile, so a very large tile keeps its source art reachable', () => {
+  // `zoomLimitsFor` sets the cap at `MAX_ZOOM_FACTOR` times the tile's own
+  // width, so no tile size can leave level 0 out of reach.
   const p = createPyramid({ base: { w: 8192, h: 8192 } });
-  assert.ok(!reachableLevels(p).has(0), 'level 0 at 8192 should be unreachable, and flagged');
+  assert.ok(reachableLevels(p).has(0), 'level 0 at 8192 should be reachable');
 });
 
 test('the coarsest level is what the far-out view actually gets', () => {
@@ -362,12 +364,12 @@ test('the sheet grid actually holds roomsPerSheet, and fromLevel is on the ladde
 });
 
 test('CACHE_SCALE moves every budget together and never reaches zero', () => {
-  const half = createPyramid({ cacheScale: 0.5 });
-  const full = createPyramid({ cacheScale: 1 });
+  const half = createPyramid({ base: BASE_TILE, cacheScale: 0.5 });
+  const full = createPyramid({ base: BASE_TILE, cacheScale: 1 });
   for (const { level } of LEVELS)
     assert.equal(half.budgetOf(level), Math.round(full.budgetOf(level) * 0.5));
 
-  const tiny = createPyramid({ cacheScale: 0.0001 });
+  const tiny = createPyramid({ base: BASE_TILE, cacheScale: 0.0001 });
   for (const { level } of LEVELS)
     assert.ok(tiny.budgetOf(level) >= 1, 'a budget of zero would disable a level entirely');
 });

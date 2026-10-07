@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { imageSize, scanDirectory, discoverLevels } from './scan.ts';
+import { imageSize, scanDirectory, discoverLevels, tileTraceMismatch } from './scan.ts';
 import * as fixture from './image-fixtures.ts';
 
 /**
@@ -458,6 +458,36 @@ test('the ladder is measured off the rooms, not off the generic', async () => {
       assert.deepEqual(levels.map((l) => [l.level, l.w]), [[0, 1024], [1, 512]]);
     }
   );
+});
+
+test('the tile shape is the first room\'s size, not a shared tile\'s', async () => {
+  await tileCollection(
+    { 'shared/center.jpg': fixture.jpeg(640, 480), '001.jpg': fixture.jpeg(1280, 720), '002.jpg': fixture.jpeg(1024, 768) },
+    async (dir) => {
+      assert.deepEqual((await scanDirectory(dir)).tile, { w: 1280, h: 720 });
+    }
+  );
+});
+
+test('a collection whose rooms have no readable size takes its tile shape from a shared tile', async () => {
+  await tileCollection({ '001.jpg': fixture.notAnImage(), 'shared/center.png': fixture.png(900, 675) }, async (dir) => {
+    assert.deepEqual((await scanDirectory(dir)).tile, { w: 900, h: 675 });
+  });
+});
+
+test('a collection with no readable size anywhere is refused, not given a guessed shape', async () => {
+  await tileCollection({ '001.jpg': fixture.notAnImage() }, async (dir) => {
+    await assert.rejects(scanDirectory(dir), /readable size/);
+  });
+});
+
+test('a tile matches the trace at any size of the traced shape, and only that shape', () => {
+  const traced = { aspect: 0.75 };
+  assert.equal(tileTraceMismatch({ w: 1024, h: 768 }, traced), null);
+  assert.equal(tileTraceMismatch({ w: 2048, h: 1536 }, traced), null, 'the trace is per-axis fractions, so size is free');
+  assert.equal(tileTraceMismatch({ w: 1365, h: 1024 }, { aspect: 1024 / 1365 }), null);
+  assert.match(tileTraceMismatch({ w: 1280, h: 720 }, traced) ?? '', /1280x720/);
+  assert.match(tileTraceMismatch({ w: 768, h: 1024 }, traced) ?? '', /re-trace/);
 });
 
 test('an unreadable source size degrades to level 0 rather than guessing', async () => {

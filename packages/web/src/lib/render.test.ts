@@ -3,9 +3,17 @@ import assert from 'node:assert/strict';
 import { createLayout, shuffledOrder } from '../../../map/ordering.ts';
 import { createRenderer, type DrawContext, type DrawResult } from './render.ts';
 import { createTileCache, CENTER, type Drawable, type LoadableImage, type RoomId, type TileCache } from './tiles.ts';
-import { CELL_ASPECT, MIN_ZOOM, MAX_ZOOM } from './camera.ts';
-import { PYRAMID, BASE_TILE, FALLBACK_LEVEL, sizeOf } from './pyramid.ts';
+import { MIN_ZOOM } from './camera.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const MAX_ZOOM = TEST_TILE.zoomLimits.max;
+const PYRAMID = TEST_TILE.pyramid;
+const BASE_TILE = TEST_TILE.base;
+const FALLBACK_LEVEL = TEST_TILE.pyramid.fallbackLevel;
+const { sizeOf } = TEST_TILE.pyramid;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 interface DrawnCall {
   img: LoadableImage;
@@ -103,6 +111,7 @@ const ROOMS = 400;
 function world({ only = null, concurrency = 4 }: { only?: number[] | null; concurrency?: number } = {}) {
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) =>
       only && !only.includes(level) ? null : { url: `/l${level}/${id}.jpg`, rect: null },
     createImage: images.createImage,
@@ -129,7 +138,7 @@ const frame = (
 ): DrawResult =>
   w.renderer.draw({
     ctx, width: 1600, height: 900, dpr,
-    cam: { x, y, zoom }, layout: w.layout, order: w.order,
+    cam: { x, y, zoom, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order,
   });
 
 // --- level selection --------------------------------------------------------
@@ -203,6 +212,7 @@ test('a sheet-backed hit draws with the 9-arg source-rect form', () => {
   // must slice a source rect out of it rather than drawing the whole thing.
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/sheet-${level}.jpg`, rect: { sx: 1, sy: 2, sw: 3, sh: 4 } }),
     createImage: images.createImage,
   });
@@ -282,6 +292,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
   // position; the far-out field must still fill, from a handful of pinned tiles.
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
   });
@@ -295,7 +306,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
   const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const order = shuffledOrder(ROOMS, 1);
   const drawOnce = (ctx: DrawContext) =>
-    renderer.draw({ ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
+    renderer.draw({ ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order });
 
   drawOnce(fakeCtx());
   images.settleAll();
@@ -309,6 +320,7 @@ test('generic cells draw generic tiles, positionally and never blank', () => {
 test('genericFade crossfades toward each generic tile\'s own distill alternate', () => {
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
   });
@@ -326,7 +338,7 @@ test('genericFade crossfades toward each generic tile\'s own distill alternate',
   const order = shuffledOrder(ROOMS, 1);
   const drawOnce = (ctx: DrawContext, genericFade: number) =>
     renderer.draw({
-      ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order, genericFade,
+      ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order, genericFade,
     });
 
   drawOnce(fakeCtx(), 0.5); // kicks off every tile's load
@@ -360,6 +372,7 @@ test('genericFade crossfades toward each generic tile\'s own distill alternate',
 test('genericFade falls back to a flat black fill when a generic tile has no distill alternate', () => {
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     // No location for a `generic-distill:` id - the "index has no matching
     // alternate on disk" case `genericDistillId`'s doc describes.
     locateTile: (id, level) =>
@@ -377,7 +390,7 @@ test('genericFade falls back to a flat black fill when a generic tile has no dis
 
   const ctx = fakeCtx();
   renderer.draw({
-    ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order, genericFade: 1,
+    ctx, width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order, genericFade: 1,
   });
   assert.ok(ctx.fills.length > 0, 'no distill art available for any generic index: falls back to a flat fill');
 });
@@ -431,6 +444,7 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
   // of it can be queued this frame (issue #258).
   const images = fakeImages();
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
     concurrency: 1,
@@ -445,7 +459,7 @@ test('the ring walk stops computing ids once the prefetch queue is full', () => 
 
   const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const stats = renderer.draw({
-    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout: spiedLayout, order,
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: spiedLayout, order,
   });
 
   const visibleCells = (stats.bounds.x1 - stats.bounds.x0 + 1) * (stats.bounds.y1 - stats.bounds.y0 + 1);
@@ -468,6 +482,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   const images = fakeImages();
   const calls: { id: RoomId; level: number }[] = [];
   const base = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
     concurrency: 4,
@@ -481,7 +496,7 @@ test('the coarser-level warm pass dedupes repeated ids before prefetching (issue
   const order = shuffledOrder(ROOMS, 1);
   const renderer = createRenderer({ cache, overlays: TEST_OVERLAYS });
   const stats = renderer.draw({
-    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400 }, layout, order,
+    ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: 400, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order,
   });
 
   const warmLevel = stats.level + 1;
@@ -500,6 +515,7 @@ test('the prefetch ring rotates its starting corner across frames', () => {
   // (render.ts's `ringFrame`) is what keeps that from happening.
   const images = fakeImages();
   const base = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: images.createImage,
     concurrency: 1,
@@ -519,7 +535,7 @@ test('the prefetch ring rotates its starting corner across frames', () => {
 
   for (let i = 0; i < 4; i++) {
     seenPerFrame.push([]);
-    renderer.draw({ ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM }, layout, order });
+    renderer.draw({ ctx: fakeCtx(), width: 1600, height: 900, dpr: 1, cam: { x: 0, y: 0, zoom: MIN_ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout, order });
   }
 
   const first = new Set(seenPerFrame[0]);
@@ -565,7 +581,7 @@ test('the renderer never assumes a square cell', () => {
 test('the keyboard cursor draws a ring only when passed, and only on screen', () => {
   const w = world();
   const slot = w.layout.slots[0];
-  const cam = { x: slot.x + 0.5, y: slot.y + 0.5, zoom: 220 };
+  const cam = { x: slot.x + 0.5, y: slot.y + 0.5, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   const ctx = fakeCtx();
   w.renderer.draw({
@@ -596,7 +612,7 @@ test('the keyboard cursor draws a ring only when passed, and only on screen', ()
 test('the favorite badge draws on every room cell, and only room cells', () => {
   const w = world();
   const isFavorite = (id: number) => id === w.order[0];
-  const cam = { x: 0.5, y: 0.5, zoom: 220 };
+  const cam = { x: 0.5, y: 0.5, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   w.renderer.draw({
     ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
@@ -650,13 +666,13 @@ test('the badge follows the same zoom scale as the tile it sits on, within one p
   const at = (zoom: number) => {
     w.renderer.draw({
       ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
-      cam: { x: 0.5, y: 0.5, zoom }, layout: w.layout, order: w.order, favorites: { isFavorite },
+      cam: { x: 0.5, y: 0.5, zoom, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, favorites: { isFavorite },
     });
     w.images.settleAll();
     const ctx = fakeCtx();
     const stats = w.renderer.draw({
       ctx, width: 1600, height: 900, dpr: 1,
-      cam: { x: 0.5, y: 0.5, zoom }, layout: w.layout, order: w.order, favorites: { isFavorite },
+      cam: { x: 0.5, y: 0.5, zoom, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, favorites: { isFavorite },
     });
     const badge = ctx.drawn.find((d) => d.w < 100 && d.h < 300);
     return { badge: badge!, level: stats.level };
@@ -688,14 +704,14 @@ test('the distill toggle draws once, over the center tile, once its art has land
   const w = world();
   w.renderer.draw({
     ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
-    cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode: false,
+    cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, distillMode: false,
   });
   w.images.settleAll();
 
   const ctx = fakeCtx();
   w.renderer.draw({
     ctx, width: 1600, height: 900, dpr: 1,
-    cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode: false,
+    cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, distillMode: false,
   });
   const toggleDraws = ctx.drawn.filter((d) => d.w < 100 && d.h < 300);
   assert.equal(toggleDraws.length, 1);
@@ -706,13 +722,13 @@ test('the distill toggle draws whichever face matches distillMode', () => {
   const draw = (distillMode: boolean) => {
     w.renderer.draw({
       ctx: fakeCtx(), width: 1600, height: 900, dpr: 1,
-      cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode,
+      cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, distillMode,
     });
     w.images.settleAll();
     const ctx = fakeCtx();
     w.renderer.draw({
       ctx, width: 1600, height: 900, dpr: 1,
-      cam: { x: 0, y: 0, zoom: 220 }, layout: w.layout, order: w.order, distillMode,
+      cam: { x: 0, y: 0, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS }, layout: w.layout, order: w.order, distillMode,
     });
     return ctx.drawn.find((d) => d.w < 100 && d.h < 300)!.img.src;
   };

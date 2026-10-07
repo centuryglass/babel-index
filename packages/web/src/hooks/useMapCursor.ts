@@ -14,7 +14,6 @@ import {
 } from '../../../map/describe.ts';
 import { nextRoom, type Cell } from '../../../map/nextRoom.ts';
 import {
-  CELL_ASPECT,
   overviewZoom,
   pxPerCell,
   cursorCell,
@@ -173,7 +172,7 @@ export function useMapCursor({
           ? `the far field near (${cell.x}, ${cell.y}) - too far out to name a single room`
           : nameCell(cell);
 
-      const beyond = cellDistance(cell.x, cell.y, CELL_ASPECT) > layout.boundaryRadius;
+      const beyond = cellDistance(cell.x, cell.y, layout.aspect) > layout.boundaryRadius;
       const crossed = beyond !== wasBeyondBoundary.current;
       wasBeyondBoundary.current = beyond;
 
@@ -454,7 +453,7 @@ function describeSurroundings(
     })
     .filter((s): s is string => Boolean(s));
 
-  const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, CELL_ASPECT));
+  const edge = Math.max(0, layout.boundaryRadius - cellDistance(cursor.x, cursor.y, layout.aspect));
 
   return [
     nearby.length ? nearby.join('; ') : 'nothing else ranked nearby',

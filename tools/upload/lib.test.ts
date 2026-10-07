@@ -25,6 +25,7 @@ function manifest(): Manifest {
     mode: 'offline',
     imagesBase: 'images',
     sharedBase: 'shared',
+    tile: { w: 1024, h: 768 },
     count: 2,
     rooms: [
       { id: 0, file: '001.jpg', url: 'images/001.jpg', bytes: 0 },

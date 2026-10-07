@@ -15,11 +15,11 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { buildRearrangement } from '../../../map/board.ts';
 import { planMoves, applyMove } from '../../../map/illusion.ts';
-import { CELL_ASPECT, overviewZoom, pxPerCell, type Camera } from '../lib/camera.ts';
+import { overviewZoom, pxPerCell, type Camera } from '../lib/camera.ts';
 import { centerCellRect, areSpinesLegible, overlapsViewport } from '../lib/center.ts';
 import type { LoadingAnimation } from '../lib/loadingAnimation.ts';
 import { createSlideshow } from '../lib/slide.ts';
-import { PYRAMID, PREFETCH, DPR_CAP } from '../lib/pyramid.ts';
+import { PREFETCH, DPR_CAP, type Pyramid } from '../lib/pyramid.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
 import { perfSetPhase, perfDump, perfRecordPrepare } from '../lib/perfProbe.ts';
 import type { MapLayout } from '../../../map/ordering.ts';
@@ -35,10 +35,10 @@ import type { RunningAnim } from './useMapRenderer.ts';
  * `-0.5`/`+0.5` cancellation there), so `cam`'s current position is already
  * the landing position.
  */
-function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number) {
+function landingRectangle(cam: Camera, canvas: HTMLCanvasElement, targetZoom: number, pyramid: Pyramid) {
   const dpr = Math.min(DPR_CAP, window.devicePixelRatio || 1);
   const cellPx = pxPerCell({ ...cam, zoom: targetZoom });
-  const level = PYRAMID.idealLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr });
+  const level = pyramid.idealLevel({ w: cellPx.x * dpr, h: cellPx.y * dpr });
   const halfW = canvas.clientWidth / 2 / cellPx.x;
   const halfH = canvas.clientHeight / 2 / cellPx.y;
   const view = {
@@ -219,9 +219,9 @@ export function useRearrangement({
       canvas: HTMLCanvasElement,
       targetZoom: number
     ): Promise<{ board: Board; show: ReturnType<typeof createSlideshow>; origin: Point } | null> => {
-      const { level, view } = landingRectangle(cam.current, canvas, targetZoom);
+      const { level, view } = landingRectangle(cam.current, canvas, targetZoom, cache.pyramid);
 
-      const built = buildRearrangement({ before, after, view, aspect: CELL_ASPECT });
+      const built = buildRearrangement({ before, after, view, aspect: cam.current.aspect });
       if (!built) return null;
       const moves = planMoves(built.start, built.end, built.bounds, built.fixed);
 

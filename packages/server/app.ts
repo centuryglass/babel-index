@@ -13,6 +13,7 @@
 import { availableParallelism } from 'node:os';
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import { resolveConfig } from '../config/config.ts';
+import { zoomLimitsFor } from '../web/src/lib/camera.ts';
 import { createLruCache, createLimiter } from './search-cache.ts';
 import { createRateBuckets } from './rate-buckets.ts';
 import { normalizeBasePath } from './base-path.ts';
@@ -194,7 +195,7 @@ export function createApp({
   // before it can render, so it never sees a map that doesn't yet know its
   // own zoom range. `notes` is for the operator, not the browser, so it is
   // stripped here - index.ts prints it at startup.
-  const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig() as ResolvedConfig);
+  const { notes: _notes, source: _source, ...clientConfig } = config ?? (resolveConfig({}, { zoomLimits: zoomLimitsFor(manifest.tile) }) as ResolvedConfig);
   const clipTextDtype = clientConfig.search.clipTextDtype;
 
   // Whether the client should offer favoriting at all. Only the flag: the
