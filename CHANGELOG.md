@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.12.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.11.1...babel-index-v1.12.0) (2026-10-08)
+
+
+### Features
+
+* **map:** open a room's details on a plain click or tap ([#471](https://github.com/centuryglass/babel-index/issues/471)) ([51b06a6](https://github.com/centuryglass/babel-index/commit/51b06a692ad0c3e7e6cd451304f21b8d82111527)), closes [#470](https://github.com/centuryglass/babel-index/issues/470)
+* **map:** read the tile shape from the collection ([#469](https://github.com/centuryglass/babel-index/issues/469)) ([84c6114](https://github.com/centuryglass/babel-index/commit/84c6114d854a6d94b89a6e288ffa949f816117d3))
+
 ## [1.11.1](https://github.com/centuryglass/babel-index/compare/babel-index-v1.11.0...babel-index-v1.11.1) (2026-10-06)
 
 
