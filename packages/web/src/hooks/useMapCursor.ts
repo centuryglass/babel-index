@@ -367,8 +367,8 @@ export function useMapCursor({
       }
 
       if (e.key === 'Enter' || e.key === ' ') {
-        // Opens the card for a room or a generic cell, matching right-click
-        // and long press. The center never opens: it is the controls, not a
+        // Opens the card for a room or a generic cell, matching a tap,
+        // right-click and long press. The center never opens: it is the controls, not a
         // room, and a card has nothing to show for it.
         const here = cursorNow();
         const at = layout.roomAt(here.x, here.y, order);

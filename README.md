@@ -74,7 +74,7 @@ all of them are at least somewhat interesting.
 
 | ![An open room overlay, showing a unique room in detail along with story content.](docs/images/room_detail_readme.jpg) |
 | ---------------------------------------------------------------------------------------------------------------------- |
-| Right-click/tap and hold on any room to see its name, its story, and how closely it matches an active search.          |
+| Click or tap any room to see its name, its story, and how closely it matches an active search.                         |
 
 | ![A zoomed-out view of many library rooms, all unique, clustered into a circle within a starry void.](docs/images/distill.jpg) |
 | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -120,8 +120,8 @@ itself is keyboard-navigable and screen-reader annotated.
 ## Rooms and stories
 
 Every unique room has a title, three style tags, a short story, and a place
-on the map. Right-click a room (or long-press on mobile) to read it, along
-with a breakdown of why the active search ranked it where it did.
+on the map. Click or tap a room to read it, along with a breakdown of why
+the active search ranked it where it did.
 
 Rooms were generated with Stable Diffusion, using ControlNet to anchor every
 one of them to the structure of a base room modeled and rendered in Blender

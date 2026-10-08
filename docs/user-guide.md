@@ -52,8 +52,7 @@ The center shelf lets you search the library and rearrange its shelves.
 
 ## A room's details
 
-Right clicking a room or long-clicking on mobile will open up a library room's
-story and details.
+Clicking or tapping a room will open up a library room's story and details.
 
 ![A room's detail overlay, with its controls numbered 1 through 8](images/room_details.jpg)
 

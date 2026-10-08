@@ -61,7 +61,7 @@ export async function waitFor(predicate, timeoutMs, message) {
  * Chromium tab, `?debug` and all. Returns everything a file's `before` needs:
  * the live `page`/`browser`/`server` handles to close later, `origin` for
  * direct API calls, `flightMs` read off the manifest (see `landed()` for
- * why it is never hard-coded), `roomCount` for the catalog's "every room once"
+ * why it is never hard-coded), `doubleTapMs` the same way, `roomCount` for the catalog's "every room once"
  * assertion, and a `consoleErrors` array a file's own "nothing was logged to
  * the console" test reads at the end.
  *
@@ -123,10 +123,12 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
 
     const { config, count } = await (await fetch(`${origin}/api/manifest`)).json();
     const flightMs = config.camera.flightMs;
+    const doubleTapMs = config.camera.gesture.doubleTapMs;
     // Read off the manifest rather than pinned, so the catalog's "every room
     // once" assertion survives someone adding an image to the sample collection.
     const roomCount = count;
     assert.equal(typeof flightMs, 'number', 'the manifest must carry the resolved flight duration');
+    assert.equal(typeof doubleTapMs, 'number', 'the manifest must carry the resolved double-tap window');
 
     browser = await chromium.launch({
       executablePath: process.env.BABEL_E2E_CHROMIUM || undefined,
@@ -161,7 +163,7 @@ export async function openLibrary({ favorites = false, webgl = false, extraParam
       { timeout: 30_000 }
     );
 
-    return { server, browser, page, origin, flightMs, roomCount, consoleErrors, favoritesDir };
+    return { server, browser, page, origin, flightMs, doubleTapMs, roomCount, consoleErrors, favoritesDir };
   } catch (err) {
     await browser?.close().catch(() => {});
     server.kill();

@@ -3,8 +3,8 @@
  *
  * Split out of the pointer plumbing for the usual reason: this is the part with
  * a right answer, and it can be asserted without a browser. The hook decides
- * *when* a pick happened - a right-click, a long press that did not become a
- * drag - and this decides *what* was picked.
+ * *when* a pick happened - a settled tap, a right-click, a long press that
+ * did not become a drag - and this decides *what* was picked.
  *
  * Cells are addressed by their lower corner and span one unit, so the cell
  * holding a world point is that point floored on both axes. `screenToWorld`

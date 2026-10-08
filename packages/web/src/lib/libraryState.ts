@@ -71,8 +71,8 @@ export interface LibraryState {
   /** How the catalog advances (`KEYS.paging`). */
   paging: Paging;
   /**
-   * The map's room card, from right-click, long press, Enter on the cursor
-   * or a ranked result. A modal dialog, so it names only the room or
+   * The map's room card, from a click, tap, right-click, long press, Enter
+   * on the cursor or a ranked result. A modal dialog, so it names only the room or
    * generic cell, never an anchor point.
    */
   card: RoomPick | null;

@@ -31,11 +31,11 @@ import type { Config } from '../../../config/config.ts';
  *
  * ### Picking
  *
- * The metadata overlay opens on right-click or long press, and the long press
- * loses to a pan: a press that turns into a drag must not also open a card.
- * The press timer watches the same pointer stream the drag does, which is this
- * one. What is picked is `picking.ts`; when, is here. Left-click stays free
- * for focusing a room.
+ * The metadata overlay opens on right-click, long press, or a settled tap
+ * (`onSettledTap`), and the long press loses to a pan: a press that turns into
+ * a drag must not also open a card. The press timer watches the same pointer
+ * stream the drag does, which is this one. What is picked is `picking.ts`;
+ * when, is here.
  *
  * ### Flying
  *
@@ -124,6 +124,14 @@ interface UseMapCameraOpts {
    */
   onDoubleTap?: OnTap;
   /**
+   * canvas-relative point of a tap that no second tap paired with, fired
+   * `camera.gesture.doubleTapMs` after it, with the camera as it was at the
+   * tap. Any new press on the map cancels a pending one, so a tap followed by
+   * a drag or a double tap never fires it. This is the delayed tap for
+   * actions a double tap must not also trigger; `onTap` stays instant.
+   */
+  onSettledTap?: OnTap;
+  /**
    * one line per pointer event, off unless asked for, so what the browser sent
    * can be read on a phone with no console. See `?touchdebug` in main.tsx.
    */
@@ -168,6 +176,7 @@ export function useMapCamera({
   onPick,
   onTap,
   onDoubleTap,
+  onSettledTap,
   onDebug,
 }: UseMapCameraOpts) {
   const limits = { min: camera.minZoom, max: camera.maxZoom };
@@ -196,6 +205,8 @@ export function useMapCamera({
   // moment it becomes anything else (movement, a third finger, running out
   // the clock).
   const twoTap = useRef<TwoTapCandidate | null>(null);
+  // The pending `onSettledTap` timer, cleared by the next press.
+  const settledTap = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * End whatever is in the air, telling the caller whether it arrived.
@@ -247,6 +258,11 @@ export function useMapCamera({
       press.current = null;
     };
 
+    const cancelSettledTap = () => {
+      if (settledTap.current) clearTimeout(settledTap.current);
+      settledTap.current = null;
+    };
+
     /**
      * Pointer capture, best-effort: nothing may depend on it succeeding.
      *
@@ -281,6 +297,10 @@ export function useMapCamera({
       );
 
     const onPointerDown = (e: PointerEvent) => {
+      // Any press, a right-click included, supersedes a tap still waiting to
+      // settle: it is the start of a double tap, a drag, or another gesture.
+      cancelSettledTap();
+
       // Secondary buttons are the context menu's, not the map's; starting a drag
       // on one would pan the map out from under a right-click.
       if (e.button !== 0) return;
@@ -480,8 +500,8 @@ export function useMapCamera({
       }
 
       // A clean tap: the last finger up, having not wandered and not stopped a
-      // flight, and not a cancel. Left-click/tap is otherwise unclaimed, so this
-      // is what selects a book on the center room.
+      // flight, and not a cancel. `onTap` selects a book on the center room;
+      // `onSettledTap`, once no second tap has paired with it, opens a room.
       const t = tap.current;
       tap.current = null;
       if (t && !t.moved && !t.interruptedFlight && e.type !== 'pointercancel') {
@@ -506,6 +526,13 @@ export function useMapCamera({
           onDoubleTap(px, py, cam.current);
         } else {
           lastTap.current = { x: t.x, y: t.y, time: now };
+          if (onSettledTap) {
+            const at = cam.current;
+            settledTap.current = setTimeout(() => {
+              settledTap.current = null;
+              onSettledTap(px, py, at);
+            }, camera.gesture.doubleTapMs);
+          }
         }
       }
       report(e.type, e);
@@ -557,6 +584,7 @@ export function useMapCamera({
     canvas.addEventListener('contextmenu', onContextMenu);
     return () => {
       cancelPress();
+      cancelSettledTap();
       pointers.current.clear();
       pinch.current = null;
       drag.current = null;
@@ -569,7 +597,7 @@ export function useMapCamera({
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onDebug, endFlight, beginFlightTo, camera]);
+  }, [canvasRef, resistanceAt, onChange, onPick, onTap, onDoubleTap, onSettledTap, onDebug, endFlight, beginFlightTo, camera]);
 
   // Step whichever of the two things is moving the camera on its own: a flight
   // while one is in the air, otherwise the glide back toward the content region

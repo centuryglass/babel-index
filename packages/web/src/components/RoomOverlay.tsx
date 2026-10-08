@@ -3,8 +3,9 @@
  * full size and the whole story, with nothing clipped.
  *
  * A full-page modal: scrim, centered dialog, Escape and a backdrop click
- * close it, and Tab is trapped inside. Reached from right-click, long press
- * or Enter on the map, a ranked result, or expanding a catalog row. Only a
+ * close it, and Tab is trapped inside. Reached from a click, tap,
+ * right-click, long press or Enter on the map, a ranked result, or expanding
+ * a catalog row. Only a
  * map pick can name a generic cell (`'generic' in room`).
  *
  * The catalog needs it because its rows are a fixed height

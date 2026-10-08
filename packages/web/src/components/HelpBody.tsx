@@ -22,8 +22,8 @@ export function HelpBody() {
         keyboard, arrow keys pan the map when no other control has focus.
       </p>
       <p>
-        <strong>View a room:</strong> right-click it, long-press it, or focus it and
-        press Enter, to see the full image, its story, and its keywords.
+        <strong>View a room:</strong> click or tap it, or focus it and press
+        Enter, to see the full image, its story, and its keywords.
       </p>
       <p>
         <strong>Search:</strong> type a word or phrase into the search box at the

@@ -5,8 +5,9 @@
  * Three consumers render this, which is the reason it is a component rather
  * than markup inside one dialog:
  *
- *   - `RoomOverlay`, the one modal reached from right-click, long press or
- *     Enter on the map, choosing a ranked result, or expanding a catalog row;
+ *   - `RoomOverlay`, the one modal reached from a click, tap, right-click,
+ *     long press or Enter on the map, choosing a ranked result, or expanding
+ *     a catalog row;
  *   - every row of the catalog;
  *   - the canvas's own nested fallback content, which is where a touch
  *     screen reader reads a room.
