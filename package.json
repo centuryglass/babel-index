@@ -1,6 +1,6 @@
 {
   "name": "babel-index",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "private": true,
   "license": "Unlicense",
   "description": "An AI art experiment based around the Library of Babel.",
