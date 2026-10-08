@@ -219,8 +219,11 @@ Every tracked file in the repo, with a line or two on what it is for.
     * `catalog.ts`: The catalog's pure paging, row-height and ordering math.
     * `babelBook.ts`: Random Library of Babel text, shared by
       `BabelBookOverlay.tsx` and the server's `/babel-book` route.
-    * `pyramid.ts`: Every pyramid number - tile dimensions, the level
-      ladder, cache budgets, the prefetch ring.
+    * `pyramid.ts`: Every pyramid number - the level ladder, cache budgets,
+      the prefetch ring - built over a collection's tile size.
+    * `tileShape.ts`: A collection's tile shape from `manifest.tile` - cell
+      aspect, pyramid and hard zoom range.
+    * `tile-fixtures.ts`: A tile shape for tests that need one.
     * `tiles.ts`: The tile cache - loading, eviction, and fallback levels.
     * `rooms.ts`: Maps a room and level to its image url or sheet cell.
     * `libraryState.ts`: `Library`'s shared state as a pure reducer - the

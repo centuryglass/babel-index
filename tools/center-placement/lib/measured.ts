@@ -7,8 +7,8 @@
  * Values are normalised to the tile edge (0-1), x against the traced width and
  * y against the traced height, so they carry no aspect of their own. `tile`
  * records the shape they were traced at: the one fact the normalisation
- * throws away, and the one that has to keep agreeing with BASE_TILE in
- * packages/web/src/lib/pyramid.ts. `geometry.test.ts` asserts that it does.
+ * throws away, and the one a collection's tiles have to share. The server
+ * refuses a collection of another shape (`scan.ts`'s `tileTraceMismatch`).
  */
 
 /** A measured rect as [x, y, w, h]. */

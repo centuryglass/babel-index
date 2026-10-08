@@ -45,8 +45,8 @@ const scalePathData = (d: string, W: number, H: number) =>
  * measured at: on any other aspect every rect is stretched onto art it no
  * longer matches, silently, because each rect is still inside the tile.
  *
- * The trace and `BASE_TILE` are two statements of one fact, and
- * `geometry.test.ts` asserts they agree.
+ * A collection's tiles must share it; `scan.ts`'s `tileTraceMismatch`
+ * refuses one that doesn't.
  */
 export const TILE_ASPECT = MEASURED.tile.aspect;
 

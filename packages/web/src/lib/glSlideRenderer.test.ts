@@ -9,12 +9,16 @@ import {
   createTileCache, CENTER as CENTER_TILE, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, DISTILL_ON, CLEAR_HISTORY_BOOK,
   type LoadableImage,
 } from './tiles.ts';
-import { CELL_ASPECT } from './camera.ts';
 import { createGLSlideRenderer, type GLSlideDrawOpts } from './glSlideRenderer.ts';
 import type { GLContext, Rect } from './gl/context.ts';
 import type { GLTextureCache } from './gl/textureCache.ts';
 import type { GlowTextureCache } from './gl/glowTexture.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
+const PYRAMID = TEST_TILE.pyramid;
 
 const TIMING = DEFAULTS.slide;
 const VIEW = { x0: -4, y0: -3, x1: 5, y1: 4 };
@@ -80,6 +84,7 @@ interface FakeImage extends LoadableImage {
 function readyCache() {
   const made: FakeImage[] = [];
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: (): LoadableImage => {
       const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
@@ -112,7 +117,7 @@ function world() {
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createGLSlideRenderer({ cache, overlays: TEST_OVERLAYS, textures: fakeTextureCache(), glowTextures: fakeGlowTextureCache() });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
   return { built, board, show, renderer, cache, settle, cam };
 }
 

@@ -27,3 +27,12 @@ export const HOVER_GLOW_STROKE = `rgba(${HOVER_GLOW_RGB.join(',')},0.55)`;
 export function applyCssVars(): void {
   document.documentElement.style.setProperty('--hover-glow-rgb', HOVER_GLOW_RGB.join(', '));
 }
+
+/**
+ * Push the collection's level-0 tile width (`manifest.tile`) into
+ * css/base.css's `--tile-w`, which sizes the room dialog to show a tile at
+ * native resolution. Called from `main.tsx` once the manifest arrives.
+ */
+export function applyTileCssVars(tileWidth: number): void {
+  document.documentElement.style.setProperty('--tile-w', `${tileWidth}px`);
+}

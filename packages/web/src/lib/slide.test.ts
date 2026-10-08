@@ -9,9 +9,13 @@ import {
   createTileCache, CENTER as CENTER_TILE, FAV_CENTER_SWITCH_BASE, FAV_MINE_ON, DISTILL_ON, CLEAR_HISTORY_BOOK,
   type LoadableImage,
 } from './tiles.ts';
-import { CELL_ASPECT } from './camera.ts';
 import type { DrawContext } from './render.ts';
 import { TEST_OVERLAYS } from './overlay-fixtures.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
+const PYRAMID = TEST_TILE.pyramid;
 
 // The shipped defaults, so these tests exercise what the demo actually runs.
 const TIMING = DEFAULTS.slide;
@@ -61,6 +65,7 @@ interface FakeImage extends LoadableImage {
 function readyCache() {
   const made: FakeImage[] = [];
   const cache = createTileCache({
+    pyramid: PYRAMID,
     locateTile: (id, level) => ({ url: `/l${level}/${id}.jpg`, rect: null }),
     createImage: (): LoadableImage => {
       const img: FakeImage = { src: '', onload: null, onerror: null, bitmap: null, ...FAKE_ICON_SIZE };
@@ -252,7 +257,7 @@ test('every visible cell is painted in every frame, including mid-slide', () => 
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
   const frame = (motions) => {
     const ctx = fakeCtx();
     const stats = renderer.draw({
@@ -363,7 +368,7 @@ test('the favorite badge rides along with a sliding board, room cells only', () 
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
   const isFavorite = () => false;
   const cellPx = { x: ZOOM, y: ZOOM * CELL_ASPECT };
   // A badge is small next to the tile it sits on - the same margin
@@ -401,7 +406,7 @@ test('the favorites-sort switch rides along with the center room during a rearra
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
   const isFavorite = () => false;
 
   const frame = (motions) => {
@@ -431,7 +436,7 @@ test('no favorites option on the slide renderer means no badge at all', () => {
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
   settle();
@@ -448,7 +453,7 @@ test('the distill toggle rides along with the center room during a rearrangement
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   const frame = (motions) => {
     const ctx = fakeCtx();
@@ -476,7 +481,7 @@ test('distillMode undefined on the slide renderer means no distill toggle at all
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
   settle();
@@ -493,7 +498,7 @@ test('the clear-history book overlay rides along with the center room during a r
   const board = { ...built.start, cells: built.start.cells.slice() };
   const show = createSlideshow({ board, moves, apply: applyMove, timing: TIMING });
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   const frame = (motions) => {
     const ctx = fakeCtx();
@@ -521,7 +526,7 @@ test('clearHistoryAvailable omitted on the slide renderer means no clear-history
   const { cache, settle } = readyCache();
   const board = { ...built.start, cells: built.start.cells.slice() };
   const renderer = createSlideRenderer({ cache, overlays: TEST_OVERLAYS });
-  const cam = { x: 0.5, y: 0.5, zoom: ZOOM };
+  const cam = { x: 0.5, y: 0.5, zoom: ZOOM, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
   renderer.draw({ ctx: fakeCtx(), width: 1920, height: 1080, dpr: 1, cam, board, origin: built.origin });
   settle();

@@ -16,13 +16,8 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { flipTransform, flipCss, rectOf, type Rect } from '../lib/catalog.ts';
 import { centerCellRect, overlapsViewport } from '../lib/center.ts';
 import { prefersReducedMotion } from './useMapCamera.ts';
+import type { Camera } from '../lib/camera.ts';
 import type { Config } from '../../../config/config.ts';
-
-interface Camera {
-  x: number;
-  y: number;
-  zoom: number;
-}
 
 export type Mode = 'map' | 'catalog';
 

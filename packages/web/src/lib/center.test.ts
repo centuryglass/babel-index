@@ -28,7 +28,10 @@ import {
   clearSpineFitCache,
   type SpineContext,
 } from './center.ts';
-import { CELL_ASPECT } from './camera.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 const GEO = layout({ width: 1, height: 1 });
 
@@ -130,8 +133,8 @@ test('openingZoom floors a narrow portrait viewport at exactly what the search b
   // unfloored fit ever cleared the floor here, the test would pass while
   // exercising nothing.
   const portrait = { width: 360, height: 780 };
-  const z = openingZoom(portrait);
-  assert.equal(z, minZoomForSearchBox());
+  const z = openingZoom(portrait, TEST_TILE, ZOOM_LIMITS);
+  assert.equal(z, minZoomForSearchBox(CELL_ASPECT));
   // The floor lands on the usability boundary, so that boundary is inclusive: a
   // narrow phone has to open with a field it can actually use.
   assert.equal(isSearchBoxUsable({ x: 0, y: 0, w: z, h: z * CELL_ASPECT }), true);
@@ -139,13 +142,13 @@ test('openingZoom floors a narrow portrait viewport at exactly what the search b
   // A wide desktop viewport clears the floor unaided, so the floor stays a
   // floor rather than becoming a fixed opening zoom for everyone.
   const landscape = { width: 1600, height: 900 };
-  const zWide = openingZoom(landscape);
-  assert.ok(zWide > minZoomForSearchBox());
+  const zWide = openingZoom(landscape, TEST_TILE, ZOOM_LIMITS);
+  assert.ok(zWide > minZoomForSearchBox(CELL_ASPECT));
   assert.equal(isSearchBoxUsable({ x: 0, y: 0, w: zWide, h: zWide * CELL_ASPECT }), true);
 });
 
 test('minZoomForSearchBox is exactly the zoom where the box screen height hits its minimum', () => {
-  const z = minZoomForSearchBox();
+  const z = minZoomForSearchBox(CELL_ASPECT);
   const justUnder = { x: 0, y: 0, w: z - 0.01, h: (z - 0.01) * CELL_ASPECT };
   const justOver = { x: 0, y: 0, w: z + 0.01, h: (z + 0.01) * CELL_ASPECT };
   assert.equal(isSearchBoxUsable(justUnder), false);
@@ -153,7 +156,7 @@ test('minZoomForSearchBox is exactly the zoom where the box screen height hits i
 });
 
 test('centerCellRect places cell (0,0) and sizes it one cell each axis', () => {
-  const cam = { x: 0, y: 0, zoom: 900, aspect: CELL_ASPECT };
+  const cam = { x: 0, y: 0, zoom: 900, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
   const canvasRect = { width: 1200, height: 800 };
   const cell = centerCellRect(cam, canvasRect);
   assert.equal(cell.x, 600);

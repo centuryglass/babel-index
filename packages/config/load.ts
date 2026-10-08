@@ -16,7 +16,8 @@ export const CONFIG_FILE = 'config.json';
 export interface LoadConfigOptions {
   /** overlay path; defaults to `config.json` in cwd */
   path?: string;
-  zoomLimits?: ZoomLimits;
+  /** The collection's hard zoom range - see `resolveConfig`. */
+  zoomLimits: ZoomLimits;
 }
 
 export type LoadedConfig = Config & { source: string | null };
@@ -30,7 +31,7 @@ export type LoadedConfig = Config & { source: string | null };
  *
  * @returns the resolved config, plus `source` (where the overlay came from, if anywhere)
  */
-export async function loadConfig({ path, zoomLimits }: LoadConfigOptions = {}): Promise<LoadedConfig> {
+export async function loadConfig({ path, zoomLimits }: LoadConfigOptions): Promise<LoadedConfig> {
   const file = resolve(process.cwd(), path ?? CONFIG_FILE);
 
   let raw: unknown = {};

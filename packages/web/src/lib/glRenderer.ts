@@ -21,14 +21,12 @@ import { createGlowTextureCache, type GlowTextureCache } from './gl/glowTexture.
 import { assertNever, type DrawList } from './drawList.ts';
 import { createMapPlanner, type DrawResult, type MapFrameOpts } from './framePlan.ts';
 import type { TileCache } from './tiles.ts';
-import type { Pyramid } from './pyramid.ts';
 import type { Overlays } from '../../../map/overlays.ts';
 
 export interface CreateGLRendererOpts {
   cache: TileCache;
   /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
   overlays: Overlays;
-  pyramid?: Pyramid;
   /** Shared with `glSlideRenderer.ts` so a tile decoded for one renderer is already resident for the other across the handoff. */
   textures?: GLTextureCache;
   /** Shared with `glSlideRenderer.ts`, same reason as `textures` - the toggle glows must survive the handoff too. */
@@ -143,9 +141,9 @@ export function paintGL(gl: GLContext, list: DrawList, res: GLPaintResources): G
 }
 
 export function createGLRenderer({
-  cache, overlays, pyramid, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+  cache, overlays, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLRendererOpts) {
-  const planner = createMapPlanner({ cache, overlays, pyramid });
+  const planner = createMapPlanner({ cache, overlays });
   const spineTextures: SpineTextureCache = createSpineTextureCache();
 
   function draw({ gl, ...opts }: GLDrawOpts): GLDrawResult {

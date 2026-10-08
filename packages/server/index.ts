@@ -58,13 +58,15 @@ import { networkInterfaces } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { context } from 'esbuild';
 import { OVERLAYS_FILE } from '../map/overlays.ts';
-import { scanDirectory, SHARED_TILES_DIR } from './scan.ts';
+import { scanDirectory, tileTraceMismatch, SHARED_TILES_DIR } from './scan.ts';
 import { scanRemote } from './remote.ts';
 import { createApp, hasTextModel } from './app.ts';
 import { loadRoomContent } from './roomContent.ts';
 import { createJsonFavoriteStore, type FavoriteStore } from './favorites.ts';
 import { createUsageMetrics } from './metrics.ts';
 import { loadConfig } from '../config/load.ts';
+import { zoomLimitsFor } from '../web/src/lib/camera.ts';
+import { MEASURED } from '../../tools/center-placement/lib/measured.ts';
 import { portInUse } from './port.ts';
 import { normalizeBasePath } from './base-path.ts';
 import { logger } from './logger.ts';
@@ -119,11 +121,6 @@ if (await portInUse(port)) {
   );
   process.exit(1);
 }
-
-// Load optional JSON config if provided, announcing invalid data:
-const config = await loadConfig({ path: argv.config as string | undefined });
-if (config.source) logger.info({ source: config.source }, 'config loaded');
-for (const note of config.notes) logger.warn({ note }, 'config note');
 
 // Off unless asked for. The counts are the only state this process persists,
 // so a plain demo run leaves no file behind.
@@ -194,6 +191,20 @@ if (!manifest.shared.center && !remoteBase)
     { tilesDir: join(imagesDir as string, SHARED_TILES_DIR) },
     'no center tile found - expected center_tile.* (or pass --center)'
   );
+
+// The center tile's controls are traced at one shape; on a collection of
+// another shape every hit area would land on art it no longer matches.
+const traceMismatch = tileTraceMismatch(manifest.tile, MEASURED.tile);
+if (traceMismatch) {
+  logger.error({ tile: manifest.tile, traced: MEASURED.tile }, traceMismatch);
+  process.exit(1);
+}
+
+// Load optional JSON config if provided, announcing invalid data. After the
+// scan, because the zoom range it may narrow is the collection's.
+const config = await loadConfig({ path: argv.config as string | undefined, zoomLimits: zoomLimitsFor(manifest.tile) });
+if (config.source) logger.info({ source: config.source }, 'config loaded');
+for (const note of config.notes) logger.warn({ note }, 'config note');
 
 if (manifest.metadata) {
   const { matched, entries } = manifest.metadata;

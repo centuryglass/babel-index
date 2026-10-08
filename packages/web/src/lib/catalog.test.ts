@@ -17,7 +17,13 @@ import {
   alphabeticalOrder,
 } from './catalog.ts';
 import type { Rect } from './catalog.ts';
-import { BASE_TILE, LEVELS, sizeOf, DPR_CAP } from './pyramid.ts';
+import { LEVELS, DPR_CAP } from './pyramid.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const BASE_TILE = TEST_TILE.base;
+const { sizeOf } = TEST_TILE.pyramid;
+const PYRAMID = TEST_TILE.pyramid;
+const CELL_ASPECT = TEST_TILE.aspect;
 
 const order = Array.from({ length: 27 }, (_, i) => 100 + i);
 
@@ -95,24 +101,25 @@ test('the mounted rows plus the spacers are exactly the whole list', () => {
   assert.equal(rows * rowPx + above + below, order.length * rowPx);
 });
 
-test('a row is as tall as the tile is, whatever shape the tile becomes', () => {
-  assert.equal(tileHeight(BASE_TILE.w), BASE_TILE.h);
+test('a row is as tall as the tile is, whatever shape the tile is', () => {
+  assert.equal(tileHeight(BASE_TILE.w, CELL_ASPECT), BASE_TILE.h);
+  assert.equal(tileHeight(400, 1024 / 768), 533, 'a tall tile gives a tall row');
 });
 
 test('an ultra-narrow row stacks the tile under the head and details, rather than beside them', () => {
   // Sum, not max: the picture runs full width beneath the name row.
-  assert.equal(stackedRowHeight(320, 30, 20), tileHeight(320) + 30 + 20);
-  assert.equal(stackedRowHeight(320, 30, 20, 24), tileHeight(320) + 30 + 20 + 24);
+  assert.equal(stackedRowHeight(320, CELL_ASPECT, 30, 20), tileHeight(320, CELL_ASPECT) + 30 + 20);
+  assert.equal(stackedRowHeight(320, CELL_ASPECT, 30, 20, 24), tileHeight(320, CELL_ASPECT) + 30 + 20 + 24);
   // The mat costs both sides, as on a wide row.
-  assert.equal(stackedRowHeight(320, 30, 20, 0, 6), tileHeight(320) + 12 + 30 + 20);
+  assert.equal(stackedRowHeight(320, CELL_ASPECT, 30, 20, 0, 6), tileHeight(320, CELL_ASPECT) + 12 + 30 + 20);
   // The picture-to-link gap is reserved on top of the rest of the stack.
-  assert.equal(stackedRowHeight(320, 30, 20, 0, 6, 8), tileHeight(320) + 12 + 30 + 20 + 8);
+  assert.equal(stackedRowHeight(320, CELL_ASPECT, 30, 20, 0, 6, 8), tileHeight(320, CELL_ASPECT) + 12 + 30 + 20 + 8);
 });
 
 test('a thumbnail asks for a level that can actually cover it', () => {
   for (const cssWidth of [80, 160, 320, 640, 1024]) {
     for (const dpr of [1, 2, 3]) {
-      const level = thumbLevel(cssWidth, dpr);
+      const level = thumbLevel(cssWidth, PYRAMID, dpr);
       assert.ok(
         LEVELS.some((l) => l.level === level),
         `level ${level} is on the ladder for ${cssWidth}@${dpr}`
@@ -128,11 +135,11 @@ test('a thumbnail asks for a level that can actually cover it', () => {
 });
 
 test('a smaller thumbnail asks for a coarser level, and dpr counts', () => {
-  assert.ok(thumbLevel(120, 1) > thumbLevel(640, 1), 'small thumbs go coarser');
-  assert.ok(thumbLevel(120, 2) <= thumbLevel(120, 1), 'a retina thumb needs at least as much');
+  assert.ok(thumbLevel(120, PYRAMID, 1) > thumbLevel(640, PYRAMID, 1), 'small thumbs go coarser');
+  assert.ok(thumbLevel(120, PYRAMID, 2) <= thumbLevel(120, PYRAMID, 1), 'a retina thumb needs at least as much');
   // Capped at `DPR_CAP`, as the map renderers are, so the catalog never asks
   // for a finer rung than the map on the same screen.
-  assert.equal(thumbLevel(200, 3), thumbLevel(200, 2));
+  assert.equal(thumbLevel(200, PYRAMID, 3), thumbLevel(200, PYRAMID, 2));
 });
 
 test('the page under the viewport comes from arithmetic, not from sentinels', () => {

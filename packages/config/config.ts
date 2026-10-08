@@ -12,10 +12,11 @@
  * type.
  *
  * Zoom is the one place a hard limit sits outside this file:
- * `camera.minZoom`/`maxZoom` may narrow `camera.ts`'s `ZOOM_LIMITS` and never
- * widen it. A value beyond the hard range is clamped rather than refused, and a
- * narrowing that leaves the finest rung or two unreachable is legal and silent.
- * `ZOOM_LIMITS`'s own comment carries why the direction is one-way.
+ * `camera.minZoom`/`maxZoom` may narrow the collection's hard range
+ * (`camera.ts`'s `zoomLimitsFor`) and never widen it. A value beyond the hard
+ * range is clamped rather than refused, and a narrowing that leaves the finest
+ * rung or two unreachable is legal and silent. `zoomLimitsFor`'s own comment
+ * carries why the direction is one-way.
  *
  * ### Numbers kept out
  *
@@ -28,7 +29,7 @@
  *     "Config and the pyramid"). Kept out because a budget below its own worst-case-visible cell
  *     count thrashes the cache within a single frame, and no range check here
  *     could see that.
- *   - `packages/web/src/lib/camera.ts`'s `ZOOM_LIMITS`/`MAX_ZOOM_FACTOR`: the
+ *   - `packages/web/src/lib/camera.ts`'s `MIN_ZOOM`/`MAX_ZOOM_FACTOR`: the
  *     hard zoom range, in code so config cannot widen it.
  *   - `packages/map/scoring.ts`'s `SEARCH_WEIGHTS` and `STORY_LONG_RANGE`: how
  *     strongly each signal pulls, and what counts as a full story run. The
@@ -59,7 +60,6 @@ import {
   FLIGHT_MS,
   GRANULARITY_HYSTERESIS,
   WHEEL_ZOOM_RATE,
-  ZOOM_LIMITS,
   ZOOM_STEP_FACTOR,
 } from '../web/src/lib/camera.ts';
 import { STRENGTH_FLOOR } from '../map/ordering.ts';
@@ -188,7 +188,7 @@ export const DEFAULTS: Defaults = {
      * The zoom range offered, as pixels per cell width.
      *
      * `null` means that end's hard limit, which is how this file says "no
-     * narrowing" without restating `ZOOM_LIMITS`'s numbers.
+     * narrowing" without restating the hard range.
      */
     minZoom: 50,
     maxZoom: null,
@@ -548,11 +548,10 @@ export const DEFAULTS: Defaults = {
  * prints at startup (docs/agents/map.md, "Config and the pyramid").
  *
  * @param raw the overlay, typically parsed `config.json`
- * @param opts.zoomLimits the hard range this config may narrow but not widen.
- *   Injected so the whole policy can be exercised at limits the app is not
- *   currently using.
+ * @param opts.zoomLimits the hard range this config may narrow but not widen:
+ *   the collection's, from `camera.ts`'s `zoomLimitsFor(manifest.tile)`.
  */
-export function resolveConfig(raw: unknown = {}, { zoomLimits = ZOOM_LIMITS }: { zoomLimits?: ZoomLimits } = {}): Config {
+export function resolveConfig(raw: unknown, { zoomLimits }: { zoomLimits: ZoomLimits }): Config {
   const notes: string[] = [];
   const src = asSection(raw, '', notes);
 

@@ -10,6 +10,8 @@ import { hashPassword } from './admin-auth.ts';
 import type { CreateAppOptions } from './app.ts';
 import { scanDirectory } from './scan.ts';
 import { DEFAULTS, resolveConfig } from '../config/config.ts';
+import { TEST_TILE } from '../web/src/lib/tile-fixtures.ts';
+import { zoomLimitsFor } from '../web/src/lib/camera.ts';
 import * as fixture from './image-fixtures.ts';
 import type { AddressInfo } from 'node:net';
 
@@ -156,13 +158,21 @@ test('/api/manifest serves the defaults when the app was given no config', async
   });
 });
 
+test('/api/manifest states the collection\'s tile, and the default zoom range is that tile\'s', async () => {
+  await serving(async ({ get }) => {
+    const m = await (await get('/api/manifest')).json();
+    assert.deepEqual(m.tile, { w: 512, h: 512 });
+    assert.equal(m.config.camera.maxZoom, zoomLimitsFor(m.tile).max);
+  });
+});
+
 test('a narrowed config reaches the client narrowed', async () => {
   await serving(
     async ({ get }) => {
       const m = await (await get('/api/manifest')).json();
       assert.equal(m.config.camera.maxZoom, 120);
     },
-    { config: resolveConfig({ camera: { maxZoom: 120 } }) }
+    { config: resolveConfig({ camera: { maxZoom: 120 } }, { zoomLimits: TEST_TILE.zoomLimits }) }
   );
 });
 
@@ -315,7 +325,7 @@ test('a query over maxQueryLength is truncated server-side, not just in the brow
       assert.equal(short.query, 'hexagonqq');
       assert.equal(long.query, 'hexagonqq', 'a direct request past the client cap must still be sliced');
     },
-    { config: resolveConfig({ search: { maxQueryLength: 9 } }) }
+    { config: resolveConfig({ search: { maxQueryLength: 9 } }, { zoomLimits: TEST_TILE.zoomLimits }) }
   );
 });
 

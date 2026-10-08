@@ -12,14 +12,12 @@ import type { GLContext } from './gl/context.ts';
 import { BACKGROUND, paintGL } from './glRenderer.ts';
 import { createSlidePlanner, type SlideDrawResult, type SlideFrameOpts } from './slidePlan.ts';
 import type { TileCache } from './tiles.ts';
-import type { Pyramid } from './pyramid.ts';
 import type { Overlays } from '../../../map/overlays.ts';
 
 export interface CreateGLSlideRendererOpts {
   cache: TileCache;
   /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
   overlays: Overlays;
-  pyramid?: Pyramid;
   /** Shared with `glRenderer.ts` so a tile decoded for one is already resident for the other. */
   textures?: GLTextureCache;
   /** Shared with `glRenderer.ts`, same reason as `textures` - the distill toggle's hover glow rides along across the handoff too. */
@@ -32,9 +30,9 @@ export type GLSlideDrawOpts = SlideFrameOpts & { gl: GLContext };
 export type GLSlideDrawResult = SlideDrawResult;
 
 export function createGLSlideRenderer({
-  cache, overlays, pyramid, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
+  cache, overlays, textures = createGLTextureCache(), glowTextures = createGlowTextureCache(),
 }: CreateGLSlideRendererOpts) {
-  const planner = createSlidePlanner({ cache, overlays, pyramid });
+  const planner = createSlidePlanner({ cache, overlays });
 
   function draw({ gl, ...opts }: GLSlideDrawOpts): GLSlideDrawResult {
     const result = planner.plan(opts);

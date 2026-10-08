@@ -28,7 +28,6 @@ import { ZoomControls } from './ZoomControls.tsx';
 import { RoomDetails, FavoriteToggle, Highlight, type FavoriteControl } from './RoomDetails.tsx';
 import { roomTitle, type RoomMeta } from '../../../map/metadata.ts';
 import { roomPath } from '../../../map/slug.ts';
-import { BASE_TILE } from '../lib/pyramid.ts';
 import type { Description } from '../../../map/describe.ts';
 import type { SearchResult, MatchRange } from '../../../map/searchResult.ts';
 
@@ -137,7 +136,7 @@ export function RoomOverlay({
   showScore = false,
   favorite = null,
   view = null,
-  naturalSize = null,
+  naturalSize,
   shareSlug = null,
   shareMode = 'catalog',
 }: {
@@ -148,10 +147,10 @@ export function RoomOverlay({
   src?: string | null;
   /**
    * The tile's pixel dimensions, read at scan time (`scan.ts`'s
-   * `imageSize`). Null when there is no reading, and the placeholder falls
-   * back to `BASE_TILE` (see `tileSize`).
+   * `imageSize`), or the collection's tile size (`manifest.tile`) where
+   * there is no reading. The pre-load placeholder is sized from it.
    */
-  naturalSize?: { w: number; h: number } | null;
+  naturalSize: { w: number; h: number };
   onClose: () => void;
   onKeyword: (keyword: string) => void;
   highlight?: {
@@ -337,8 +336,6 @@ export function RoomOverlay({
     return () => window.removeEventListener('resize', onResize);
   }, [columns, desc, entry, src]);
 
-  const tileSize = naturalSize ?? BASE_TILE;
-
   // The dialog's accessible name is `desc.name`, the same string the map's
   // cursor says for this cell.
   return (
@@ -422,7 +419,7 @@ export function RoomOverlay({
             (empty when absent), or the fixed generic sentence
             (`describe.ts`'s generic branch).
 
-            `width`/`height` come from `tileSize`, so the box matches what
+            `width`/`height` come from `naturalSize`, so the box matches what
             will load. The CSS scales it down to fit (`.overlay-tile` in
             css/dialogs.css).
 
@@ -437,8 +434,8 @@ export function RoomOverlay({
               src={src}
               alt={desc.picture ?? ''}
               decoding="async"
-              width={tileSize.w}
-              height={tileSize.h}
+              width={naturalSize.w}
+              height={naturalSize.h}
               onLoad={() => {
                 decideColumns.current();
                 measureScale.current();

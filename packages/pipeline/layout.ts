@@ -56,8 +56,8 @@ export interface SheetPosition {
 /**
  * What levels a source image of these dimensions should produce, finest first.
  *
- * Sizes come from the source, not from `BASE_TILE`: a collection rendered at any
- * size gets the levels it can hold. Each level is the source divided by the
+ * Sizes come from the source: a collection rendered at any size gets the
+ * levels it can hold. Each level is the source divided by the
  * ladder's divisor on both axes together, which keeps the aspect exact.
  *
  * A source too small for the whole ladder yields fewer levels, never duplicate

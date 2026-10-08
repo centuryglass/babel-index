@@ -14,7 +14,6 @@ import { tracePathCommands } from './svgPath.ts';
 import { assertNever, type DrawList } from './drawList.ts';
 import { createMapPlanner, type DrawResult, type MapFrameOpts } from './framePlan.ts';
 import type { Drawable, TileCache } from './tiles.ts';
-import type { Pyramid } from './pyramid.ts';
 import type { Overlays } from '../../../map/overlays.ts';
 
 export type { DrawResult };
@@ -79,7 +78,6 @@ export interface CreateRendererOpts {
   cache: TileCache;
   /** `manifest.overlays` - see `framePlan.ts`'s `CreateMapPlannerOpts`. */
   overlays: Overlays;
-  pyramid?: Pyramid;
 }
 
 /** `framePlan.ts`'s `MapFrameOpts` plus the context to paint on. */
@@ -136,8 +134,8 @@ export function paintCanvas2D(ctx: DrawContext, list: DrawList): void {
   }
 }
 
-export function createRenderer({ cache, overlays, pyramid }: CreateRendererOpts) {
-  const planner = createMapPlanner({ cache, overlays, pyramid });
+export function createRenderer({ cache, overlays }: CreateRendererOpts) {
+  const planner = createMapPlanner({ cache, overlays });
 
   function draw({ ctx, ...opts }: DrawOpts): DrawResult {
     const result = planner.plan(opts);

@@ -1,13 +1,13 @@
 /**
  * Checks on the traced center tile: that `measured.ts` is internally
- * consistent, that `layout()` scales it per axis, and that the trace and
- * `BASE_TILE` still describe the same shape.
+ * consistent and that `layout()` scales it per axis. Whether a collection's
+ * tiles share the trace's shape is checked at server startup, by `scan.ts`'s
+ * `tileTraceMismatch`.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layout, TILE_ASPECT } from './lib/geometry.ts';
 import { MEASURED, SHELF_COUNT, BOOK_COUNT } from './lib/measured.ts';
-import { BASE_TILE } from '../../packages/web/src/lib/pyramid.ts';
 
 test('measured rects are normalised and inside the tile', () => {
   const all = [
@@ -106,24 +106,6 @@ test('rects stretch with the tile, on each axis independently', () => {
   );
 });
 
-test('the trace and the tile agree on aspect', () => {
-  // The SVG's viewBox and BASE_TILE are two independent statements of one
-  // fact. `measured.ts` normalises x by the traced width and y by the traced
-  // height, so if the two disagree every rect is silently stretched onto art
-  // it no longer matches: the books stop landing on the books.
-  //
-  // The workflow this guards: change the tile's aspect, re-trace in Inkscape,
-  // re-run the importer. Do one and forget the other and this is what says so.
-  const traced = MEASURED.tile.aspect;
-  const tile = BASE_TILE.h / BASE_TILE.w;
-  assert.ok(
-    Math.abs(traced - tile) < 0.01,
-    `the trace is ${MEASURED.tile.w}x${MEASURED.tile.h} (aspect ${traced}) but BASE_TILE is ` +
-      `${BASE_TILE.w}x${BASE_TILE.h} (aspect ${tile}). Re-trace shelf_geometry.svg at the ` +
-      `new shape and re-run import-shelf-svg.ts, or put BASE_TILE back.`
-  );
-});
-
 test('a width with no height gives the traced shape, not a square', () => {
   // The bug this pins is `height = width` as a default. It is silent: every
   // rect is individually still inside the tile, so the books just stop landing
@@ -131,12 +113,11 @@ test('a width with no height gives the traced shape, not a square', () => {
   const L = layout({ width: 1024 });
   assert.equal(L.height, Math.round(1024 * TILE_ASPECT));
   assert.notEqual(L.height, L.width, 'the trace is 4:3; a square layout is the old bug');
-  assert.ok(Math.abs(TILE_ASPECT - BASE_TILE.h / BASE_TILE.w) < 0.01, "and it is BASE_TILE's shape");
 });
 
 test('the trace records the shape it was made at', () => {
   // Without `tile` the normalisation is lossy in the one way that matters, and
-  // "the trace and the tile agree on aspect" has nothing to compare against.
+  // `scan.ts`'s `tileTraceMismatch` has nothing to check a collection against.
   assert.ok(MEASURED.tile, 'measured.ts must carry its traced dimensions');
   assert.ok(MEASURED.tile.w > 0 && MEASURED.tile.h > 0);
   assert.ok(Math.abs(MEASURED.tile.aspect - MEASURED.tile.h / MEASURED.tile.w) < 1e-4);

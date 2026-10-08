@@ -247,6 +247,21 @@ export async function scanOverlays(sharedDir: string, source: ImageSize | null):
   return overlays;
 }
 
+/**
+ * Why a collection's tile cannot carry the traced center geometry, or null if
+ * it can. The trace's rects are fractions of each axis, so they fit any size
+ * of the shape they were traced at, and land on the wrong art at any other
+ * shape. `tolerance` absorbs the rounding of a tile's pixel size.
+ */
+export function tileTraceMismatch(tile: ImageSize, traced: { aspect: number }, tolerance = 0.01): string | null {
+  const aspect = tile.h / tile.w;
+  if (Math.abs(aspect - traced.aspect) <= tolerance) return null;
+  return (
+    `the collection's tiles are ${tile.w}x${tile.h} (aspect ${aspect.toFixed(3)}), but the center ` +
+    `geometry was traced at aspect ${traced.aspect.toFixed(3)}; re-trace shelf_geometry.svg at this shape`
+  );
+}
+
 /** Image filenames in a directory, sorted. Rejects if the directory is missing. */
 async function listImages(dir: string): Promise<string[]> {
   const entries = await readdir(dir);
@@ -356,18 +371,17 @@ export async function scanDirectory(
     })
   );
 
-  // The ladder is measured off the collection, not the shared tiles: a shared tile
-  // is one file and may be any shape, while the rooms are what the map is
-  // mostly made of. Fall back to a shared tile only when no room reported a size.
+  // The tile size, and so the ladder and the map's cell shape, is measured off
+  // the collection, not the shared tiles: a shared tile is one file and may be
+  // any shape, while the rooms are what the map is mostly made of. Fall back
+  // to a shared tile only when no room reported a size.
   const source =
     rooms.find((r) => r.w && r.h) ??
     [sharedAssets.center, ...sharedAssets.generic].find((b) => b?.w && b?.h) ??
     null;
-  const levels = await discoverLevels(
-    dir,
-    source && source.w && source.h ? { w: source.w, h: source.h } : null,
-    rooms.length
-  );
+  if (!source?.w || !source?.h) throw new Error(`no image in ${dir} has a readable size, so the tile shape is unknown`);
+  const tile = { w: source.w, h: source.h };
+  const levels = await discoverLevels(dir, tile, rooms.length);
 
   // The shared tiles' pyramid, off the same reference size: `packages/pipeline/
   // shared-mips.ts` writes it the same per-file way `mips.ts` writes a room's,
@@ -379,12 +393,11 @@ export async function scanDirectory(
   // alternate, so gating it on the base trees' rungs would veto levels the
   // distill tree actually has. A `pyramid` overlay's levels are discovered
   // off the same reference size, per overlay (`scanOverlays`).
-  const sharedSize = source && source.w && source.h ? { w: source.w, h: source.h } : null;
   const [centerLevels, genericLevels, distillLevels, overlays] = await Promise.all([
-    discoverLevels(tilesDir, sharedSize),
-    discoverLevels(join(tilesDir, GENERIC_DIR), sharedSize),
-    discoverLevels(join(tilesDir, GENERIC_DISTILL_DIR), sharedSize),
-    sharedDir ? scanOverlays(sharedDir, sharedSize) : {},
+    discoverLevels(tilesDir, tile),
+    discoverLevels(join(tilesDir, GENERIC_DIR), tile),
+    discoverLevels(join(tilesDir, GENERIC_DISTILL_DIR), tile),
+    sharedDir ? scanOverlays(sharedDir, tile) : {},
   ]);
   // Only intersect against a tree that actually has something to pyramid -
   // a collection with generic tiles but no separate center (or vice versa) must
@@ -464,6 +477,8 @@ export async function scanDirectory(
     shared: { ...sharedAssets, levels: sharedLevels, distillLevels },
     /** The corner overlays from `--shared-dir`, served at `SHARED_BASE`; see `scanOverlays`. */
     overlays,
+    /** The level-0 tile size, which is also the map's cell shape. */
+    tile,
     rooms,
     count: rooms.length,
     /** The image-embedding blob, if one has been generated; else null. */

@@ -306,7 +306,7 @@
  * to the tile's bottom-right corner. A decorative `<img>`, not a control:
  * distill mode changes only the map.
  * - Sized as a fraction of the thumbnail by CatalogView's inline
- *   `distillW`/`distillH` (`iconSize / BASE_TILE`), matching the map, where
+ *   `distillW`/`distillH` (`iconSize / tile.base`), matching the map, where
  *   the icon scales with the tile. The center-row grid can then size the
  *   picture with no pixel rect to keep in step.
  * - Both are `0` until the `<img>` decodes, so the image has no footprint

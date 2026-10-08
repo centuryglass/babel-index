@@ -1,13 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { roomAtPoint } from './picking.ts';
-import { CELL_ASPECT, pxPerCell, worldToScreen } from './camera.ts';
+import { pxPerCell, worldToScreen } from './camera.ts';
 import { createLayout } from '../../../map/ordering.ts';
+import { TEST_TILE } from './tile-fixtures.ts';
+
+const CELL_ASPECT = TEST_TILE.aspect;
+const ZOOM_LIMITS = TEST_TILE.zoomLimits;
 
 const rect = { width: 1280, height: 800 };
 const layout = createLayout({ roomCount: 40, contentRatio: 0.3, seed: 1, aspect: CELL_ASPECT });
 const order = Array.from({ length: 40 }, (_, i) => i);
-const cam = { x: 0.5, y: 0.5, zoom: 220 };
+const cam = { x: 0.5, y: 0.5, zoom: 220, aspect: CELL_ASPECT, limits: ZOOM_LIMITS };
 
 /** The viewport point at the middle of a given cell. */
 const centreOf = (x, y, camera = cam) => worldToScreen(x + 0.5, y + 0.5, camera, rect);

@@ -5,9 +5,9 @@
  * spans to (x+1, y+1), and the center room sits at (0, 0). A camera is
  * `{x, y, zoom}`, where x/y are the world point at the center of the viewport
  * and `zoom` is pixels per cell width; cell height follows from the aspect, so
- * one number still drives the whole scale. `aspect` and `limits` are optional
- * fields that ride on a camera, and every function here preserves them by
- * spreading, which is why callers must spread too.
+ * one number still drives the whole scale. `aspect` and `limits` ride on a
+ * camera, and every function here preserves them by spreading, which is why
+ * callers must spread too.
  *
  * Keeping the base unit a cell rather than a pixel is what lets the tile change
  * shape without rewriting `packages/map`: slot placement and ranking are in
@@ -20,7 +20,7 @@
  * the screen/world round-trip and the fixed point under a zoom can be asserted
  * without a browser.
  */
-import { BASE_TILE } from './pyramid.ts';
+import type { Size } from './pyramid.ts';
 
 /** The hard or configured zoom range, riding on a camera as `limits`. */
 export interface ZoomLimits {
@@ -30,15 +30,16 @@ export interface ZoomLimits {
 
 /**
  * The map camera. `x`/`y` are the world cell at the center of the viewport;
- * `zoom` is pixels per cell *width*. `aspect` and `limits` are optional, and
- * once present every operation in this file carries them through by spreading.
+ * `zoom` is pixels per cell *width*. `aspect` (cell height over width) and
+ * `limits` come from the collection's tile (`tileShape.ts`) and the config,
+ * and every operation in this file carries them through by spreading.
  */
 export interface Camera {
   x: number;
   y: number;
   zoom: number;
-  aspect?: number;
-  limits?: ZoomLimits;
+  aspect: number;
+  limits: ZoomLimits;
 }
 
 /** A viewport-relative pixel rect - the canvas bounding box. */
@@ -79,17 +80,14 @@ export type CursorGranularity = 'cell' | 'region';
 // --- the cell's shape, the zoom range, and fitting a view to it ------------
 
 /**
- * Cell height as a multiple of cell width, derived from `BASE_TILE` so a change
- * to the art's shape changes the shape of the world with it. A camera may carry
- * its own `aspect` to override this, which is how the tests exercise shapes the
- * collection is not in.
+ * Cell height as a multiple of cell width for a collection's tile, so the
+ * art's shape is the shape of the world.
  */
-export const CELL_ASPECT = BASE_TILE.h / BASE_TILE.w;
+export const cellAspectOf = (tile: Size): number => tile.h / tile.w;
 
 /** Pixels per cell on each axis, for a camera. The one place the aspect is applied. */
 export function pxPerCell(cam: Camera): { x: number; y: number } {
-  const aspect = cam.aspect ?? CELL_ASPECT;
-  return { x: cam.zoom, y: cam.zoom * aspect };
+  return { x: cam.zoom, y: cam.zoom * cam.aspect };
 }
 
 /**
@@ -106,26 +104,25 @@ export function pxPerCell(cam: Camera): { x: number; y: number } {
  */
 export const MAX_ZOOM_FACTOR = 2;
 
+/** The hard minimum zoom, in pixels per cell width: a thumbnail. */
+export const MIN_ZOOM = 26;
+
 /**
- * The hard zoom limits, as pixels per cell width: never smaller than a
- * thumbnail, never past `MAX_ZOOM_FACTOR` times the tile's native width. The
- * max derives from `BASE_TILE` so it tracks the art's resolution rather than
- * restating it, and a short tile is free to be shorter than the min - that is
+ * The hard zoom limits for a collection's tile, as pixels per cell width:
+ * never smaller than `MIN_ZOOM`, never past `MAX_ZOOM_FACTOR` times the tile's
+ * native width. A short tile is free to be shorter than the min - that is
  * what "the cell is the unit" means.
  *
  * This is the widest range that can ever be offered, and the range everything
  * derived is checked against: `pyramid.test.ts` asserts every rung of the ladder
- * is reachable somewhere inside it. Configuration may narrow it - a camera
- * carries its own `limits` - but never widen it, so that assertion keeps
- * covering every state the app can reach at runtime.
+ * is reachable somewhere inside it. Configuration may narrow it (the server
+ * resolves `camera.minZoom`/`maxZoom` against it) but never widen it, so that
+ * assertion keeps covering every state the app can reach at runtime.
  */
-export const ZOOM_LIMITS: ZoomLimits = { min: 26, max: BASE_TILE.w * MAX_ZOOM_FACTOR };
+export const zoomLimitsFor = (tile: Size): ZoomLimits => ({ min: MIN_ZOOM, max: tile.w * MAX_ZOOM_FACTOR });
 
-export const MIN_ZOOM = ZOOM_LIMITS.min;
-export const MAX_ZOOM = ZOOM_LIMITS.max;
-
-/** Clamp a zoom into a range, defaulting to `ZOOM_LIMITS` when a camera carries none. */
-export const clampZoom = (z: number, limits: ZoomLimits = ZOOM_LIMITS): number =>
+/** Clamp a zoom into a range. */
+export const clampZoom = (z: number, limits: ZoomLimits): number =>
   Math.min(limits.max, Math.max(limits.min, z));
 
 /**
@@ -147,15 +144,15 @@ export function fitZoom({
   width,
   height,
   target,
-  aspect = CELL_ASPECT,
-  limits = ZOOM_LIMITS,
+  aspect,
+  limits,
   margin = 1,
 }: {
   width: number;
   height: number;
   target: { w: number; h: number };
-  aspect?: number;
-  limits?: ZoomLimits;
+  aspect: number;
+  limits: ZoomLimits;
   margin?: number;
 }): number {
   const byWidth = (width * margin) / target.w;
@@ -184,8 +181,8 @@ export function overviewZoom(
     width: canvas.clientWidth,
     height: canvas.clientHeight,
     target: { w: cellsPerAxis, h: cellsPerAxis },
-    aspect: cam.aspect ?? CELL_ASPECT,
-    limits: cam.limits ?? ZOOM_LIMITS,
+    aspect: cam.aspect,
+    limits: cam.limits,
   });
 }
 
@@ -475,7 +472,7 @@ export function beginFlight(from: Camera, to: Camera, now: number, ms: number = 
  * The camera part way through a flight, and whether it has arrived.
  *
  * Zoom interpolates geometrically, position linearly. Zoom is pixels per cell,
- * so a linear ramp from `MIN_ZOOM` to `MAX_ZOOM` spends nearly all of its time
+ * so a linear ramp from the minimum zoom to the maximum spends nearly all of its time
  * near the top of the range and the flight reads as a snap followed by a crawl;
  * the ratio is what the eye reads, which is why the wheel is exponential too.
  * Position has no such problem over the distances this map flies - tens of

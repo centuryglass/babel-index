@@ -50,6 +50,7 @@ function sampleManifest(): Manifest {
         levels: [{ level: 0, dir: null }, { level: 1, dir: '512' }],
       },
     },
+    tile: { w: 512, h: 512 },
     rooms: [{ id: 0, file: '001.jpg', url: '/images/001.jpg', bytes: 42, w: 512, h: 512 }],
     count: 1,
     embeddings: { url: '/images/embeddings.bin', dim: 512, count: 1, model: 'x', scale: 127 },
@@ -121,6 +122,23 @@ test('scanRemote passes overlays through, and reads a manifest from before overl
     async (base) => {
       assert.deepEqual((await scanRemote(base, 'new')).overlays, sampleManifest().overlays);
       assert.deepEqual((await scanRemote(base, 'old')).overlays, {});
+    }
+  );
+});
+
+test('scanRemote reads a manifest from before the tile size rode on it off level 0, and refuses one with neither', async () => {
+  const { tile: _tile, ...old } = sampleManifest();
+  const bare = { ...old, levels: [{ level: 0, dir: null }] };
+  await remoteHost(
+    {
+      '/new/manifest.json': { body: JSON.stringify({ ...sampleManifest(), tile: { w: 640, h: 480 } }), type: 'application/json' },
+      '/old/manifest.json': { body: JSON.stringify(old), type: 'application/json' },
+      '/bare/manifest.json': { body: JSON.stringify(bare), type: 'application/json' },
+    },
+    async (base) => {
+      assert.deepEqual((await scanRemote(base, 'new')).tile, { w: 640, h: 480 }, 'a stated tile wins');
+      assert.deepEqual((await scanRemote(base, 'old')).tile, { w: 512, h: 512 });
+      await assert.rejects(() => scanRemote(base, 'bare'), /tile size/);
     }
   );
 });
