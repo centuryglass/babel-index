@@ -613,6 +613,14 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     (px: number, py: number, camera: Camera) => doubleTapRef.current(px, py, camera),
     []
   );
+  // A single tap on a room opens its card, once the tap has settled into
+  // not being half of a double tap (`useMapCamera`'s `onSettledTap`). Same
+  // ref indirection as `tapRef` above.
+  const settledTapRef = useRef((_px: number, _py: number, _camera: Camera) => {});
+  const onSettledTap = useCallback(
+    (px: number, py: number, camera: Camera) => settledTapRef.current(px, py, camera),
+    []
+  );
   // The camera to return to on the next double tap of the same room, and
   // which room that is; null when no zoom is pending.
   const zoomToggle = useRef<{ cellKey: string; from: Camera } | null>(null);
@@ -646,6 +654,7 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
     onPick,
     onTap,
     onDoubleTap,
+    onSettledTap,
     onDebug,
   });
 
@@ -948,8 +957,8 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
   // Choosing a ranked result flies the camera and opens the card, ordered
   // but not waiting on each other: the card's content is reachable the
   // instant this runs, and the flight is continuity for a sighted reader,
-  // not a precondition for anyone else. This is the touch reader's path
-  // into a room that right-click and long-press never gave them.
+  // not a precondition for anyone else. This is a touch screen reader's
+  // path into a room, since the canvas's pointer gestures give them none.
   const openRoom = useCallback(
     (x: number, y: number, id: number, rank: number) => {
       dispatch({ type: 'openCard', card: { id, rank, x, y } });
@@ -1090,22 +1099,39 @@ function Library({ manifest }: { manifest: ManifestResponse }) {
       return;
     }
 
-    // A tap on a room's favorite badge toggles it - an ordinary room tile
-    // has no other tap behaviour. `roomAtPoint` already excludes the center
-    // cell (null) and generic cells, which have no badge. Below
-    // `config.favorites.minInteractiveTileWidth`, the badge is too small to
-    // fairly hit and the whole check is skipped.
-    if (favorites.enabled) {
-      const cellPx = pxPerCell(camera);
-      const hit = cellPx.x > config.favorites.minInteractiveTileWidth
-        ? roomAtPoint(px, py, camera, rect, layout, order)
-        : null;
-      if (hit && !('generic' in hit)) {
-        const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
-        const hitRect = favoriteHitRect(cellPx, sx, sy, COARSE_POINTER);
-        if (hitRect && pointInRect(px, py, hitRect)) favoriteFor(hit.id)?.toggle();
-      }
-    }
+    // A tap on a room's favorite badge toggles it, at once. The rest of a
+    // room tile opens its card, through `settledTapRef` below.
+    const badge = favoriteBadgeAt(px, py, camera, rect);
+    if (badge != null) favoriteFor(badge)?.toggle();
+  };
+
+  // The room under a point if the point is on that room's favorite badge,
+  // else null. `roomAtPoint` already excludes the center cell (null) and
+  // generic cells, which have no badge. Below
+  // `config.favorites.minInteractiveTileWidth`, the badge is too small to
+  // fairly hit and the whole check is skipped.
+  const favoriteBadgeAt = (px: number, py: number, camera: Camera, rect: { width: number; height: number }) => {
+    if (!favorites.enabled) return null;
+    const cellPx = pxPerCell(camera);
+    if (cellPx.x <= config.favorites.minInteractiveTileWidth) return null;
+    const hit = roomAtPoint(px, py, camera, rect, layout, order);
+    if (!hit || 'generic' in hit) return null;
+    const { x: sx, y: sy } = worldToScreen(hit.x, hit.y, camera, rect);
+    const hitRect = favoriteHitRect(cellPx, sx, sy, COARSE_POINTER);
+    return hitRect && pointInRect(px, py, hitRect) ? hit.id : null;
+  };
+
+  // The settled-tap body: open the card for the room or generic cell under
+  // the tap, as right-click and long press do. The center cell
+  // (`roomAtPoint`'s null) is the controls `tapRef` already handled, and a
+  // badge tap was the favorite toggle, so neither opens anything.
+  settledTapRef.current = (px, py, camera) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
+    const hit = roomAtPoint(px, py, camera, rect, layout, order);
+    if (!hit || favoriteBadgeAt(px, py, camera, rect) != null) return;
+    dispatch({ type: 'openCard', card: hit });
   };
 
   // The double-tap body: fit the room, or undo the fit (see `doubleTapRef`

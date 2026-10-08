@@ -450,6 +450,56 @@ describe('the library, in a browser: map and gestures', { concurrency: false }, 
     assert.equal(await card.count(), 0, 'a press that became a drag must not open a card');
   });
 
+  test('a click opens the card once it settles, and a double click zooms instead', async () => {
+    const { page, flightMs, doubleTapMs } = session;
+    const card = page.locator('.overlay');
+    // Past the window in which a second click could still pair with the
+    // first, so "no card yet" is an answer and not a race.
+    const settleMs = doubleTapMs + 300;
+
+    await page.mouse.click(880, 300);
+    await card.waitFor({ timeout: 5000 });
+    assert.match(await card.getAttribute('aria-label'), /, rank \d+ of \d+/);
+    await page.keyboard.press('Escape');
+    await card.waitFor({ state: 'detached', timeout: 5000 });
+
+    // A double click is the zoom, and must not also open the card.
+    const before = await settled(page);
+    await page.mouse.dblclick(880, 300);
+    try {
+      const zoomed = await landed(page, flightMs);
+      await page.waitForTimeout(settleMs);
+      assert.ok(zoomed.zoom > before.zoom, `a double click should zoom in: ${before.zoom} -> ${zoomed.zoom}`);
+      assert.equal(await card.count(), 0, 'a double click must not open a card');
+
+      // A click whose next press becomes a drag opens nothing: the drag
+      // supersedes the click still waiting to settle. The drag goes out and
+      // back so the camera ends where it began.
+      await page.mouse.click(640, 400);
+      await page.mouse.down();
+      await page.mouse.move(540, 400, { steps: 4 });
+      await page.mouse.move(640, 400, { steps: 4 });
+      await page.mouse.up();
+      await page.waitForTimeout(settleMs);
+      assert.equal(await card.count(), 0, 'a click followed by a drag must not open a card');
+    } finally {
+      // The tests after this one reuse the fixed point at the overview zoom:
+      // a second double click on the zoomed room flies back to the camera
+      // from before the first. A card left open, before or after it, would
+      // swallow every later gesture.
+      const closeCard = async () => {
+        if (!(await card.count())) return;
+        await page.keyboard.press('Escape');
+        await card.waitFor({ state: 'detached', timeout: 5000 });
+      };
+      await closeCard();
+      await page.mouse.dblclick(640, 400);
+      await landed(page, flightMs);
+      await page.waitForTimeout(settleMs);
+      await closeCard();
+    }
+  });
+
   test('pinching zooms, and two fingers do not fight over the pan', async () => {
     const { page } = session;
     // Playwright's touchscreen is single-touch, so a real pinch has to be

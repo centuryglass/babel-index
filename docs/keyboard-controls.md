@@ -81,7 +81,7 @@ canvas comment).
 | `Home` | Fly to (0, 0) at the return-to-center zoom (`overviewZoom`) |
 | `Ctrl/Cmd+Home` | Fly to rank-0 room, or announce "no ranked rooms" |
 | `Ctrl/Cmd+End` | Fly to the last-ranked room, or announce "no ranked rooms" |
-| `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching right-click/long-press |
+| `Enter` / `Space` | Open the room overlay for the room (or generic cell) under the cursor - no-op only on the center, matching a click or tap |
 | `/` | Focus search (fly home first if search is off-screen) |
 | `?` | Announce nearest ranked room in each direction, distance to boundary, then the cursor's own cell; a repeat on the same cell is spoken again |
 | `f` / `F` | Toggle the favorite for the room under the cursor and announce the result; on the center or a generic cell, announce that only a room can be a favorite. Unbound without a favorite store, and with `Ctrl`/`Cmd`/`Alt` held (`Ctrl/Cmd+F` stays the browser's find) |

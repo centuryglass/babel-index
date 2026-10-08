@@ -622,7 +622,7 @@ export function MapView({
           (docs/agents/catalog.md, "One live region for the whole app").
         */}
         <div className="note">
-          {!status && 'drag to pan, scroll to zoom. right-click a room.'}
+          {!status && 'drag to pan, scroll to zoom. click a room to read it.'}
         </div>
       </div>
       )}

@@ -189,9 +189,15 @@ still apply.
   `releasePointerCapture` can throw `NotFoundError`, which is ordinary on
   touch. Do the `pointers` map bookkeeping before the capture call, not
   gated by it.
-- **The overlay opens on right-click or long press, never left-click** (left
-  focuses the room). A long press loses to a pan: its timer lives on the
-  pointer stream, so moving past the slop radius cancels it.
+- **A tap on a room opens its card only once it settles.** `onSettledTap`
+  fires `doubleTapMs` after a tap that no second tap paired with, so a double
+  tap zooms without also opening the card. Any new press cancels a pending
+  one, so a tap followed by a drag opens nothing. The center's controls and
+  the favorite badge stay on the instant `onTap`; moving either onto the
+  settled tap adds the delay to every book and toggle.
+- **Right-click and long press open the card at once.** A long press loses
+  to a pan: its timer lives on the pointer stream, so moving past the slop
+  radius cancels it.
 
 ## Config and the pyramid
 
