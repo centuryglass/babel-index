@@ -20,15 +20,16 @@ builds its prompt, so the full text is one click away.
    |                    "Pitch more" appends to the same list
  3. Pitch review ...... drop obvious failures, sharpen near misses
    |
- 4. Draft ............. one draft per kept pitch, in parallel
-   |                    [proposed: lint every draft, #414]
+ 4. Draft ............. one draft per kept pitch, in parallel,
+   |                    each linted against the collection's rules
    |                    [proposed: automatic critique, #415]
  5. Critique .......... hand edits and revision requests, on any
    |                    drafts, repeated as often as needed
  6. Choose ............ pick one draft (or re-pitch / redraft);
    |                    critique can continue on it afterwards
  7. Accept ............ mark Final
-   |                    tagged into collection memory
+   |                    tagged into collection memory, which
+   |                    lint rules are derived from
 ```
 
 A tile's reading, pitches and drafts live in one workspace file that grows
@@ -47,7 +48,7 @@ comments and the maintainer's local `story_preferences.md`.
 - **The writer never reads past stories.** A pattern repeated many times in
   a model's context gets copied. A short ban instruction ("don't use the
   name Vane or Vance") works in most cases, so rules distilled from the
-  collection may go into the writer's prompt (see "Lint rules").
+  collection go into the writer's prompt (see "Lint rules").
 - **Each model call has one narrow job.** No single call has to read,
   invent, choose and write at once.
 - **Judging stays with the reviewer, and is cheap to give.** Pitch review,
@@ -68,6 +69,9 @@ comments and the maintainer's local `story_preferences.md`.
 | Trace log | [`story_engine/trace.py`](../story_engine/trace.py) |
 | Collection memory: tagging prompt and pattern counts | [`story_engine/memory.py`](../story_engine/memory.py) |
 | Collection memory: storage, provenance, backfill and report | [`babel_index_review/collection_memory.py`](../babel_index_review/collection_memory.py) |
+| Lint rules: checks, lint, derivation prompt | [`story_engine/rules.py`](../story_engine/rules.py) |
+| Lint rules: storage, defaults, CLI | [`babel_index_review/story_rules.py`](../babel_index_review/story_rules.py) |
+| Lint rules window | [`babel_index_review/rules_dialog.py`](../babel_index_review/rules_dialog.py) |
 | Babel Index's frame: subject, presentation, voice, style rules | [`babel_index_review/story_frame.py`](../babel_index_review/story_frame.py) |
 | The base scene every image shares | `core.py`'s `BASE_SCENE` |
 | Seeds, forms, constraints | `data/story_seeds.json`, `data/story_forms.json`, `data/story_constraints.json` |
@@ -75,6 +79,7 @@ comments and the maintainer's local `story_preferences.md`.
 | Workspaces on disk | `DIR/story_traces/<tile stem>.json` |
 | Traces on disk | `DIR/story_traces/<tile stem>.jsonl` |
 | Collection memory on disk | `DIR/collection_memory.json` |
+| Lint rules on disk | `DIR/story_rules.json` |
 
 ## Current workflow
 
@@ -194,6 +199,8 @@ about other stories. The rules:
 - take tone from the keywords without naming them;
 - 150-word hard limit, a budget and not a target;
 - the frame's style rules (no em dashes);
+- every lint rule's description, unless Engine settings turns that off
+  (see "Lint rules");
 - the constraint, if one was drawn.
 
 **Choices:**
@@ -203,6 +210,10 @@ about other stories. The rules:
 - **Redraft** one draft: a new draft from the same pitch, with a new form and
   constraint drawn. The old draft stays.
 - **Model.** Drafting benefits from a stronger model than pitching.
+
+**Lint:** every draft is checked against the lint rules that have a check,
+and again on every edit. A draft that fails is shown as usual, with a list
+of each rule it fails and what tripped it.
 
 **Output:** drafts appended to the workspace, tagged with their pitch, form
 and constraint.
@@ -320,8 +331,42 @@ backfills the collection. The report (`story_engine.memory.analyze`) counts:
   ("Vane" / "Vance").
 
 `--no-sync` reports without model calls, and `--json` prints the report as
-data. The writer never reads memory. Lint rules derived from it are still
-proposed (see "Lint rules").
+data. The writer never reads memory; lint rules derived from it reach the
+writer instead (see "Lint rules").
+
+### Lint rules
+
+`DIR/story_rules.json` holds the collection's lint rules
+(`story_engine.rules`). Each rule is:
+- a **description**: one instruction, given word for word to the writer;
+- an optional **check**: a deterministic test, as data of a fixed kind
+  (banned words or names, opener, regex, word count). A rule with no check
+  reaches the writer but lints nothing.
+
+A tile directory starts with two rules, matching the writer's own: no em
+dashes, and the word budget.
+
+**Story engine > Lint rules** in the review GUI lists every rule with how
+many Final stories its check fails, so a check too broad to be useful
+shows. In it:
+- **Update from memory** sends collection memory's report to the Rules
+  model (`rules.derive_prompt`), which returns rules for overused phrases,
+  openers, names and tropes. They replace every rule marked `llm`.
+- **Add**, **Edit** and **Delete** change rules by hand. A rule added or
+  edited by hand is marked `hand` and stays until deleted. Deleting an `llm`
+  rule records it as dismissed, and later updates are told not to propose it
+  again.
+- Edits wait for Save.
+
+`python -m babel_index_review.story_rules DIR` does the same from a shell:
+`list`, `derive`, and `prompt` / `apply`, which run the derivation
+through a Claude Code session. Derivation reads memory, so it
+sees only stories memory has tagged.
+
+**Choices:**
+- **Lint rules in writer prompt** (Engine settings, on by default) gives the
+  writer every rule's description. Off, rules only lint.
+- **Rules model** (Engine settings) picks the deriving model.
 
 ### The workspace
 
@@ -356,29 +401,10 @@ one-time workspace import.
 
 ## Proposed additions
 
-### Lint rules (#414)
-
-- A prompt guides an LLM through analyzing collection memory and turning it into
-  lint rules. A review GUI menu option runs the update.
-- Each rule is a plain-text description ("Don't use the name Vane or
-  Vance"), with a deterministic check where one is possible. Rules with no
-  check are allowed.
-- The maintainer can add, edit and remove rules in the GUI. A rule the
-  maintainer added stays until the maintainer removes it; an update from
-  the LLM replaces only rules the LLM wrote.
-- An engine setting, on by default, puts every rule's description into
-  `write_prompt`.
-- Every draft is linted against the rules that have a check. A failing draft
-  is still shown as usual, with an indicator listing each failed check.
-- Rules with no check are used only in the writer's prompt and in the LLM
-  critique.
-- The old planned checks (em dashes, word budget, names reused from the
-  collection, overused openers, banned n-grams) become ordinary rules.
-
 ### Automatic critique (#415)
 
 A failed lint becomes a revision request, sent through stage 5's revision
-path. Two engine settings:
+path. Rules with no check reach the LLM critique too. Two engine settings:
 - **Automatic critique:** on, a failed lint sends the request at once. Off,
   an Automatic critique button on each draft sends it.
 - **LLM critique:** on, an LLM reads the draft, every rule and the failed
@@ -392,12 +418,6 @@ There are no automatic loops:
 - A revised draft that fails the lint again, for any reason, is marked as
   needing attention.
 - The writer may object to an automatic request, as to a manual one.
-
-### Weight report (#412)
-
-A modal window reports acceptance rates for every seed, seed kind, form and
-constraint, with the counts behind each rate. It edits their weights and adds
-new entries, saving back to the `data/story_*.json` files.
 
 ### Extraction (#416)
 

@@ -113,11 +113,15 @@ The story engine panel (`story_engine/`, configured by
    **Revise**; requests on different drafts run at the same time. A writer
    can object to a request instead of making it. **Choose** makes a draft the
    story, and from then on the two are one text. Mark it Final to accept it.
+   A draft that fails a lint rule lists each failure above its text (see
+   "Lint rules" below).
 
 Engine settings holds a model for each stage, the form, the odd-constraint
 chance, and extra instructions for the next pitch call. Its Memory model tags
 each story marked Final into collection memory (see "Collection memory"
-below). Model picks are remembered between sessions.
+below), its Rules model derives lint rules from that memory, and **Lint rules
+in writer prompt** gives the writer every rule's description. Model picks are
+remembered between sessions.
 
 Each tile's reading, pitches and drafts are kept in
 `DIR/story_traces/<tile>.json`, and every model call, choice and outcome is
@@ -191,6 +195,26 @@ whole collection. Later runs tag only new or edited Final stories, since the
 review GUI tags each one as it is marked Final. `--no-sync` prints the report
 without model calls. See [`docs/story_workflow.md`](docs/story_workflow.md)'s
 "Collection memory".
+
+**Lint rules**
+
+```sh
+python -m babel_index_review.story_rules DIR list
+python -m babel_index_review.story_rules DIR derive [--model MODEL]
+python -m babel_index_review.story_rules DIR prompt > prompt.md   # for a Claude Code session
+python -m babel_index_review.story_rules DIR apply reply.json
+```
+
+`DIR/story_rules.json` holds rules like "Don't use the name Vane or Vance",
+each with an optional deterministic check (banned words or names, opener,
+regex, word count). Every draft is linted against them, and their
+descriptions go into the writer's prompt. `derive` asks a model to rewrite
+the rules marked `llm` from collection memory's report; `prompt` and `apply`
+do the same through a Claude Code session. Rules added or edited by hand
+stay. `list` prints every rule with how many Final stories it fails. The
+review GUI's **Story engine > Lint rules** window does all of this and edits
+rules by hand. See [`docs/story_workflow.md`](docs/story_workflow.md)'s
+"Lint rules".
 
 **Parallel requests**
 

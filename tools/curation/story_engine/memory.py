@@ -13,8 +13,8 @@ Two parts, both free of storage:
 
 The caller keeps the entries (``babel_index_review.collection_memory``).
 Nothing here is shown to the writer: ``engine.py``'s principle that the
-writer never reads past stories holds for memory too. Lint rules derived
-from memory are #414's next step.
+writer never reads past stories holds for memory too. ``rules.py`` turns
+the report into lint rules, and only their descriptions reach the writer.
 """
 
 from __future__ import annotations

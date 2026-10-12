@@ -84,7 +84,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from babel_index_review import collection_memory, core, story_frame, tag_explainer, titles, weights_dialog
+from babel_index_review import collection_memory, core, rules_dialog, story_frame, story_rules, tag_explainer, titles, weights_dialog
 from babel_index_review.review_widgets import (
     COLOR_MUTED,
     THUMB_SIZE,
@@ -102,6 +102,7 @@ from babel_index_review.review_widgets import (
     set_text_quietly,
 )
 from story_engine import DraftEntry, PitchEntry, Reading, Workspace
+from story_engine.rules import RuleSet, lint
 from story_engine.workspace import new_id, now
 from tag.describe_image import DEFAULT_MODEL, LOCAL_PREFIX, MODELS, available_models
 
@@ -221,6 +222,8 @@ class ReviewWindow(QMainWindow):
         self._explaining: set[tuple[str, str]] = set()  # (keyword, model id) in flight
         self._open_keyword: str | None = None
         self._model_setting_connections: dict[str, QMetaObject.Connection] = {}
+        self._rules: RuleSet | None = None  # read by _lint_rules
+        self._rules_mtime: float | None = None
 
         # Model calls. Network-bound, so many run at once; a single-model
         # local server can't serve concurrent requests, so its calls queue.
@@ -289,6 +292,9 @@ class ReviewWindow(QMainWindow):
         report = menu.addAction("Weight report and tuning...")
         report.setEnabled(self.story_engine is not None)
         report.triggered.connect(self._open_weights)
+        rules = menu.addAction("Lint rules...")
+        rules.setEnabled(self.story_engine is not None)
+        rules.triggered.connect(self._open_rules)
 
     def _build_ui(self):
         columns = QSplitter(Qt.Orientation.Horizontal)
@@ -522,6 +528,12 @@ class ReviewWindow(QMainWindow):
         self.revise_model_combo = QComboBox()
         self.memory_model_combo = QComboBox()
         self.memory_model_combo.setToolTip("Tags a story's tropes and payload into collection memory when it is marked Final")
+        self.rules_model_combo = QComboBox()
+        self.rules_model_combo.setToolTip("Rewrites the llm lint rules from collection memory (Story engine > Lint rules)")
+        self.rules_in_prompt = QCheckBox("Lint rules in writer prompt")
+        self.rules_in_prompt.setToolTip("Give the writer every lint rule's description when drafting")
+        self.rules_in_prompt.setChecked(self.settings.value("rules_in_prompt", True, type=bool))
+        self.rules_in_prompt.toggled.connect(lambda on: self.settings.setValue("rules_in_prompt", on))
         self.form_combo = QComboBox()
         self.form_combo.addItem("Drawn by weight", None)
         for option in self.story_engine.frame.forms.options:
@@ -552,6 +564,9 @@ class ReviewWindow(QMainWindow):
         grid.addWidget(self.instructions_edit, 2, 3)
         grid.addWidget(QLabel("Memory model"), 3, 0)
         grid.addWidget(self.memory_model_combo, 3, 1)
+        grid.addWidget(QLabel("Rules model"), 3, 2)
+        grid.addWidget(self.rules_model_combo, 3, 3)
+        grid.addWidget(self.rules_in_prompt, 4, 1)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(3, 1)
         self.settings_frame.hide()
@@ -780,6 +795,7 @@ class ReviewWindow(QMainWindow):
                 draft_model=self.draft_model_combo,
                 revise_model=self.revise_model_combo,
                 memory_model=self.memory_model_combo,
+                rules_model=self.rules_model_combo,
             )
         return combos
 
@@ -1498,6 +1514,36 @@ class ReviewWindow(QMainWindow):
                 self.form_combo.addItem(option.name, option.name)
             self.form_combo.setCurrentIndex(max(0, self.form_combo.findData(current)))
 
+    def _open_rules(self):
+        """Show the lint rules window, then lint the drafts against whatever it saved."""
+        if self.story_engine is None:
+            return
+        dialog = rules_dialog.RulesDialog(
+            self.tile_dir, self._run, self.rules_model_combo.currentData(), self.rules_model_combo.currentText(), self
+        )
+        dialog.exec()
+        if dialog.saved:
+            self._refresh_engine()
+
+    def _lint_rules(self) -> RuleSet:
+        """The tile directory's lint rules, read again whenever the file changes.
+
+        A file that fails to parse (caught mid-write) keeps the rules last read.
+        """
+        path = story_rules.rules_path(self.tile_dir)
+        mtime = os.path.getmtime(path) if os.path.exists(path) else None
+        if self._rules is None or mtime != self._rules_mtime:
+            try:
+                self._rules = story_rules.load(self.tile_dir, strict=True)
+                self._rules_mtime = mtime
+            except json.JSONDecodeError:
+                pass
+        return self._rules or RuleSet()
+
+    def _writer_rules(self) -> list[str]:
+        """Lint rule descriptions for the writer, or none when Engine settings turned them off."""
+        return self._lint_rules().descriptions() if self.rules_in_prompt.isChecked() else []
+
     def _save_workspace(self, subject: str):
         if self.store is not None and subject in self._workspaces:
             if self._dirty_subject == subject:
@@ -1601,6 +1647,7 @@ class ReviewWindow(QMainWindow):
     def _refresh_drafts(self, subject: str, workspace: Workspace, locked: bool):
         hidden = self._hidden.setdefault(subject, set())
         revising = self._revising.get(subject, {})
+        rules = self._lint_rules().rules
         for draft_id in [did for did in self._draft_cards if workspace.draft(did) is None]:
             _discard(self._draft_cards.pop(draft_id))
         while self.draft_grid.count():
@@ -1624,6 +1671,7 @@ class ReviewWindow(QMainWindow):
                 draft, number, pitch_text, chosen, revising.get(draft.id), locked and chosen,
                 can_redraft=pitch is not None and not locked,
             )
+            card.show_lint(lint(draft.story, rules))
             if draft.id in hidden:
                 card.hide()
                 continue
@@ -1844,6 +1892,7 @@ class ReviewWindow(QMainWindow):
         form = self.form_combo.currentData()
         chance = self.chance_slider.value() / 100
         reading, brief, note = workspace.reading, pitch.as_pitch(), pitch.note
+        rules = self._writer_rules()
         self._writing.setdefault(subject, []).append(pitch_id)
 
         def finish():
@@ -1868,7 +1917,7 @@ class ReviewWindow(QMainWindow):
             QMessageBox.warning(self, "Draft failed", f"Pitch {workspace.pitch_number(pitch_id)}: {message}")
 
         self._run(
-            lambda: engine.write(subject, image, keywords, reading, brief, model, form, chance, note, pitch_id),
+            lambda: engine.write(subject, image, keywords, reading, brief, model, form, chance, note, pitch_id, rules),
             model, done, failed,
         )
         self._refresh_engine()
@@ -1897,6 +1946,9 @@ class ReviewWindow(QMainWindow):
             return
         self._hand_edit(draft, text)
         self._mark_workspace_dirty(subject)
+        card = self._draft_cards.get(draft_id)
+        if card is not None:
+            card.show_lint(lint(text, self._lint_rules().rules))
         if draft.id == workspace.chosen and self.current_key is not None and not self._is_final():
             self._loading = True
             self.story_edit.setPlainText(text)
@@ -2048,7 +2100,8 @@ class ReviewWindow(QMainWindow):
         engine, model = self.story_engine, self.revise_model_combo.currentData()
         pitch = workspace.pitch(draft.pitch_id)
         prompt = draft.prompt or engine.context_prompt(
-            keywords, workspace.reading, pitch.as_pitch() if pitch else None, pitch.note if pitch else ""
+            keywords, workspace.reading, pitch.as_pitch() if pitch else None, pitch.note if pitch else "",
+            self._writer_rules(),
         )
         story = draft.story
         revising[draft_id] = request
