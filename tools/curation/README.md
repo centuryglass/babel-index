@@ -131,7 +131,9 @@ python -m babel_index_review.story_critiques DIR [--out critiques.md]
 Seeds, forms and constraints are `data/story_seeds.json`,
 `data/story_forms.json` and `data/story_constraints.json`. Each entry has a
 relative `weight`, and seed kinds have their own weights too; raise the ones
-that keep working and lower the ones that don't.
+that keep working and lower the ones that don't. The review GUI's
+**Story engine > Weight report and tuning** window shows how each entry has
+fared and edits the weights and lists in place.
 
 **Review from a phone**
 

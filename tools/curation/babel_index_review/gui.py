@@ -84,7 +84,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from babel_index_review import collection_memory, core, story_frame, tag_explainer, titles
+from babel_index_review import collection_memory, core, story_frame, tag_explainer, titles, weights_dialog
 from babel_index_review.review_widgets import (
     COLOR_MUTED,
     THUMB_SIZE,
@@ -262,6 +262,7 @@ class ReviewWindow(QMainWindow):
         self.resize(1920, 1040)
         self.model = TileTableModel(tile_dir, keys, lambda key: self.index[key], self)
         self._build_ui()
+        self._build_menu()
         self._build_overlay()
         self._install_shortcuts()
         self._set_models(MODELS)
@@ -283,6 +284,12 @@ class ReviewWindow(QMainWindow):
             self.select_tile(first[0])
 
     # -- UI construction ----------------------------------------------------
+    def _build_menu(self):
+        menu = self.menuBar().addMenu("Story engine")
+        report = menu.addAction("Weight report and tuning...")
+        report.setEnabled(self.story_engine is not None)
+        report.triggered.connect(self._open_weights)
+
     def _build_ui(self):
         columns = QSplitter(Qt.Orientation.Horizontal)
         columns.addWidget(self._build_tile_list())
@@ -1471,6 +1478,25 @@ class ReviewWindow(QMainWindow):
             return None, None
         subject = story_frame.subject_for(self.current_key)
         return subject, self._workspace(subject)
+
+    def _open_weights(self):
+        """Show the weight report, then use any lists it saved for the next draw."""
+        if self.story_engine is None:
+            return
+        if self._dirty_subject is not None:
+            self._save_workspace(self._dirty_subject)
+        frame = self.story_engine.frame
+        dialog = weights_dialog.open_dialog(self.tile_dir, frame.seeds, frame.forms, frame.constraints, self)
+        frame.seeds = dialog.saved.get("seeds", frame.seeds)
+        frame.forms = dialog.saved.get("forms", frame.forms)
+        frame.constraints = dialog.saved.get("constraints", frame.constraints)
+        if "forms" in dialog.saved:
+            current = self.form_combo.currentData()
+            self.form_combo.clear()
+            self.form_combo.addItem("Drawn by weight", None)
+            for option in frame.forms.options:
+                self.form_combo.addItem(option.name, option.name)
+            self.form_combo.setCurrentIndex(max(0, self.form_combo.findData(current)))
 
     def _save_workspace(self, subject: str):
         if self.store is not None and subject in self._workspaces:
