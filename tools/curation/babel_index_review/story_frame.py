@@ -16,6 +16,9 @@ import os
 
 from babel_index_review.core import BASE_SCENE
 from story_engine import Engine, Frame, TraceLog, WorkspaceStore, load_options
+from story_engine.engine import word_limit_rule
+from story_engine.rules import Rule
+from story_engine.workspace import new_id, now
 
 SEEDS_PATH = os.path.join("data", "story_seeds.json")
 FORMS_PATH = os.path.join("data", "story_forms.json")
@@ -38,9 +41,24 @@ VOICE = (
     "whom it is ordinary."
 )
 
+NO_EM_DASHES = "Don't use em dashes."
+
 STYLE_RULES = [
-    "Don't use em dashes.",
+    NO_EM_DASHES,
 ]
+
+
+def default_rules() -> list[Rule]:
+    """The lint rules a tile directory starts with, before it has a rules file.
+
+    Each description matches a rule ``write_prompt`` already gives the writer,
+    which ``write_prompt`` then lists once.
+    """
+    stamp = now()
+    return [
+        Rule(new_id(), NO_EM_DASHES, {"kind": "regex", "pattern": "—", "ignore_case": False}, created=stamp),
+        Rule(new_id(), word_limit_rule(Frame.word_limit), {"kind": "word_count", "max": Frame.word_limit}, created=stamp),
+    ]
 
 
 def build_frame() -> Frame:

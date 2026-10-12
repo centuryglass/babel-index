@@ -303,6 +303,11 @@ def pitch_prompt(
     )
 
 
+def word_limit_rule(limit: int) -> str:
+    """The writer's word budget rule, also the description of the default word_count lint rule."""
+    return f"Hard limit of {limit} words. That's a budget, not a target."
+
+
 def write_prompt(
     frame: Frame,
     keywords: list[str],
@@ -311,9 +316,15 @@ def write_prompt(
     form: Option | None,
     constraint: Option | None,
     note: str = "",
+    extra_rules: list[str] | None = None,
 ) -> str:
     """The writer's prompt. ``pitch`` and ``form`` are None for a hand-written draft,
-    whose revisions still need the writer's rules as context."""
+    whose revisions still need the writer's rules as context.
+
+    ``extra_rules`` are lint rule descriptions (``rules.py``), added after the
+    frame's own rules. One that repeats a rule already listed is left out, so
+    a lint rule seeded from a frame rule doesn't appear twice.
+    """
     rules = [
         "The hook arrives within the first two sentences. What follows builds on it; nothing delays it.",
         "Keep the story light to read. Each detail can carry its own small "
@@ -332,9 +343,14 @@ def write_prompt(
         f"The image was generated from the keywords {', '.join(keywords)}. Take tone "
         "and texture from them, but don't name them and don't use any names they "
         "contain. The reader sees them separately.",
-        f"Hard limit of {frame.word_limit} words. That's a budget, not a target.",
+        word_limit_rule(frame.word_limit),
         *frame.style_rules,
     ]
+    listed = {rule.strip().casefold() for rule in rules}
+    for rule in extra_rules or []:
+        if rule.strip() and rule.strip().casefold() not in listed:
+            listed.add(rule.strip().casefold())
+            rules.append(rule.strip())
     if constraint is not None:
         rules.append(f"An extra constraint for this one: {constraint.description}")
     if pitch is None:
@@ -478,20 +494,22 @@ class Engine:
         constraint_chance: float | None = None,
         note: str = "",
         pitch_id: str | None = None,
+        rules: list[str] | None = None,
     ) -> Draft:
         """Write one draft from ``pitch``.
 
         ``form`` names a form to use; ``None`` draws one by weight. A draft
         gets an odd constraint with ``constraint_chance`` (the frame's when
         None). ``note`` is the reviewer's note on the pitch, passed to the
-        writer. ``pitch_id`` only labels the trace event.
+        writer. ``pitch_id`` only labels the trace event. ``rules`` are lint
+        rule descriptions for the writer (``write_prompt``'s ``extra_rules``).
         """
         chosen = self.frame.forms.by_name(form) if form else self.frame.forms.draw(1, self.rng)[0]
         chance = self.frame.constraint_chance if constraint_chance is None else constraint_chance
         constraint = None
         if self.frame.constraints and self.rng.random() < chance:
             constraint = self.frame.constraints.draw(1, self.rng)[0]
-        prompt = write_prompt(self.frame, keywords, reading, pitch, chosen, constraint, note)
+        prompt = write_prompt(self.frame, keywords, reading, pitch, chosen, constraint, note, rules)
         raw = llm.ask(image, [("user", prompt)], model)
         draft = Draft(chosen.name, constraint.name if constraint else None, _clean_story(raw), prompt)
         self.trace.append(
@@ -511,9 +529,16 @@ class Engine:
         )
         return draft
 
-    def context_prompt(self, keywords: list[str], reading: Reading | None, pitch: Pitch | None, note: str = "") -> str:
+    def context_prompt(
+        self,
+        keywords: list[str],
+        reading: Reading | None,
+        pitch: Pitch | None,
+        note: str = "",
+        rules: list[str] | None = None,
+    ) -> str:
         """A writer's prompt for a draft that has none, e.g. one written by hand."""
-        return write_prompt(self.frame, keywords, reading, pitch, None, None, note)
+        return write_prompt(self.frame, keywords, reading, pitch, None, None, note, rules)
 
     def revise(
         self,

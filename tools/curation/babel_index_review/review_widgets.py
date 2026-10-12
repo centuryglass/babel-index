@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from story_engine import DraftEntry, PitchEntry
+from story_engine.rules import Failure
 
 THUMB_SIZE = QSize(64, 48)
 DRAFT_LINES = 15  # a draft card's text box height; longer drafts scroll
@@ -62,6 +63,7 @@ COLOR_MISSING_STORY = "#d25555"
 COLOR_MISSING_IMAGE = "#7f8c8d"
 COLOR_REVISED = "#6f9fe0"
 COLOR_MUTED = "#8a8a93"
+COLOR_LINT = "#d25555"
 
 
 def tile_state(entry: dict, exists: bool) -> str:
@@ -636,6 +638,11 @@ class DraftCard(QFrame):
         self.revised.setWordWrap(True)
         self.revised.setStyleSheet(f"color: {COLOR_REVISED};")
 
+        self.lint = QLabel()
+        self.lint.setWordWrap(True)
+        self.lint.setStyleSheet(f"color: {COLOR_LINT}; border: 1px solid {COLOR_LINT}; border-radius: 3px; padding: 2px 4px;")
+        self.lint.hide()
+
         self.text = FixedLinesTextEdit(DRAFT_LINES)
         self.text.setFrameShape(QFrame.Shape.NoFrame)
         self.text.textChanged.connect(lambda: self.textEdited.emit(self.draft_id, self.text.toPlainText()))
@@ -683,6 +690,7 @@ class DraftCard(QFrame):
         layout.addWidget(self.pitch)
         layout.addWidget(self.objection)
         layout.addWidget(self.revised)
+        layout.addWidget(self.lint)
         layout.addWidget(self.text)
         layout.addStretch(1)
         layout.addWidget(self.pending)
@@ -757,6 +765,13 @@ class DraftCard(QFrame):
         self.history_button.setEnabled(bool(draft.history))
         self.history_button.setToolTip(f"Earlier versions ({len(draft.history)})")
         self.delete_button.setEnabled(not locked)
+
+    def show_lint(self, failures: list[Failure]) -> None:
+        """List each lint rule the draft fails, or hide the list when it passes."""
+        self.lint.setVisible(bool(failures))
+        lines = [f"- {f.rule.description} ({f.found})" for f in failures]
+        heading = f"Fails {len(failures)} lint rule{'s' if len(failures) != 1 else ''}:"
+        self.lint.setText("\n".join([heading, *lines]))
 
     def take_request(self) -> str:
         """Clear the request field, returning what it held."""
