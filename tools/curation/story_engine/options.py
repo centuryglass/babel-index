@@ -13,13 +13,17 @@ Two file shapes:
 - ``{"kinds": {kind: weight}, "options": [... each with a "kind" ...]}``
   (seeds). A draw picks a kind by its weight first, then an entry within it,
   so a long list of one kind doesn't crowd out a short list of another.
+
+``save_options`` writes either shape back in the layout the files are
+edited in, one entry per line, so a save changes only the lines that changed.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -57,6 +61,13 @@ class OptionSet:
             picked.append(option)
         return picked
 
+    def with_weights(self, weights: dict[str, float], kind_weights: dict[str, float] | None = None) -> "OptionSet":
+        """A copy with the named options (and kinds) reweighted; others are unchanged."""
+        return OptionSet(
+            [replace(o, weight=weights.get(o.name, o.weight)) for o in self.options],
+            {**self.kind_weights, **(kind_weights or {})},
+        )
+
     def by_name(self, name: str) -> Option:
         for option in self.options:
             if option.name == name:
@@ -88,3 +99,43 @@ def load_options(path: str) -> OptionSet:
         seen.add(option.name)
         options.append(option)
     return OptionSet(options, kind_weights)
+
+
+def _number(value: float) -> str:
+    return str(int(value)) if value == int(value) else repr(float(value))
+
+
+def save_options(path: str, option_set: OptionSet) -> None:
+    """Write ``option_set`` to ``path`` in the shape ``load_options`` reads.
+
+    A set whose only kind is ``""`` is a plain list; any other is the
+    ``{"kinds", "options"}`` shape. Goes through a temp file and a rename, so
+    a crash never leaves half a file.
+    """
+    dump = json.dumps
+    plain = set(option_set.kind_weights) == {""}
+
+    def line(o: Option) -> str:
+        kind = "" if plain else f'"kind": {dump(o.kind)}, '
+        return (
+            f'{{{kind}"name": {dump(o.name, ensure_ascii=False)}, '
+            f'"description": {dump(o.description, ensure_ascii=False)}, "weight": {_number(o.weight)}}}'
+        )
+
+    indent = "  " if plain else "    "
+    rows = []
+    for i, o in enumerate(option_set.options):
+        last = i == len(option_set.options) - 1
+        rows.append(indent + line(o) + ("" if last else ","))
+        if not last and option_set.options[i + 1].kind != o.kind:
+            rows.append("")  # a blank line between kinds
+    body = "\n".join(rows)
+    if plain:
+        text = f"[\n{body}\n]\n"
+    else:
+        kinds = ",\n".join(f"    {dump(k)}: {_number(w)}" for k, w in option_set.kind_weights.items())
+        text = f'{{\n  "kinds": {{\n{kinds}\n  }},\n  "options": [\n{body}\n  ]\n}}\n'
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as file:
+        file.write(text)
+    os.replace(tmp, path)

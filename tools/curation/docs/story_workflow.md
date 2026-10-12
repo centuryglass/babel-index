@@ -275,12 +275,24 @@ outside the story engine, but they read the story:
 ### Tuning
 
 The maintainer tunes the engine between sessions:
-- **Weights.** Edit the weights in the `data/story_*.json` files. A weight
-  of 0 removes an entry from draws but keeps it available by hand.
-- **Lists.** Add or remove entries in the same files. No code change needed.
+- **Weights and lists.** The review GUI's **Story engine > Weight report and
+  tuning** window reports how every seed, seed kind, form and constraint has
+  fared, and edits their weights and adds entries. Save writes the
+  `data/story_*.json` files, and the next draw uses them. The files can also
+  be edited by hand. A weight of 0 removes an entry from draws but keeps it
+  available by hand.
 - **Prompts.** Notes from pitch review and the critique export
   (`python -m babel_index_review.story_critiques DIR`) are distilled into
   `story_preferences.md`, then into `pitch_prompt` and `write_prompt`.
+
+The report counts every workspace in `story_traces/`
+(`story_engine.stats.tally`). For a seed or seed kind, *Used* counts pitches,
+*Kept* those that survived pitch review and *Drafted* those with a draft.
+For a form or constraint, *Used* counts drafts, and "(no constraint)" is the
+baseline row. Every row then counts drafts *Chosen*, *Accepted* (the
+draft's latest `outcome` event is `accepted`), *Discarded* and *Edited* (an
+accepted draft changed by hand after it was chosen, still counted as
+accepted). A rate beside a small *Used* says little.
 
 ### Other story paths
 
