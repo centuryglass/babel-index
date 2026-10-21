@@ -6,6 +6,13 @@ still apply.
 
 ## Testing and CI
 
+- **Third-party actions are pinned to the SHA of their major-version tag, with
+  the tag repeated in a comment.** A floating `@vN` is a retargetable pointer,
+  so a compromised tag would be picked up with no code change here. The
+  trailing `# vN` comment is what Dependabot's `github-actions` ecosystem
+  reads to raise the SHA when the tag moves; a SHA with no such comment stops
+  updating. Local workflow calls (`uses: ./.github/workflows/e2e.yml`) are
+  exempt.
 - **`check:requirements` maps tests to `docs/search_requirements.md` by tag.**
   A test names the requirement it covers in its own name
   (`test('... [SR-18]', ...)`); the checker rebuilds the mapping from

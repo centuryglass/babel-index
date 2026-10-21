@@ -34,7 +34,7 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # No compiled output ever hits disk here (AGENTS.md, *Commands*) -
       # esbuild bundles the client in-process at startup and `.ts` runs
@@ -42,10 +42,10 @@ jobs:
       # CodeQL to run before it scans. `javascript-typescript` covers both
       # `.ts`/`.tsx` and the plain `.js`/`.mjs` files AGENTS.md's
       # "Conventions" exempts from TypeScript.
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           languages: javascript-typescript
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           category: '/language:javascript-typescript'
