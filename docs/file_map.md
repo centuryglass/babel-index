@@ -29,7 +29,7 @@ Every tracked file in the repo, with a line or two on what it is for.
     session (gated on `CLAUDE_CODE_REMOTE`), then refreshes and prints the
     issue cache.
   * `scripts/issues.mjs`: Compiles the repo's GitHub issues into the
-    gitignored `.claude/cache/issues/` (`index.md` plus one file per issue).
+    gitignored `.claude/cache/issues/` (`index.md` of open issues, a closed-issue list, and one file per issue).
     `.mjs` because it must run before `npm install`; its header lists the
     fetch paths.
 - `.opencode`: OpenCode session config for this repo, not part of the app.

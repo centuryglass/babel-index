@@ -284,9 +284,11 @@ path can match several rows; read every file it matches.
 - **A PR closing an issue says `Closes #NN` in its description.**
 - **Open issues are usually already in context.** The `SessionStart` hook
   (`.claude/hooks/session-start.sh`) runs `.claude/scripts/issues.mjs`, which
-  writes `.claude/cache/issues/` (`index.md` plus one file per issue) and
-  prints the index. In OpenCode, `.opencode/plugins/issue-cache.ts` runs
-  the same script once per session and adds the index to the system prompt.
+  writes `.claude/cache/issues/` (an index of open issues, a separate
+  closed-issue list, and one file per issue) and prints the open index only.
+  In OpenCode, `.opencode/plugins/issue-cache.ts` runs the same script once
+  per session and adds that index to the system prompt. The index names the
+  closed list; read it only to look up a closed issue.
   The cache is generated and gitignored; never edit it or treat it as the
   source of truth. `issues.mjs`'s header covers the fetch
   paths and `BABEL_INDEX_ISSUES_TOKEN`.
