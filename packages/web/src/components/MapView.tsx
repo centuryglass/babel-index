@@ -608,7 +608,6 @@ export function MapView({
             <button
               className="forget"
               onClick={onForgetSearches}
-              aria-label={`forget ${history.length} remembered ${history.length === 1 ? 'search' : 'searches'}`}
             >
               forget searches ({history.length})
             </button>
