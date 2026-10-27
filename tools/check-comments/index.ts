@@ -36,7 +36,7 @@ import {
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const BASELINE_PATH = 'tools/check-comments/baseline.json';
-const ISSUE_INDEX_PATH = '.claude/cache/issues/index.md';
+const CLOSED_ISSUES_PATH = '.claude/cache/issues/closed.md';
 
 /**
  * Tracked paths this check never reads.
@@ -100,9 +100,9 @@ function buildRepo(files: string[]): Repo {
   };
 }
 
-/** Closed issue numbers from the issue cache's index, or undefined when there is no cache. */
+/** Closed issue numbers from the issue cache's closed list, or undefined when there is no cache. */
 function closedIssues(): Set<number> | undefined {
-  const path = join(REPO_ROOT, ISSUE_INDEX_PATH);
+  const path = join(REPO_ROOT, CLOSED_ISSUES_PATH);
   if (!existsSync(path)) return undefined;
   const index = readFileSync(path, 'utf8');
   const closed = index.split(/^## Closed$/m)[1];
@@ -180,7 +180,7 @@ function main(): void {
       `${result.stale.length} file/rule counts fell below the baseline - ` +
         'run `npm run check:comments -- --update-baseline` to lower it'
     );
-  if (!closed) console.log(`closed-issue check skipped: no ${ISSUE_INDEX_PATH}`);
+  if (!closed) console.log(`closed-issue check skipped: no ${CLOSED_ISSUES_PATH}`);
 
   if (!result.ok) process.exit(1);
   console.log(`comments ok (${warnings.length} warnings)`);
