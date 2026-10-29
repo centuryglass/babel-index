@@ -85,7 +85,8 @@ function CheckIcon() {
  * `copied` swaps the icon as well as the label, because the label is hidden
  * at a narrow width (`.share-button-full` in css/dialogs.css). `aria-label`/`title`
  * carry the same words either way, so the accessible name never depends on
- * layout.
+ * layout. The label starts with the visible text so it satisfies WCAG 2.5.3
+ * (axe's `label-content-name-mismatch`).
  */
 function ShareButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
@@ -109,7 +110,7 @@ function ShareButton({ url }: { url: string }) {
     timeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
   };
 
-  const label = copied ? 'link copied' : 'copy link to this room';
+  const label = copied ? 'Copied! link copied to clipboard' : 'Share: copy link to this room';
   return (
     <button
       type="button"
