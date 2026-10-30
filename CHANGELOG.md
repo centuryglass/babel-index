@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.13.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.12.0...babel-index-v1.13.0) (2026-10-29)
+
+
+### Features
+
+* **curation:** add a weight report and tuning window for the story engine ([#475](https://github.com/centuryglass/babel-index/issues/475)) ([19bfd73](https://github.com/centuryglass/babel-index/commit/19bfd736b7549d2b84c3c27132f7253c505de79a))
+* **curation:** derive story lint rules from collection memory ([#477](https://github.com/centuryglass/babel-index/issues/477)) ([cb3d230](https://github.com/centuryglass/babel-index/commit/cb3d2308ebbc9b7a5a60d1a79dc527b973306abf))
+
+
+### Bug Fixes
+
+* keep closed issues out of the session-start issue index ([#484](https://github.com/centuryglass/babel-index/issues/484)) ([72003f4](https://github.com/centuryglass/babel-index/commit/72003f48fdb84c5ed180e0beff6f7b80fa98eeb9))
+* name the forget and share buttons by their visible text ([#485](https://github.com/centuryglass/babel-index/issues/485)) ([a816b9a](https://github.com/centuryglass/babel-index/commit/a816b9a26a0781a3b9a7d82f75a39afdb84ba83a))
+
 ## [1.12.0](https://github.com/centuryglass/babel-index/compare/babel-index-v1.11.1...babel-index-v1.12.0) (2026-10-08)
 
 
