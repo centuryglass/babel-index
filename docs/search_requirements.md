@@ -67,7 +67,8 @@ coverage gap.
   strong match.
 - **SR-19** Search should never present the top result of a meaningless query
   as a strong match.
-- **SR-20** Search should tell the user plainly when nothing matched.
+- **SR-20** Search should say in words when its matches are weak, and should
+  not claim that nothing matched.
 - **SR-21** Search should say which signals it actually had available, and not
   imply confidence it cannot support.
 - **SR-22** The strength a room reports and the position it occupies on the map
